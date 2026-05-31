@@ -1,0 +1,125 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: shelf_postgres
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shelf_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+
+  directus:
+    image: directus/directus:11
+    container_name: shelf_directus
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env.production
+    environment:
+      SECRET:       ${DIRECTUS_SECRET}
+      ADMIN_EMAIL:  ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      DB_CLIENT:    pg
+      DB_HOST:      postgres
+      DB_PORT:      "5432"
+      DB_DATABASE:  ${POSTGRES_DB}
+      DB_USER:      ${POSTGRES_USER}
+      DB_PASSWORD:  ${POSTGRES_PASSWORD}
+      PUBLIC_URL:   ${DIRECTUS_PUBLIC_URL}
+      EXTENSIONS_PATH: /directus/extensions
+      RATE_LIMITER_ENABLED: "true"
+      RATE_LIMITER_POINTS:  "50"
+      RATE_LIMITER_DURATION: "1"
+      LOG_LEVEL:    info
+      CORS_ENABLED: "true"
+      CORS_ORIGIN:  "https://theflippantfoxpos.duckdns.org"
+      MAX_PAYLOAD_SIZE: "10mb"
+    volumes:
+      - directus_uploads:/directus/uploads
+      - directus_extensions:/directus/extensions
+    networks:
+      - shelf_net
+
+  shelf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shelf_app
+    restart: unless-stopped
+    depends_on:
+      - directus
+    env_file: .env.production
+    environment:
+      NODE_ENV:             production
+      PORT:                 "3000"
+      ORIGIN:               ${ORIGIN}
+      DIRECTUS_URL:         ${DIRECTUS_URL}
+      DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      PUBLIC_DIRECTUS_URL:  ${PUBLIC_DIRECTUS_URL}
+    networks:
+      - shelf_net
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: shelf_nginx
+    restart: unless-stopped
+    depends_on:
+      - shelf
+      - directus
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot_www:/var/www/certbot:ro
+      - certbot_certs:/etc/letsencrypt:ro
+    networks:
+      - shelf_net
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: shelf_certbot
+    volumes:
+      - certbot_www:/var/www/certbot
+      - certbot_certs:/etc/letsencrypt
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew; sleep 12h; done"
+
+  duckdns:
+    image: lscr.io/linuxserver/duckdns:latest
+    container_name: shelf_duckdns
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      PUID:       "1000"
+      PGID:       "1000"
+      TZ:         "Africa/Lagos"
+      SUBDOMAINS: ${DUCKDNS_SUBDOMAIN}
+      TOKEN:      ${DUCKDNS_TOKEN}
+      LOG_FILE:   "false"
+    volumes:
+      - duckdns_config:/config
+
+volumes:
+  postgres_data:
+  directus_uploads:
+  directus_extensions:
+  certbot_www:
+  certbot_certs:
+  duckdns_config:
+
+networks:
+  shelf_net:
+    driver: bridge

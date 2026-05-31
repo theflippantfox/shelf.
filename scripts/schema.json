@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "directus": "11.x",
+  "vendor": "sqlite",
+  "collections": [
+    {
+      "collection": "shops",
+      "meta": { "icon": "store", "note": "Multi-tenant shops" },
+      "schema": { "name": "shops" },
+      "fields": [
+        { "field": "id",                  "type": "uuid",    "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true, "has_auto_increment": false } },
+        { "field": "name",                "type": "string",  "schema": { "is_nullable": false } },
+        { "field": "slug",                "type": "string",  "schema": { "is_nullable": false, "is_unique": true } },
+        { "field": "country_code",        "type": "string",  "schema": { "default_value": "US" } },
+        { "field": "currency_code",       "type": "string",  "schema": { "default_value": "USD" } },
+        { "field": "currency_symbol",     "type": "string",  "schema": { "default_value": "$" } },
+        { "field": "currency_locale",     "type": "string",  "schema": { "default_value": "en-US" } },
+        { "field": "timezone",            "type": "string",  "schema": { "default_value": "UTC" } },
+        { "field": "date_format",         "type": "string",  "schema": { "default_value": "D MMM YYYY" } },
+        { "field": "time_format",         "type": "string",  "schema": { "default_value": "12h" } },
+        { "field": "tax_rate",            "type": "integer", "schema": { "default_value": 0 } },
+        { "field": "tax_inclusive",       "type": "boolean", "schema": { "default_value": false } },
+        { "field": "tax_name",            "type": "string",  "schema": { "default_value": "Tax" } },
+        { "field": "theme",               "type": "string",  "schema": { "default_value": "system" } },
+        { "field": "primary_color",       "type": "string",  "schema": { "default_value": "#7B4F8A" } },
+        { "field": "sidebar_bg",          "type": "string",  "schema": { "default_value": "#150F1C" } },
+        { "field": "onboarding_complete", "type": "boolean", "schema": { "default_value": false } },
+        { "field": "onboarding_step",     "type": "string",  "schema": { "default_value": "account" } },
+        { "field": "low_stock_threshold", "type": "integer", "schema": { "default_value": 10 } },
+        { "field": "receipt_header",      "type": "text",    "schema": { "is_nullable": true } },
+        { "field": "receipt_footer",      "type": "text",    "schema": { "is_nullable": true } },
+        { "field": "date_created",        "type": "timestamp","meta": { "special": ["date-created"] } },
+        { "field": "date_updated",        "type": "timestamp","meta": { "special": ["date-updated"] } }
+      ]
+    },
+    {
+      "collection": "shop_members",
+      "meta": { "icon": "group" },
+      "schema": { "name": "shop_members" },
+      "fields": [
+        { "field": "id",           "type": "uuid",      "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "shop",         "type": "uuid",      "schema": { "is_nullable": false, "foreign_key_table": "shops",         "foreign_key_column": "id" } },
+        { "field": "user",         "type": "uuid",      "schema": { "is_nullable": false, "foreign_key_table": "directus_users", "foreign_key_column": "id" } },
+        { "field": "role",         "type": "string",    "schema": { "default_value": "cashier" } },
+        { "field": "permissions",  "type": "json",      "schema": { "is_nullable": true }, "meta": { "special": ["json"] } },
+        { "field": "status",       "type": "string",    "schema": { "default_value": "active" } },
+        { "field": "date_created", "type": "timestamp", "meta": { "special": ["date-created"] } }
+      ]
+    },
+    {
+      "collection": "categories",
+      "meta": { "icon": "label" },
+      "schema": { "name": "categories" },
+      "fields": [
+        { "field": "id",          "type": "uuid",    "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "shop",        "type": "uuid",    "schema": { "foreign_key_table": "shops", "foreign_key_column": "id" } },
+        { "field": "name",        "type": "string",  "schema": { "is_nullable": false } },
+        { "field": "icon",        "type": "string",  "schema": { "default_value": "Tag" } },
+        { "field": "color",       "type": "string",  "schema": { "default_value": "#7B4F8A" } },
+        { "field": "sort_order",  "type": "integer", "schema": { "default_value": 0 } },
+        { "field": "archived_at", "type": "timestamp","schema": { "is_nullable": true } }
+      ]
+    },
+    {
+      "collection": "tags",
+      "meta": { "icon": "sell" },
+      "schema": { "name": "tags" },
+      "fields": [
+        { "field": "id",    "type": "uuid",   "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "shop",  "type": "uuid",   "schema": { "foreign_key_table": "shops", "foreign_key_column": "id" } },
+        { "field": "name",  "type": "string", "schema": { "is_nullable": false } },
+        { "field": "color", "type": "string", "schema": { "default_value": "#9b8aaa" } }
+      ]
+    },
+    {
+      "collection": "products",
+      "meta": { "icon": "inventory_2" },
+      "schema": { "name": "products" },
+      "fields": [
+        { "field": "id",                  "type": "uuid",      "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "shop",                "type": "uuid",      "schema": { "foreign_key_table": "shops",      "foreign_key_column": "id" } },
+        { "field": "name",                "type": "string",    "schema": { "is_nullable": false } },
+        { "field": "sku",                 "type": "string",    "schema": { "is_nullable": false } },
+        { "field": "description",         "type": "text",      "schema": { "is_nullable": true } },
+        { "field": "category",            "type": "uuid",      "schema": { "is_nullable": true, "foreign_key_table": "categories", "foreign_key_column": "id" } },
+        { "field": "price",               "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "cost_price",          "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "qty",                 "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "low_stock_threshold", "type": "integer",   "schema": { "default_value": 10 } },
+        { "field": "unit",                "type": "string",    "schema": { "default_value": "piece" } },
+        { "field": "image",               "type": "uuid",      "schema": { "is_nullable": true, "foreign_key_table": "directus_files", "foreign_key_column": "id" } },
+        { "field": "barcode",             "type": "string",    "schema": { "is_nullable": true } },
+        { "field": "archived_at",         "type": "timestamp", "schema": { "is_nullable": true } },
+        { "field": "date_created",        "type": "timestamp", "meta": { "special": ["date-created"] } },
+        { "field": "date_updated",        "type": "timestamp", "meta": { "special": ["date-updated"] } }
+      ]
+    },
+    {
+      "collection": "customers",
+      "meta": { "icon": "people" },
+      "schema": { "name": "customers" },
+      "fields": [
+        { "field": "id",           "type": "uuid",      "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "shop",         "type": "uuid",      "schema": { "foreign_key_table": "shops", "foreign_key_column": "id" } },
+        { "field": "name",         "type": "string",    "schema": { "is_nullable": false } },
+        { "field": "phone",        "type": "string",    "schema": { "is_nullable": true } },
+        { "field": "email",        "type": "string",    "schema": { "is_nullable": true } },
+        { "field": "notes",        "type": "text",      "schema": { "is_nullable": true } },
+        { "field": "visit_count",  "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "total_spent",  "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "last_visit",   "type": "timestamp", "schema": { "is_nullable": true } },
+        { "field": "date_created", "type": "timestamp", "meta": { "special": ["date-created"] } },
+        { "field": "date_updated", "type": "timestamp", "meta": { "special": ["date-updated"] } }
+      ]
+    },
+    {
+      "collection": "sales",
+      "meta": { "icon": "receipt_long" },
+      "schema": { "name": "sales" },
+      "fields": [
+        { "field": "id",              "type": "uuid",      "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "shop",            "type": "uuid",      "schema": { "foreign_key_table": "shops",         "foreign_key_column": "id" } },
+        { "field": "sale_ref",        "type": "string",    "schema": { "is_nullable": false } },
+        { "field": "customer",        "type": "uuid",      "schema": { "is_nullable": true, "foreign_key_table": "customers",     "foreign_key_column": "id" } },
+        { "field": "served_by",       "type": "uuid",      "schema": { "foreign_key_table": "directus_users", "foreign_key_column": "id" } },
+        { "field": "subtotal",        "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "discount_type",   "type": "string",    "schema": { "default_value": "amount" } },
+        { "field": "discount_value",  "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "discount_amount", "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "total",           "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "tax_amount",      "type": "integer",   "schema": { "default_value": 0 } },
+        { "field": "payment_method",  "type": "string",    "schema": { "default_value": "cash" } },
+        { "field": "notes",           "type": "text",      "schema": { "is_nullable": true } },
+        { "field": "voided_at",       "type": "timestamp", "schema": { "is_nullable": true } },
+        { "field": "voided_by",       "type": "uuid",      "schema": { "is_nullable": true, "foreign_key_table": "directus_users", "foreign_key_column": "id" } },
+        { "field": "void_reason",     "type": "text",      "schema": { "is_nullable": true } },
+        { "field": "date_created",    "type": "timestamp", "meta": { "special": ["date-created"] } }
+      ]
+    },
+    {
+      "collection": "sale_items",
+      "meta": { "icon": "list_alt" },
+      "schema": { "name": "sale_items" },
+      "fields": [
+        { "field": "id",           "type": "uuid",    "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "sale",         "type": "uuid",    "schema": { "foreign_key_table": "sales",    "foreign_key_column": "id" } },
+        { "field": "product",      "type": "uuid",    "schema": { "foreign_key_table": "products", "foreign_key_column": "id" } },
+        { "field": "product_name", "type": "string",  "schema": { "is_nullable": false } },
+        { "field": "product_sku",  "type": "string",  "schema": { "is_nullable": false } },
+        { "field": "unit_price",   "type": "integer", "schema": { "default_value": 0 } },
+        { "field": "qty",          "type": "integer", "schema": { "default_value": 1 } },
+        { "field": "line_total",   "type": "integer", "schema": { "default_value": 0 } }
+      ]
+    },
+    {
+      "collection": "stock_log",
+      "meta": { "icon": "history" },
+      "schema": { "name": "stock_log" },
+      "fields": [
+        { "field": "id",           "type": "uuid",      "meta": { "special": ["uuid"] }, "schema": { "is_primary_key": true } },
+        { "field": "shop",         "type": "uuid",      "schema": { "foreign_key_table": "shops",         "foreign_key_column": "id" } },
+        { "field": "product",      "type": "uuid",      "schema": { "foreign_key_table": "products",      "foreign_key_column": "id" } },
+        { "field": "delta",        "type": "integer",   "schema": { "is_nullable": false } },
+        { "field": "reason",       "type": "string",    "schema": { "is_nullable": false } },
+        { "field": "reference",    "type": "string",    "schema": { "is_nullable": true } },
+        { "field": "created_by",   "type": "uuid",      "schema": { "foreign_key_table": "directus_users", "foreign_key_column": "id" } },
+        { "field": "date_created", "type": "timestamp", "meta": { "special": ["date-created"] } }
+      ]
+    }
+  ],
+  "relations": [
+    { "collection": "shop_members", "field": "shop",     "related_collection": "shops" },
+    { "collection": "shop_members", "field": "user",     "related_collection": "directus_users" },
+    { "collection": "categories",   "field": "shop",     "related_collection": "shops" },
+    { "collection": "products",     "field": "shop",     "related_collection": "shops" },
+    { "collection": "products",     "field": "category", "related_collection": "categories" },
+    { "collection": "customers",    "field": "shop",     "related_collection": "shops" },
+    { "collection": "sales",        "field": "shop",     "related_collection": "shops" },
+    { "collection": "sales",        "field": "customer", "related_collection": "customers" },
+    { "collection": "sales",        "field": "served_by","related_collection": "directus_users" },
+    { "collection": "sale_items",   "field": "sale",     "related_collection": "sales" },
+    { "collection": "sale_items",   "field": "product",  "related_collection": "products" },
+    { "collection": "stock_log",    "field": "shop",     "related_collection": "shops" },
+    { "collection": "stock_log",    "field": "product",  "related_collection": "products" }
+  ]
+}
