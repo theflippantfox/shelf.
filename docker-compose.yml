@@ -56,6 +56,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        DIRECTUS_URL: ${DIRECTUS_URL}
+        DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
     container_name: shelf_app
     restart: unless-stopped
     depends_on:
@@ -64,10 +67,6 @@ services:
     environment:
       NODE_ENV:             production
       PORT:                 "3000"
-      ORIGIN:               ${ORIGIN}
-      DIRECTUS_URL:         ${DIRECTUS_URL}
-      DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
-      PUBLIC_DIRECTUS_URL:  ${PUBLIC_DIRECTUS_URL}
     networks:
       - shelf_net
 

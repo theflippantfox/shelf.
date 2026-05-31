@@ -6,6 +6,8 @@ COPY package*.json ./
 RUN npm ci --ignore-scripts
 
 COPY . .
+ARG DIRECTUS_URL
+ARG DIRECTUS_ADMIN_TOKEN
 RUN npm run build
 RUN npm prune --production
 

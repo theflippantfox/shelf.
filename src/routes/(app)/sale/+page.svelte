@@ -156,10 +156,10 @@
 
 <!-- Floating cart sheet -->
 {#if cartOpen && cart.count > 0}
-  <div class="cart-sheet">
+  <div class="cart-sheet flex flex-col">
     <!-- Handle -->
-    <button class="w-10 h-1 rounded-full bg-[var(--border)] mx-auto mt-3 mb-0 block" onclick={() => cartOpen = false}></button>
-    <div class="flex items-center justify-between px-5 pt-3 pb-2 border-b border-[var(--border)]">
+    <button class="w-10 h-1 rounded-full bg-[var(--border)] mx-auto mt-3 mb-0 block flex-shrink-0" onclick={() => cartOpen = false}></button>
+    <div class="flex items-center justify-between px-5 pt-3 pb-2 border-b border-[var(--border)] flex-shrink-0">
       <p class="text-sm font-semibold">Cart ({cart.count})</p>
       <button class="btn btn-ghost btn-icon btn-sm" onclick={() => cartOpen = false}><X size={16} strokeWidth={1.75} /></button>
     </div>
@@ -180,7 +180,7 @@
         </div>
       {/each}
     </div>
-    <div class="p-4 border-t border-[var(--border)]">
+    <div class="p-4 border-t border-[var(--border)] bg-[var(--surface)] flex-shrink-0">
       <div class="flex justify-between text-xs mb-1">
         <span class="text-[var(--text-3)]">Subtotal</span>
         <span>{formatCurrency(cart.subtotal)}</span>
