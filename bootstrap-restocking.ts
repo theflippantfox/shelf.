@@ -1,27 +1,12 @@
-import { createDirectusClient } from '@directus/sdk';
-import { staticTokenClient } from '@directus/sdk/auth';
-import * as dotenv from 'dotenv';
-import path from 'path';
-
-// Load environment variables from .env.production
-dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });
-
-const DIRECTUS_URL = process.env.DIRECTUS_URL;
-const DIRECTUS_ADMIN_TOKEN = process.env.DIRECTUS_ADMIN_TOKEN;
-
-if (!DIRECTUS_URL || !DIRECTUS_ADMIN_TOKEN) {
-  console.error('❌ Missing DIRECTUS_URL or DIRECTUS_ADMIN_TOKEN in .env.production');
-  process.exit(1);
-}
-
-const client = createDirectusClient(DIRECTUS_URL).with(staticTokenClient(DIRECTUS_ADMIN_TOKEN));
+import { adminClient } from '../src/lib/server/directus';
 
 async function setupRestocking() {
   console.log('🚀 Starting Restocking Feature Schema Setup...');
 
   try {
     // 1. Suppliers Collection
-    await client.request(createCollection('suppliers', {
+    await adminClient().request('collections/create', {
+      collection: 'suppliers',
       schema: {
         name: { type: 'string', required: true },
         contact_name: { type: 'string' },
@@ -39,14 +24,15 @@ async function setupRestocking() {
         notes: { type: 'text' },
         is_active: { type: 'boolean', default: true },
       }
-    }));
+    });
     console.log('✅ Created suppliers collection');
 
     // 2. Purchase Orders Collection
-    await client.request(createCollection('purchase_orders', {
+    await adminClient().request('collections/create', {
+      collection: 'purchase_orders',
       schema: {
-        shop: { type: 'uuid', required: true },
-        supplier: { type: 'uuid', required: true },
+        shop: { type: 'uuid', required: true }, // FK to shops
+        supplier: { type: 'uuid', required: true }, // FK to suppliers
         order_ref: { type: 'string', required: true },
         status: { 
           type: 'string', 
@@ -66,11 +52,12 @@ async function setupRestocking() {
         notes: { type: 'text' },
         created_by: { type: 'uuid' },
       }
-    }));
+    });
     console.log('✅ Created purchase_orders collection');
 
     // 3. Purchase Order Items
-    await client.request(createCollection('purchase_order_items', {
+    await adminClient().request('collections/create', {
+      collection: 'purchase_order_items',
       schema: {
         purchase_order: { type: 'uuid', required: true },
         product: { type: 'uuid' },
@@ -83,11 +70,12 @@ async function setupRestocking() {
         is_new_product: { type: 'boolean', default: false },
         notes: { type: 'text' },
       }
-    }));
+    });
     console.log('✅ Created purchase_order_items collection');
 
     // 4. Supplier Price History
-    await client.request(createCollection('supplier_price_history', {
+    await adminClient().request('collections/create', {
+      collection: 'supplier_price_history',
       schema: {
         shop: { type: 'uuid', required: true },
         supplier: { type: 'uuid', required: true },
@@ -98,11 +86,12 @@ async function setupRestocking() {
         recorded_at: { type: 'timestamp', default: 'now' },
         notes: { type: 'string' },
       }
-    }));
+    });
     console.log('✅ Created supplier_price_history collection');
 
-    // 5. Product Batches
-    await client.request(createCollection('product_batches', {
+    // 5. Product Batches (for expiry tracking)
+    await adminClient().request('collections/create', {
+      collection: 'product_batches',
       schema: {
         shop: { type: 'uuid', required: true },
         product: { type: 'uuid', required: true },
@@ -112,24 +101,26 @@ async function setupRestocking() {
         quantity_remaining: { type: 'integer', required: true },
         date_created: { type: 'timestamp', default: 'now' },
       }
-    }));
+    });
     console.log('✅ Created product_batches collection');
 
     // 6. Update existing products collection
-    await client.request(updateCollection('products', {
+    await adminClient().request('collections/update', {
+      collection: 'products',
       schema: {
         reorder_point: { type: 'integer' },
         preferred_supplier: { type: 'uuid' },
       }
-    }));
+    });
     console.log('✅ Updated products collection');
 
     // 7. Update existing stock_log
-    await client.request(updateCollection('stock_log', {
+    await adminClient().request('collections/update', {
+      collection: 'stock_log',
       schema: {
         purchase_order: { type: 'uuid' },
       }
-    }));
+    });
     console.log('✅ Updated stock_log collection');
 
     console.log('🎉 Restocking schema successfully bootstrapped!');
@@ -137,36 +128,6 @@ async function setupRestocking() {
     console.error('❌ Error bootstrapping restocking schema:', e);
     process.exit(1);
   }
-}
-
-// Helper functions to match Directus API expectations
-function createCollection(name: string, body: any) {
-  return (client: any) => client.request(createCollectionRequest(name, body));
-}
-
-function updateCollection(name: string, body: any) {
-  return (client: any) => client.request(updateCollectionRequest(name, body));
-}
-
-function createCollectionRequest(name: string, body: any) {
-  return {
-    method: 'POST',
-    url: `/collections`,
-    body: {
-      collection: name,
-      schema: body.schema,
-    },
-  };
-}
-
-function updateCollectionRequest(name: string, body: any) {
-  return {
-    method: 'PATCH',
-    url: `/collections/${name}`,
-    body: {
-      schema: body.schema,
-    },
-  };
 }
 
 setupRestocking();
