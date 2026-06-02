@@ -25,11 +25,9 @@
   let filterCat   = $state('');
   let filterAlert = $state($page.url.searchParams.get('filter') === 'alerts');
   let showAdd     = $state(false);
-  let showRestock = $state(false);
   let showDelete  = $state(false);          // ← dedicated boolean for ConfirmModal
   let editTarget  = $state<any>(null);
   let deleteTarget = $state<any>(null);     // ← holds the product being deleted
-  let restockTarget = $state<any>(null);
   let saving      = $state(false);
 
   let form = $state({
@@ -109,20 +107,6 @@
       showAdd = false;
       await invalidateAll();
     } else toasts.error('Failed to save product');
-    saving = false;
-  }
-
-  async function doRestock() {
-    saving = true;
-    const res = await fetch('/api/stock', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: restockTarget.id, delta: restockDelta, reason: 'restock' }),
-    });
-    if (res.ok) {
-      toasts.success(`+${restockDelta} units added`);
-      showRestock = false;
-      await invalidateAll();
-    } else toasts.error('Restock failed');
     saving = false;
   }
 
@@ -216,7 +200,7 @@
                   <div class="flex items-center gap-1 justify-end">
                     <button class="btn btn-ghost btn-icon btn-sm"
                       title="Restock"
-                      onclick={() => { restockTarget = p; restockDelta = 10; showRestock = true; }}>
+                      onclick={() => { window.location.href = `/restocking/orders/new?product=${p.id}`; }}>
                       <PackagePlus size={14} strokeWidth={1.75} />
                     </button>
                     <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)}>
@@ -265,21 +249,6 @@
     <div class="flex justify-end gap-2">
       <Button variant="secondary" onclick={() => showAdd = false}>Cancel</Button>
       <Button loading={saving} onclick={saveProduct}>Save product</Button>
-    </div>
-  {/snippet}
-</Modal>
-
-<!-- Restock modal -->
-<Modal bind:open={showRestock} title="Restock" maxWidth="max-w-sm">
-  {#if restockTarget}
-    <p class="text-xs font-semibold mb-1">{restockTarget.name}</p>
-    <p class="text-xs text-[var(--text-3)] mb-3">Current stock: <strong>{restockTarget.qty}</strong></p>
-    <Input label="Units to add" type="number" bind:value={restockDelta as any} />
-  {/if}
-  {#snippet footer()}
-    <div class="flex justify-end gap-2">
-      <Button variant="secondary" onclick={() => showRestock = false}>Cancel</Button>
-      <Button loading={saving} onclick={doRestock}>Restock</Button>
     </div>
   {/snippet}
 </Modal>
