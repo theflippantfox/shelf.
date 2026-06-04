@@ -25,16 +25,15 @@
   let filterCat   = $state('');
   let filterAlert = $state($page.url.searchParams.get('filter') === 'alerts');
   let showAdd     = $state(false);
-  let showDelete  = $state(false);          // ← dedicated boolean for ConfirmModal
+  let showDelete  = $state(false);
   let editTarget  = $state<any>(null);
-  let deleteTarget = $state<any>(null);     // ← holds the product being deleted
+  let deleteTarget = $state<any>(null);
   let saving      = $state(false);
 
   let form = $state({
     name: '', sku: '', price: '', cost_price: '',
     qty: '', unit: 'piece', category: '', description: '', low_stock_threshold: '',
   });
-  let restockDelta = $state<number>(10);
 
   const filtered = $derived(() => {
     let list = data.products as any[];
@@ -81,7 +80,7 @@
 
   function confirmDelete(p: any) {
     deleteTarget = p;
-    showDelete   = true;   // ← set the boolean to open the modal
+    showDelete   = true;
   }
 
   async function saveProduct() {
@@ -136,9 +135,14 @@
       <p class="text-base font-semibold">Inventory</p>
       <p class="text-xs text-[var(--text-3)]">{(data.products as any[]).length} products</p>
     </div>
-    {#if auth.can('inventory.manage')}
-      <Button onclick={openAdd} size="sm"><Plus size={14} strokeWidth={2} /> Add product</Button>
-    {/if}
+    <div class="flex gap-2">
+      {#if auth.can('inventory.manage')}
+        <Button onclick={() => window.location.href = '/restocking/orders/new'} variant="secondary" size="sm">
+          <PackagePlus size={14} strokeWidth={2} /> Restock
+        </Button>
+        <Button onclick={openAdd} size="sm"><Plus size={14} strokeWidth={2} /> Add product</Button>
+      {/if}
+    </div>
   </div>
 
   <div class="flex gap-2 mb-4">
@@ -198,11 +202,6 @@
               {#if auth.can('inventory.manage')}
                 <td>
                   <div class="flex items-center gap-1 justify-end">
-                    <button class="btn btn-ghost btn-icon btn-sm"
-                      title="Restock"
-                      onclick={() => { window.location.href = `/restocking/orders/new?product=${p.id}`; }}>
-                      <PackagePlus size={14} strokeWidth={1.75} />
-                    </button>
                     <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)}>
                       <Pencil size={14} strokeWidth={1.75} />
                     </button>
@@ -221,7 +220,6 @@
   {/if}
 </PageShell>
 
-<!-- Add / Edit modal -->
 <Modal bind:open={showAdd} title={editTarget ? 'Edit product' : 'Add product'} maxWidth="max-w-lg">
   <form onsubmit={(e) => { e.preventDefault(); saveProduct(); }} class="flex flex-col gap-3">
     <Input label="Name" bind:value={form.name} required />
@@ -253,7 +251,6 @@
   {/snippet}
 </Modal>
 
-<!-- Archive confirm — uses a plain boolean now ✅ -->
 <ConfirmModal
   bind:open={showDelete}
   title="Archive product"

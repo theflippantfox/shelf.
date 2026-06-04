@@ -71,14 +71,13 @@ const JSN = (f: string) => ({ field: f, type: 'json', meta: { interface: 'input-
 
 const COLLECTIONS: Array<{ name: string; icon: string; fields: any[] }> = [
   {
-    // Shëlf's own user accounts — completely separate from directus_users
     name: 'users', icon: 'person',
     fields: [
       PK(),
       STR('first_name'),
       STR('last_name', { schema: { is_nullable: true } }),
       STR('email', { schema: { is_unique: true } }),
-      STR('password_hash', { meta: { hidden: true } }),   // bcrypt hash, never returned to client
+      STR('password_hash', { meta: { hidden: true } }),
       STR('avatar',     { schema: { is_nullable: true } }),
       STR('reset_token',            { schema: { is_nullable: true } }),
       TS('reset_token_expires_at',  true),
@@ -87,12 +86,11 @@ const COLLECTIONS: Array<{ name: string; icon: string; fields: any[] }> = [
     ],
   },
   {
-    // One session row per logged-in browser session
     name: 'sessions', icon: 'key',
     fields: [
       PK(),
-      FK('user'),                                          // → users
-      STR('token', { schema: { is_unique: true } }),      // UUID stored in cookie
+      FK('user'),
+      STR('token', { schema: { is_unique: true } }),
       TS('expires_at', false),
       TS('date_created', false, 'date-created'),
     ],
@@ -129,8 +127,8 @@ const COLLECTIONS: Array<{ name: string; icon: string; fields: any[] }> = [
     name: 'shop_members', icon: 'group',
     fields: [
       PK(),
-      FK('shop'),                                           // → shops
-      FK('user'),                                           // → users (custom, NOT directus_users)
+      FK('shop'),
+      FK('user'),
       STR('role',   { schema: { default_value: 'cashier' } }),
       JSN('permissions'),
       STR('status', { schema: { default_value: 'active' } }),
@@ -165,6 +163,8 @@ const COLLECTIONS: Array<{ name: string; icon: string; fields: any[] }> = [
       FK('category', true),
       INT('price', 0), INT('cost_price', 0), INT('qty', 0),
       INT('low_stock_threshold', 10),
+      INT('reorder_point', { schema: { is_nullable: true } }),
+      FK('preferred_supplier', true),
       STR('unit', { schema: { default_value: 'piece' } }),
       STR('image', { schema: { is_nullable: true } }),
       STR('barcode', { schema: { is_nullable: true } }),
@@ -193,7 +193,7 @@ const COLLECTIONS: Array<{ name: string; icon: string; fields: any[] }> = [
       PK(), FK('shop'),
       STR('sale_ref'),
       FK('customer', true),
-      FK('served_by'),                                      // → users
+      FK('served_by'),
       INT('subtotal', 0),
       STR('discount_type',   { schema: { default_value: 'amount' } }),
       INT('discount_value',  0), INT('discount_amount', 0),
@@ -201,7 +201,7 @@ const COLLECTIONS: Array<{ name: string; icon: string; fields: any[] }> = [
       STR('payment_method',  { schema: { default_value: 'cash' } }),
       TXT('notes'),
       TS('voided_at', true),
-      FK('voided_by', true),                                // → users
+      FK('voided_by', true),
       TXT('void_reason'),
       TS('date_created', false, 'date-created'),
     ],
@@ -221,14 +221,86 @@ const COLLECTIONS: Array<{ name: string; icon: string; fields: any[] }> = [
       INT('delta', 0),
       STR('reason'),
       STR('reference', { schema: { is_nullable: true } }),
-      FK('created_by'),                                     // → users
+      FK('purchase_order', true),
+      FK('created_by'),
+      TS('date_created', false, 'date-created'),
+    ],
+  },
+  {
+    name: 'suppliers', icon: 'business',
+    fields: [
+      PK(), FK('shop'),
+      STR('name'),
+      STR('contact_name', { schema: { is_nullable: true } }),
+      STR('phone', { schema: { is_nullable: true } }),
+      STR('email', { schema: { is_nullable: true } }),
+      TXT('address'),
+      STR('payment_terms'), // cash, credit, net_15, net_30, net_60, consignment
+      STR('currency_code', { schema: { default_value: 'USD' } }),
+      INT('lead_time_days', { schema: { is_nullable: true } }),
+      TXT('notes'),
+      BOL('is_active', true),
+      TS('date_created', false, 'date-created'),
+      TS('date_updated', true,  'date-updated'),
+    ],
+  },
+  {
+    name: 'purchase_orders', icon: 'assignment',
+    fields: [
+      PK(), FK('shop'), FK('supplier'),
+      STR('order_ref'),
+      STR('status'), // draft, ordered, partial, received, cancelled
+      TS('order_date', false),
+      TS('expected_delivery_date', true),
+      TS('received_date', true),
+      INT('subtotal', 0),
+      INT('tax_amount', 0),
+      INT('shipping_cost', 0),
+      INT('total_cost', 0),
+      STR('bill_image', { schema: { is_nullable: true } }),
+      TXT('notes'),
+      FK('created_by'),
+      TS('date_created', false, 'date-created'),
+      TS('date_updated', true,  'date-updated'),
+    ],
+  },
+  {
+    name: 'purchase_order_items', icon: 'list',
+    fields: [
+      PK(), FK('purchase_order'), FK('product', true),
+      STR('product_name'), STR('product_sku'),
+      INT('quantity_ordered', 0),
+      INT('quantity_received', 0),
+      INT('unit_cost', 0),
+      INT('line_total', 0),
+      BOL('is_new_product', false),
+      TXT('notes'),
+    ],
+  },
+  {
+    name: 'supplier_price_history', icon: 'trending_up',
+    fields: [
+      PK(), FK('shop'), FK('supplier'), FK('product'),
+      INT('unit_cost', 0),
+      STR('currency_code'),
+      FK('purchase_order', true),
+      TS('recorded_at', false),
+      STR('notes', { schema: { is_nullable: true } }),
+    ],
+  },
+  {
+    name: 'product_batches', icon: 'inventory',
+    fields: [
+      PK(), FK('shop'), FK('product'), FK('purchase_order_item', true),
+      STR('batch_number', { schema: { is_nullable: true } }),
+      TS('expiry_date', true),
+      INT('quantity_remaining', 0),
       TS('date_created', false, 'date-created'),
     ],
   },
 ];
 
 // All relations: [collection, field, related_collection]
-// Note: ALL user FKs point to 'users' (Shëlf custom table), NOT directus_users
 const RELATIONS: [string, string, string][] = [
   ['sessions',     'user',       'users'],
   ['shop_members', 'shop',       'shops'],
@@ -237,6 +309,7 @@ const RELATIONS: [string, string, string][] = [
   ['tags',         'shop',       'shops'],
   ['products',     'shop',       'shops'],
   ['products',     'category',   'categories'],
+  ['products',     'preferred_supplier', 'suppliers'],
   ['customers',    'shop',       'shops'],
   ['sales',        'shop',       'shops'],
   ['sales',        'customer',   'customers'],
@@ -247,6 +320,20 @@ const RELATIONS: [string, string, string][] = [
   ['stock_log',    'shop',       'shops'],
   ['stock_log',    'product',    'products'],
   ['stock_log',    'created_by', 'users'],
+  ['stock_log',    'purchase_order', 'purchase_orders'],
+  ['suppliers',    'shop',       'shops'],
+  ['purchase_orders', 'shop',    'shops'],
+  ['purchase_orders', 'supplier', 'suppliers'],
+  ['purchase_orders', 'created_by', 'users'],
+  ['purchase_order_items', 'purchase_order', 'purchase_orders'],
+  ['purchase_order_items', 'product', 'products'],
+  ['supplier_price_history', 'shop', 'shops'],
+  ['supplier_price_history', 'supplier', 'suppliers'],
+  ['supplier_price_history', 'product', 'products'],
+  ['supplier_price_history', 'purchase_order', 'purchase_orders'],
+  ['product_batches', 'shop', 'shops'],
+  ['product_batches', 'product', 'products'],
+  ['product_batches', 'purchase_order_item', 'purchase_order_items'],
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────

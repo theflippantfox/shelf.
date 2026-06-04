@@ -6,12 +6,12 @@ export interface Palette {
 }
 
 export const PALETTES: Palette[] = [
-  { name: 'Velvet Plum',    primary: '#7B4F8A', sidebarBg: '#150F1C', description: 'Luxury beauty' },
+  { name: 'Velvet Plum', primary: '#7B4F8A', sidebarBg: '#150F1C', description: 'Luxury beauty' },
   { name: 'Forest & Linen', primary: '#1C7A52', sidebarBg: '#0F1A14', description: 'Natural, organic' },
-  { name: 'Ocean Cobalt',   primary: '#2E5FC7', sidebarBg: '#0D1428', description: 'Clean, modern' },
-  { name: 'Terracotta',     primary: '#B85430', sidebarBg: '#1C0E08', description: 'Warm, artisan' },
-  { name: 'Midnight Rose',  primary: '#C03868', sidebarBg: '#1A0D14', description: 'Bold, feminine' },
-  { name: 'Slate',          primary: '#4A5568', sidebarBg: '#0F1114', description: 'Minimal, neutral' },
+  { name: 'Ocean Cobalt', primary: '#2E5FC7', sidebarBg: '#0D1428', description: 'Clean, modern' },
+  { name: 'Terracotta', primary: '#B85430', sidebarBg: '#1C0E08', description: 'Warm, artisan' },
+  { name: 'Midnight Rose', primary: '#C03868', sidebarBg: '#1A0D14', description: 'Bold, feminine' },
+  { name: 'Slate', primary: '#4A5568', sidebarBg: '#0F1114', description: 'Minimal, neutral' },
 ];
 
 export const CATEGORY_COLORS = [

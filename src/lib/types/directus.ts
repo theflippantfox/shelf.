@@ -88,6 +88,8 @@ export interface Product {
   cost_price:          number;
   qty:                 number;
   low_stock_threshold: number;
+  reorder_point:       number | null;
+  preferred_supplier:  string | Supplier | null;
   unit:                string;
   image:               string | null;
   barcode:             string | null;
@@ -148,8 +150,83 @@ export interface StockLog {
   delta:        number;
   reason:       'sale' | 'restock' | 'adjustment' | 'void';
   reference:    string | null;
+  purchase_order: string | null;
   created_by:   string | User;         // ← custom users
   date_created: string;
+}
+
+export interface Supplier {
+  id:             string;
+  shop:           string;
+  name:           string;
+  contact_name:   string | null;
+  phone:           string | null;
+  email:          string | null;
+  address:        string | null;
+  payment_terms:  'cash' | 'credit' | 'net_15' | 'net_30' | 'net_60' | 'consignment';
+  currency_code:  string;
+  lead_time_days: number | null;
+  notes:          string | null;
+  is_active:      boolean;
+  date_created:   string;
+  date_updated:   string;
+}
+
+export interface PurchaseOrder {
+  id:                    string;
+  shop:                  string;
+  supplier:              string | Supplier;
+  order_ref:             string;
+  status:                'draft' | 'ordered' | 'partial' | 'received' | 'cancelled';
+  order_date:            string;
+  expected_delivery_date: string | null;
+  received_date:         string | null;
+  subtotal:              number;
+  tax_amount:            number;
+  shipping_cost:         number;
+  total_cost:            number;
+  bill_image:            string | null;
+  notes:                string | null;
+  created_by:            string | User;
+  date_created:          string;
+  date_updated:          string;
+}
+
+export interface PurchaseOrderItem {
+  id:               string;
+  purchase_order:   string;
+  product:          string | Product | null;
+  product_name:     string;
+  product_sku:      string;
+  quantity_ordered: number;
+  quantity_received: number;
+  unit_cost:        number;
+  line_total:       number;
+  is_new_product:   boolean;
+  notes:            string | null;
+}
+
+export interface SupplierPriceHistory {
+  id:             string;
+  shop:           string;
+  supplier:       string | Supplier;
+  product:        string | Product;
+  unit_cost:      number;
+  currency_code:  string;
+  purchase_order: string | null;
+  recorded_at:    string;
+  notes:          string | null;
+}
+
+export interface ProductBatch {
+  id:                  string;
+  shop:                string;
+  product:            string | Product;
+  purchase_order_item: string | null;
+  batch_number:        string | null;
+  expiry_date:        string | null;
+  quantity_remaining: number;
+  date_created:        string;
 }
 
 export type ShelfSchema = {
@@ -164,4 +241,9 @@ export type ShelfSchema = {
   sales:        Sale[];
   sale_items:   SaleItem[];
   stock_log:    StockLog[];
+  suppliers:    Supplier[];
+  purchase_orders: PurchaseOrder[];
+  purchase_order_items: PurchaseOrderItem[];
+  supplier_price_history: SupplierPriceHistory[];
+  product_batches: ProductBatch[];
 };
