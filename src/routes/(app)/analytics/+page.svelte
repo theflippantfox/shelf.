@@ -1,17 +1,22 @@
 <script lang="ts">
   import PageShell from '$lib/components/layout/PageShell.svelte';
   import { formatCurrency } from '$lib/utils/format';
-  import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
-  import Chart from 'chart.js/auto';
-  import { 
-    TrendingUp, 
-    TrendingDown, 
-    Users, 
-    ShoppingBag, 
-    DollarSign, 
-    Percent, 
+  import { browser } from '$app/environment';
+  import KpiCard from '$lib/components/ui/KpiCard.svelte';
+  import AreaChart from '$lib/components/charts/AreaChart.svelte';
+  import BarChart from '$lib/components/charts/BarChart.svelte';
+  import HBarChart from '$lib/components/charts/HBarChart.svelte';
+  import DonutChart from '$lib/components/charts/DonutChart.svelte';
+  import Sparkline from '$lib/components/charts/Sparkline.svelte';
+  import Heatmap from '$lib/components/charts/Heatmap.svelte';
+
+  import {
+    TrendingUp,
+    Users,
+    ShoppingBag,
+    DollarSign,
+    Percent,
     BarChart3,
     PieChart,
     LayoutGrid,
@@ -19,435 +24,357 @@
     Clock
   } from 'lucide-svelte';
 
-  let data: any = null;
-  let loading = true;
-  let activeMetric = 'revenue';
+  let { data } = $props();
 
   const presets = [
     { label: 'Today', value: 'today' },
-    { label: 'Yesterday', value: 'yesterday' },
     { label: '7d', value: '7d' },
     { label: '30d', value: '30d' },
     { label: '90d', value: '90d' },
     { label: 'This Month', value: 'this_month' },
     { label: 'Last Month', value: 'last_month' },
-    { label: 'This Year', value: 'this_year' },
+    { label: 'This Year', value: 'this_year' }
   ];
 
-  async function fetchAnalytics() {
-    loading = true;
-    const period = $page.url.searchParams.get('period') || '30d';
-    const res = await fetch(`/api/analytics?period=${period}`);
-    data = await res.json();
-    loading = false;
-    initCharts();
-  }
+  const metricTabs = [
+    { key: 'revenue', label: 'Revenue' },
+    { key: 'transactions', label: 'Transactions' },
+    { key: 'avgOrder', label: 'Avg Order' }
+  ] as const;
+  type MetricKey = (typeof metricTabs)[number]['key'];
 
-  let revenueChart: any, paymentChart: any, hourChart: any, dayChart: any;
+  let activeMetric = $state<MetricKey>('revenue');
 
-  function initCharts() {
-    if (!data) return;
+  const analytics = $derived((data as any).analytics);
+  const kpis = $derived(analytics?.kpis ?? null);
+  const trend = $derived(analytics?.trend ?? []);
+  const currency = $derived(analytics?.currency ?? '$');
+  const period = analytics?.period ?? null;
 
-    const ctxRevenue = document.getElementById('revenueChart') as HTMLCanvasElement;
-    if (ctxRevenue) {
-      if (revenueChart) revenueChart.destroy();
-      const labels = Object.keys(data.trends.current).sort();
-      const currentData = labels.map(l => data.trends.current[l]);
-      const prevData = labels.map(l => data.trends.previous[l] || 0);
-      revenueChart = new Chart(ctxRevenue, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [
-            {
-              label: 'Current',
-              data: currentData,
-              borderColor: 'var(--primary)',
-              backgroundColor: 'rgba(123, 79, 138, 0.1)',
-              fill: true,
-              tension: 0.4,
-              pointRadius: 2,
-              borderWidth: 2
-            },
-            {
-              label: 'Previous',
-              data: prevData,
-              borderColor: 'var(--text-3)',
-              borderDash: [5, 5],
-              fill: false,
-              tension: 0.4,
-              pointRadius: 0,
-              borderWidth: 1
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'var(--text-3)', font: { size: 10 } } },
-            x: { grid: { display: false }, ticks: { color: 'var(--text-3)', font: { size: 10 } } }
-          }
-        }
-      });
+  const labels = $derived(trend.map((t) => t.label));
+  const renderedDatasets = $derived([
+    {
+      label: 'Current',
+      data: trend.map((t) => {
+        if (activeMetric === 'revenue') return t.current.revenue;
+        if (activeMetric === 'transactions') return t.current.txns;
+        return t.current.avgOrder;
+      }),
+      borderColor: 'var(--primary)',
+      backgroundColor: 'rgba(123, 79, 138, 0.15)',
+      fill: true,
+      tension: 0.4,
+      pointRadius: 2,
+      borderWidth: 2
+    },
+    {
+      label: 'Previous',
+      data: trend.map((t) => t.previous),
+      borderColor: 'var(--text-3)',
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      fill: true,
+      tension: 0.4,
+      pointRadius: 0,
+      borderWidth: 1,
+      borderDash: [5, 5]
     }
+  ]);
 
-    const ctxPayment = document.getElementById('paymentChart') as HTMLCanvasElement;
-    if (ctxPayment) {
-      if (paymentChart) paymentChart.destroy();
-      const labels = Object.keys(data.distributions.paymentMethods);
-      const values = Object.values(data.distributions.paymentMethods);
-      paymentChart = new Chart(ctxPayment, {
-        type: 'doughnut',
-        data: {
-          labels,
-          datasets: [{
-            data: values,
-            backgroundColor: ['#2DD4BF', '#3B82F6', '#FBBF24', '#F87171', '#A78BFA'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          cutout: '75%'
-        }
-      });
-    }
-
-    const ctxHour = document.getElementById('hourChart') as HTMLCanvasElement;
-    if (ctxHour) {
-      if (hourChart) hourChart.destroy();
-      hourChart = new Chart(ctxHour, {
-        type: 'bar',
-        data: {
-          labels: Array.from({length: 24}, (_, i) => `${i}h`),
-          datasets: [{
-            data: data.distributions.hourlyDist,
-            backgroundColor: 'var(--primary)',
-            borderRadius: 3
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { display: false },
-            x: { grid: { display: false }, ticks: { color: 'var(--text-3)', font: { size: 9 } } }
-          }
-        }
-      });
-    }
-
-    const ctxDay = document.getElementById('dayChart') as HTMLCanvasElement;
-    if (ctxDay) {
-      if (dayChart) dayChart.destroy();
-      dayChart = new Chart(ctxDay, {
-        type: 'bar',
-        data: {
-          labels: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-          datasets: [{
-            data: data.distributions.dailyDist,
-            backgroundColor: 'var(--primary)',
-            borderRadius: 3
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: { display: false },
-            x: { grid: { display: false }, ticks: { color: 'var(--text-3)', font: { size: 10 } } }
-          }
-        }
-      });
-    }
-  }
-
-  onMount(async () => {
-    await fetchAnalytics();
-  });
-
-  function setPeriod(val: string) {
-    goto(`?period=${val}`, { replaceState: true });
-    fetchAnalytics();
-  }
+  const hourlyLabels = $derived(analytics?.hourly?.map((h) => h.label) ?? []);
+  const hourlyData = $derived(analytics?.hourly?.map((h) => h.revenue) ?? []);
+  const weekdayLabels = $derived(analytics?.weekday?.map((w) => w.label) ?? []);
+  const weekdayData = $derived(analytics?.weekday?.map((w) => w.revenue) ?? []);
+  const categoryLabels = $derived(analytics?.categories?.map((c) => c.name) ?? []);
+  const categoryData = $derived(analytics?.categories?.map((c) => c.revenue) ?? []);
+  const paymentRows = $derived(analytics?.paymentMethods ?? []);
+  const customerTiers = $derived(analytics?.customers?.tiers);
+  const leaderboard = $derived(analytics?.customers?.leaderboard ?? []);
+  const heatmapValues = $derived(analytics?.heatmap ?? []);
 </script>
 
 <PageShell>
+  <div class="page-header">
+    <div class="flex-1">
+      <p class="text-base font-semibold">Business Analytics</p>
+      <p class="text-xs text-[var(--text-3)]">
+        {#if period}
+          {period.label}
+          {kpis ? ` · ${formatCurrency(kpis.revenue.current, currency)} revenue` : ''}
+        {:else}All time{/if}
+      </p>
+    </div>
+  </div>
+
   <div class="p-4 md:p-6 space-y-6">
-    
     <!-- Period Selector -->
-    <div class="sticky top-20 z-10 bg-surface-1/80 backdrop-blur-md p-2 rounded-xl flex flex-wrap gap-2 justify-center md:justify-start border border-surface-2">
+    <div
+      class="sticky top-20 z-10 bg-surface-1/80 backdrop-blur-md p-2 rounded-xl border border-surface-2 flex flex-wrap gap-2 justify-center md:justify-start"
+    >
       {#each presets as p}
-        <button 
-          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all { $page.url.searchParams.get('period') === p.value ? 'bg-primary text-white shadow-sm' : 'bg-surface-2 text-text-3 hover:bg-surface-3' }"
-          on:click={() => setPeriod(p.value)}
+        <button
+          class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+          class:bg-primary={period?.preset === p.value}
+          class:text-white={period?.preset === p.value}
+          class:shadow-sm={period?.preset === p.value}
+          class:bg-surface-2={period?.preset !== p.value}
+          class:text-[var(--text-3)]={period?.preset !== p.value}
+          onclick={() => goto(`?period=${p.value}`, { invalidateAll: true })}
         >
           {p.label}
         </button>
       {/each}
     </div>
 
-    {#if loading}
-      <div class="flex items-center justify-center h-64">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    {#if kpis === null}
+      <div class="flex items-center justify-center h-64 text-[var(--text-3)]">
+        Loading analytics...
       </div>
-    {:else if !data}
-      <div class="flex items-center justify-center h-64 text-text-3">
-        No data available for this period.
+    {:else if !analytics}
+      <div class="flex items-center justify-center h-64 text-[var(--text-3)]">
+        Select a timeframe to load analytics.
       </div>
     {:else}
       <div class="space-y-6">
-        <!-- KPI Strip -->
+        <!-- §A KPI Strip -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div class="card p-4 space-y-2">
-            <div class="flex items-center justify-between text-text-3 text-[10px] font-bold uppercase tracking-wider">
-              <span>Revenue</span>
-              <DollarSign size={12} />
+          <KpiCard
+            label="Revenue"
+            icon="DollarSign"
+            value={formatCurrency(kpis.revenue.current, currency)}
+            sub={`${Math.abs(kpis.revenue.delta?.pct ?? 0)}% vs prev`}
+            trend={{ direction: kpis.revenue.delta?.direction ?? 'flat', label: '' }}
+          />
+          <KpiCard
+            label="Sales"
+            icon="ShoppingBag"
+            value={String(kpis.transactions.current)}
+            sub={`${Math.abs(kpis.transactions.delta?.pct ?? 0)}% vs prev`}
+            trend={{ direction: kpis.transactions.delta?.direction ?? 'flat', label: '' }}
+          />
+          <KpiCard
+            label="Avg Order"
+            icon="BarChart3"
+            value={formatCurrency(kpis.avgOrder.current, currency)}
+            sub={`${Math.abs(kpis.avgOrder.delta?.pct ?? 0)}% vs prev`}
+            trend={{ direction: kpis.avgOrder.delta?.direction ?? 'flat', label: '' }}
+          />
+          {#if kpis.margin}
+            <KpiCard
+              label="Gross Margin"
+              icon="Percent"
+              value={`${kpis.margin.current.toFixed(1)}%`}
+              sub={`${Math.abs(kpis.margin.delta?.pp ?? 0)} pp vs prev`}
+              trend={{ direction: kpis.margin.delta?.direction ?? 'flat', label: '' }}
+            />
+          {/if}
+        </div>
+
+        <!-- §B Revenue Trend -->
+        <div class="card p-4 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <TrendingUp size={16} class="text-primary" />
+              <h3 class="font-semibold text-sm">Revenue Trend</h3>
             </div>
-            <div class="text-xl font-bold">{formatCurrency(data.kpis.revenue.current)}</div>
-            <div class="flex items-center gap-1 text-[10px] { data.kpis.revenue.delta >= 0 ? 'text-teal' : 'text-crimson' }">
-              {#if data.kpis.revenue.delta >= 0}<TrendingUp size={10} />{:else}<TrendingDown size={10} />{/if}
-              {Math.abs(data.kpis.revenue.delta).toFixed(1)}% vs prev
+            <div class="flex gap-1 bg-surface-2 p-1 rounded-lg text-[10px]">
+              {#each metricTabs as tab}
+                <button
+                  class="px-2 py-1 rounded"
+                  class:bg-primary={activeMetric === tab.key}
+                  class:text-white={activeMetric === tab.key}
+                  class:text-[var(--text-3)]={activeMetric !== tab.key}
+                  onclick={() => activeMetric = tab.key}
+                >
+                  {tab.label}
+                </button>
+              {/each}
             </div>
           </div>
-          <div class="card p-4 space-y-2">
-            <div class="flex items-center justify-between text-text-3 text-[10px] font-bold uppercase tracking-wider">
-              <span>Sales</span>
-              <ShoppingBag size={12} />
-            </div>
-            <div class="text-xl font-bold">{data.kpis.transactions.current}</div>
-            <div class="flex items-center gap-1 text-[10px] { data.kpis.transactions.delta >= 0 ? 'text-teal' : 'text-crimson' }">
-              {#if data.kpis.transactions.delta >= 0}<TrendingUp size={10} />{:else}<TrendingDown size={10} />{/if}
-              {Math.abs(data.kpis.transactions.delta).toFixed(1)}% vs prev
-            </div>
-          </div>
-          <div class="card p-4 space-y-2">
-            <div class="flex items-center justify-between text-text-3 text-[10px] font-bold uppercase tracking-wider">
-              <span>Avg Order</span>
-              <BarChart3 size={12} />
-            </div>
-            <div class="text-xl font-bold">{formatCurrency(data.kpis.aov.current)}</div>
-            <div class="flex items-center gap-1 text-[10px] { data.kpis.aov.delta >= 0 ? 'text-teal' : 'text-crimson' }">
-              {#if data.kpis.aov.delta >= 0}<TrendingUp size={10} />{:else}<TrendingDown size={10} />{/if}
-              {Math.abs(data.kpis.aov.delta).toFixed(1)}% vs prev
-            </div>
-          </div>
-          <div class="card p-4 space-y-2">
-            <div class="flex items-center justify-between text-text-3 text-[10px] font-bold uppercase tracking-wider">
-              <span>Gross Margin</span>
-              <Percent size={12} />
-            </div>
-            <div class="text-xl font-bold">{data.kpis.margin.current.toFixed(1)}%</div>
-            <div class="flex items-center gap-1 text-[10px] { data.kpis.margin.delta >= 0 ? 'text-teal' : 'text-crimson' }">
-              {#if data.kpis.margin.delta >= 0}<TrendingUp size={10} />{:else}<TrendingDown size={10} />{/if}
-              {Math.abs(data.kpis.margin.delta).toFixed(1)} pp vs prev
-            </div>
+          <div class="h-72 w-full">
+            <AreaChart labels={labels} datasets={renderedDatasets} />
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div class="card p-4 lg:col-span-2 space-y-4">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2">
-                <TrendingUp size={16} class="text-primary" />
-                <h3 class="font-semibold text-sm">Revenue Trend</h3>
-              </div>
-              <div class="flex gap-1 bg-surface-2 p-1 rounded-lg text-[10px]">
-                <button class="px-2 py-1 rounded { activeMetric === 'revenue' ? 'bg-primary text-white' : 'text-text-3' }" on:click={() => activeMetric = 'revenue'}>Revenue</button>
-                <button class="px-2 py-1 rounded { activeMetric === 'transactions' ? 'bg-primary text-white' : 'text-text-3' } " on:click={() => activeMetric = 'transactions'}>Txns</button>
-                <button class="px-2 py-1 rounded { activeMetric === 'aov' ? 'bg-primary text-white' : 'text-text-3' } " on:click={() => activeMetric = 'aov'}>AOV</button>
-              </div>
-            </div>
-            <div class="h-72 w-full">
-              <canvas id="revenueChart"></canvas>
-            </div>
-          </div>
-
+        <!-- §C Distribution Row -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Payment Methods -->
           <div class="card p-4 space-y-4">
             <div class="flex items-center gap-2">
               <PieChart size={16} class="text-primary" />
               <h3 class="font-semibold text-sm">Payment Methods</h3>
             </div>
-            <div class="h-48 w-full relative">
-              <canvas id="paymentChart"></canvas>
+            <div class="h-44 w-full relative">
+              <DonutChart
+                labels={paymentRows.map((paymentMethod) => paymentMethod.label)}
+                values={paymentRows.map((paymentMethod) => paymentMethod.revenue)}
+              />
             </div>
-            <div class="space-y-2 pt-2">
-              {#each Object.entries(data.distributions.paymentMethods) as [method, value]}
+            <div class="space-y-1">
+              {#each paymentRows as paymentMethod}
                 <div class="flex items-center justify-between text-[11px]">
-                  <span class="text-text-3">{method}</span>
-                  <span class="font-medium">{formatCurrency(value as number)}</span>
+                  <span class="text-[var(--text-3)]">{paymentMethod.label}</span>
+                  <span class="font-medium">{formatCurrency(paymentMethod.revenue, currency)}</span>
                 </div>
               {/each}
             </div>
           </div>
 
+          <!-- Hourly -->
           <div class="card p-4 space-y-4">
             <div class="flex items-center gap-2">
               <Clock size={16} class="text-primary" />
-              <h3 class="font-semibold text-sm">Busiest Hours</h3>
+              <h3 class="font-semibold text-sm">Sales by Hour</h3>
             </div>
-            <div class="h-32 w-full">
-              <canvas id="hourChart"></canvas>
+            <div class="h-44 w-full">
+              <BarChart labels={hourlyLabels} data={hourlyData} color="var(--primary)" height={176} />
             </div>
-            <p class="text-center text-[10px] text-text-3 italic">Revenue peak by hour of day</p>
           </div>
 
+          <!-- Weekday -->
           <div class="card p-4 space-y-4">
             <div class="flex items-center gap-2">
               <Calendar size={16} class="text-primary" />
               <h3 class="font-semibold text-sm">Sales by Day</h3>
             </div>
-            <div class="h-32 w-full">
-              <canvas id="dayChart"></canvas>
+            <div class="h-44 w-full">
+              <HBarChart labels={weekdayLabels} data={weekdayData} color="var(--primary)" height={176} />
             </div>
-            <p class="text-center text-[10px] text-text-3 italic">Weekly revenue distribution</p>
+          </div>
+        </div>
+
+        <!-- §D Product Performance -->
+        <div class="card p-4 space-y-4">
+          <div class="flex items-center gap-2">
+            <LayoutGrid size={16} class="text-primary" />
+            <h3 class="font-semibold text-sm">Product Performance</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="tbl w-full text-[11px]">
+              <thead>
+                <tr>
+                  <th class="text-left">#</th>
+                  <th class="text-left">Product</th>
+                  <th class="text-right">Revenue</th>
+                  <th class="text-right">Units</th>
+                  <th class="text-right">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each analytics.products.byRevenue ?? [] as product, i}
+                  <tr>
+                    <td class="text-[var(--text-3)]">{i + 1}</td>
+                    <td class="font-medium">{product.name ?? '—'}</td>
+                    <td class="text-right">{formatCurrency(product.revenue, currency)}</td>
+                    <td class="text-right">{product.units}</td>
+                    <td class="text-right">{product.margin != null ? `${product.margin.toFixed(1)}%` : '—'}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- §E Categories -->
+        <div class="card p-4 space-y-4">
+          <div class="flex items-center gap-2">
+            <PieChart size={16} class="text-primary" />
+            <h3 class="font-semibold text-sm">Categories</h3>
+          </div>
+          <div class="h-56 w-full">
+            <BarChart labels={categoryLabels} data={categoryData} color="var(--primary)" height={220} />
+          </div>
+          <div class="overflow-x-auto">
+            <table class="tbl w-full text-[11px]">
+              <thead>
+                <tr>
+                  <th class="text-left">Category</th>
+                  <th class="text-right">Revenue</th>
+                  <th class="text-right">Units</th>
+                  <th class="text-right">Avg Sale</th>
+                  <th class="text-right">Margin</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each analytics.categories ?? [] as category}
+                  <tr>
+                    <td class="font-medium">{category.name}</td>
+                    <td class="text-right">{formatCurrency(category.revenue, currency)}</td>
+                    <td class="text-right">{category.units}</td>
+                    <td class="text-right">{formatCurrency(category.revenue / (category.units || 1), currency)}</td>
+                    <td class="text-right">{category.margin != null ? `${category.margin.toFixed(1)}%` : '—'}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- §F Customers -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="card p-4 space-y-4">
+            <div class="flex items-center gap-2">
+              <Users size={16} class="text-primary" />
+              <h3 class="font-semibold text-sm">Customers</h3>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
+              <div class="bg-surface-2 rounded-lg p-2">
+                <p class="text-[var(--text-3)]">VIP</p>
+                <p class="text-base font-semibold">{customerTiers?.vip ?? 0}</p>
+              </div>
+              <div class="bg-surface-2 rounded-lg p-2">
+                <p class="text-[var(--text-3)]">Regular</p>
+                <p class="text-base font-semibold">{customerTiers?.regular ?? 0}</p>
+              </div>
+              <div class="bg-surface-2 rounded-lg p-2">
+                <p class="text-[var(--text-3)]">New</p>
+                <p class="text-base font-semibold">{customerTiers?.new ?? 0}</p>
+              </div>
+            </div>
+            <p class="text-[10px] text-[var(--text-3)]">
+              {analytics.customers?.uniqueBuyers ?? 0} unique buyers this period
+            </p>
           </div>
 
           <div class="card p-4 space-y-4">
             <div class="flex items-center gap-2">
-              <Users size={16} class="text-primary" />
+              <ShoppingBag size={16} class="text-primary" />
               <h3 class="font-semibold text-sm">Top Customers</h3>
             </div>
             <div class="overflow-x-auto">
               <table class="tbl w-full text-[11px]">
                 <thead>
                   <tr>
+                    <th class="text-left">#</th>
                     <th class="text-left">Name</th>
                     <th class="text-right">Spent</th>
                     <th class="text-right">Visits</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#each data.customers.topCustomers as c}
+                  {#each leaderboard as customer, i}
                     <tr>
-                      <td class="font-medium">{c.name || 'Unknown'}</td>
-                      <td class="text-right">{formatCurrency(c.spend)}</td>
-                      <td class="text-right">{c.visits}</td>
+                      <td class="text-[var(--text-3)]">{i + 1}</td>
+                      <td class="font-medium">{customer.name ?? '—'}</td>
+                      <td class="text-right">{formatCurrency(customer.spent, currency)}</td>
+                      <td class="text-right">{customer.visits}</td>
                     </tr>
                   {/each}
                 </tbody>
               </table>
             </div>
           </div>
+        </div>
 
-          <div class="card p-4 lg:col-span-3 space-y-4">
-            <div class="flex items-center gap-2">
-              <LayoutGrid size={16} class="text-primary" />
-              <h3 class="font-semibold text-sm">Product Performance</h3>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div class="overflow-x-auto">
-                <table class="tbl w-full text-[11px]">
-                  <thead>
-                    <tr>
-                      <th class="text-left">#</th>
-                      <th class="text-left">Product</th>
-                      <th class="text-right">Revenue</th>
-                      <th class="text-right">Units</th>
-                      <th class="text-right">Margin</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each data.products.topRevenue as p, i}
-                      <tr>
-                        <td class="text-text-3">{i + 1}</td>
-                        <td class="font-medium">{p.name}</td>
-                        <td class="text-right">{formatCurrency(p.revenue)}</td>
-                        <td class="text-right">{p.units}</td>
-                        <td class="text-right">{p.margin.toFixed(1)}%</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-              <div class="overflow-x-auto">
-                <table class="tbl w-full text-[11px]">
-                  <thead>
-                    <tr>
-                      <th class="text-left">#</th>
-                      <th class="text-left">Product</th>
-                      <th class="text-right">Units</th>
-                      <th class="text-right">Revenue</th>
-                      <th class="text-right">Margin</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each data.products.topUnits as p, i}
-                      <tr>
-                        <td class="text-text-3">{i + 1}</td>
-                        <td class="font-medium">{p.name}</td>
-                        <td class="text-right">{p.units}</td>
-                        <td class="text-right">{formatCurrency(p.revenue)}</td>
-                        <td class="text-right">{p.margin.toFixed(1)}%</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+        <!-- §G Heatmap -->
+        <div class="card p-4 space-y-4">
+          <div class="flex items-center gap-2">
+            <LayoutGrid size={16} class="text-primary" />
+            <h3 class="font-semibold text-sm">Busiest Times</h3>
           </div>
-
-          <div class="card p-4 lg:col-span-3 space-y-4">
-            <div class="flex items-center gap-2">
-              <PieChart size={16} class="text-primary" />
-              <h3 class="font-semibold text-sm">Category Performance</h3>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="tbl w-full text-[11px]">
-                <thead>
-                  <tr>
-                    <th class="text-left">Category</th>
-                    <th class="text-right">Revenue</th>
-                    <th class="text-right">Units</th>
-                    <th class="text-right">Avg Sale</th>
-                    <th class="text-right">Margin %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each Object.entries(data.categories) as [name, stats]}
-                    <tr>
-                      <td class="font-medium">{name}</td>
-                      <td class="text-right">{formatCurrency(stats.revenue)}</td>
-                      <td class="text-right">{stats.units}</td>
-                      <td class="text-right">{formatCurrency(stats.revenue / (stats.units || 1))}</td>
-                      <td class="text-right">{stats.margin || '—'}%</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="card p-4 lg:col-span-3 space-y-4">
-            <div class="flex items-center gap-2">
-              <Clock size={16} class="text-primary" />
-              <h3 class="font-semibold text-sm">Busiest Times Heatmap</h3>
-            </div>
-            <div class="overflow-x-auto pb-2">
-              <div class="grid grid-cols-1 gap-2 text-[10px]">
-                {#each data.heatmap as dayRow, i}
-                  <div class="flex items-center gap-2">
-                    <span class="w-8 text-text-3 uppercase font-bold">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][i]}</span>
-                    <div class="grid grid-cols-24 gap-1 flex-1">
-                      {#each dayRow as cell}
-                        <div 
-                          class="h-5 w-full rounded-sm transition-all hover:bg-primary" 
-                          style="background-color: rgba(123, 79, 138, { 0.05 + (cell / (data.heatmap.flat().reduce((a,b) => a+b, 0) || 1) * 12) })"
-                        ></div>
-                      {/each}
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            </div>
-            <p class="text-center text-[10px] text-text-3 italic">Intensity represents average revenue per time slot</p>
-          </div>
+          <Heatmap values={heatmapValues} />
+          <p class="text-center text-[10px] text-[var(--text-3)] italic">
+            Intensity represents average revenue per time slot
+          </p>
         </div>
       </div>
     {/if}

@@ -1,80 +1,187 @@
+import type { RequestHandler } from '@sveltejs/kit';
 import { adminClient, readItems } from '$lib/server/directus';
+import {
+	buildKpis,
+	buildTrend,
+	buildPaymentMethods,
+	buildHourly,
+	buildWeekday,
+	buildProducts,
+	buildCategories,
+	buildCustomerInsights,
+	buildHeatmap,
+	buildSlowMovers,
+	parsePeriod,
+	type Period,
+	type KpiSet,
+	type PaymentRow,
+	type TimeSlot,
+	type ProductSet,
+	type CategoryRow,
+	type CustomerInsights,
+} from '$lib/utils/analytics';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 
-export async function load({ locals, url }) {
-  const shopId = locals.currentShop!.id;
-  const period = url.searchParams.get('period') ?? '30d';
-  const client = adminClient();
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
-  const now  = new Date();
-  const from = new Date(now);
-  if      (period === '7d')  from.setDate(now.getDate() - 7);
-  else if (period === '30d') from.setDate(now.getDate() - 30);
-  else if (period === '90d') from.setDate(now.getDate() - 90);
-  else if (period === '1y')  from.setFullYear(now.getFullYear() - 1);
+export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
+	const shop = locals.currentShop;
+	if (!shop) return {};
 
-  const sales = await client.request(readItems('sales', {
-    filter: {
-      shop:         { _eq: shopId },
-      voided_at:    { _null: true },
-      date_created: { _gte: from.toISOString() },
-    },
-    fields: ['id','total','tax_amount','payment_method','date_created'],
-    limit:  -1,
-  })) as any[];
+	const shopId = shop.id;
+	const shopTz = shop.timezone ?? 'UTC';
+	const currency = shop.currency_symbol ?? '$';
+	const period: Period = parsePeriod(url, shopTz);
 
-  const saleIds = sales.map(s => s.id);
-  let topProducts: any[] = [];
-  let byCategory: any[]  = [];
+	const client = adminClient();
 
-  if (saleIds.length > 0) {
-    const saleItems = await client.request(readItems('sale_items', {
-      filter: { sale: { _in: saleIds } },
-      fields: ['product_name','qty','line_total','product.category.name','product.category.color'],
-      limit:  -1,
-    })) as any[];
+	const [currentSales, compareSales, customers] = await Promise.all([
+		client.request(
+			readItems('sales', {
+				filter: {
+					shop: { _eq: shopId },
+					voided_at: { _null: true },
+					date_created: { _gte: period.from, _lte: period.to },
+				},
+				fields: [
+					'id',
+					'total',
+					'subtotal',
+					'tax_amount',
+					'payment_method',
+					'date_created',
+					'customer',
+				],
+				sort: ['date_created'],
+				limit: -1,
+			})
+		),
+		client.request(
+			readItems('sales', {
+				filter: {
+					shop: { _eq: shopId },
+					voided_at: { _null: true },
+					date_created: { _gte: period.cFrom, _lte: period.cTo },
+				},
+				fields: [
+					'id',
+					'total',
+					'subtotal',
+					'tax_amount',
+					'payment_method',
+					'date_created',
+					'customer',
+				],
+				sort: ['date_created'],
+				limit: -1,
+			})
+		),
+		client.request(
+			readItems('customers', {
+				filter: { shop: { _eq: shopId } },
+				fields: ['*'],
+				limit: 100,
+			})
+		),
+	]);
 
-    // Top products
-    const prodMap: Record<string, { name: string; qty: number; revenue: number }> = {};
-    const catMap:  Record<string, { name: string; color: string; revenue: number }> = {};
+	const currentIds = (currentSales as any[])
+		.map((sale) => sale.id)
+		.filter(Boolean);
 
-    for (const item of saleItems) {
-      if (!prodMap[item.product_name]) prodMap[item.product_name] = { name: item.product_name, qty: 0, revenue: 0 };
-      prodMap[item.product_name].qty     += item.qty;
-      prodMap[item.product_name].revenue += item.line_total;
+	const compareIds = (compareSales as any[])
+		.map((sale) => sale.id)
+		.filter(Boolean);
 
-      const catName  = item.product?.category?.name  ?? 'Uncategorised';
-      const catColor = item.product?.category?.color ?? '#9b8aaa';
-      if (!catMap[catName]) catMap[catName] = { name: catName, color: catColor, revenue: 0 };
-      catMap[catName].revenue += item.line_total;
-    }
+	const [allCurrentItems, allCompareItems] = await Promise.all([
+		currentIds.length
+			? client.request(
+					readItems('sale_items', {
+						filter: { sale: { _in: currentIds } },
+						fields: [
+							'id',
+							'sale',
+							'product',
+							'product_name',
+							'product_sku',
+							'qty',
+							'unit_price',
+							'line_total',
+							'product.cost_price',
+							'product.category.id',
+							'product.category.name',
+							'product.category.color',
+						],
+						limit: -1,
+					})
+			  )
+			: [],
+		compareIds.length
+			? client.request(
+					readItems('sale_items', {
+						filter: { sale: { _in: compareIds } },
+						fields: ['id', 'sale', 'product', 'qty', 'line_total', 'product.cost_price'],
+						limit: -1,
+					})
+			  )
+			: [],
+	]);
 
-    topProducts = Object.values(prodMap).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
-    byCategory  = Object.values(catMap).sort((a, b) => b.revenue - a.revenue);
-  }
+	const saleItems = allCurrentItems as any[];
+	const compareSaleItems = allCompareItems as any[];
 
-  // Revenue by day
-  const byDay: Record<string, number> = {};
-  for (const s of sales) {
-    const day = s.date_created.slice(0, 10);
-    byDay[day] = (byDay[day] ?? 0) + s.total;
-  }
+	const kpis = buildKpis(
+		currentSales as any[],
+		compareSales as any[],
+		saleItems as any[],
+		compareSaleItems as any[],
+		shopTz
+	);
+	const trend = buildTrend(
+		currentSales as any[],
+		period.from,
+		period.to,
+		compareSales as any[],
+		period.cFrom,
+		shopTz
+	);
+	const paymentMethods = buildPaymentMethods(currentSales as any[]);
+	const hourly = buildHourly(currentSales as any[], shopTz);
+	const weekday = buildWeekday(currentSales as any[], shopTz);
+	const products = buildProducts(saleItems as any[]);
+	const categories = buildCategories(saleItems as any[]);
+	const customerInsights = buildCustomerInsights(
+		currentSales as any[],
+		customers as any[]
+	);
+	const heatmap = buildHeatmap(currentSales as any[], shopTz);
+	const slowMovers = buildSlowMovers(
+		saleItems as any[],
+		(currentSales as any[])[0]?.sale_items ?? []
+	);
 
-  const revenueByDay = Object.entries(byDay)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, revenue]) => ({ date, revenue }));
+	setHeaders({
+		'cache-control': 'private, max-age=60',
+	});
 
-  const byMethod = { cash: 0, credit: 0, transfer: 0 } as Record<string, number>;
-  for (const s of sales) byMethod[s.payment_method] = (byMethod[s.payment_method] ?? 0) + s.total;
-
-  return {
-    period,
-    totalRevenue:     sales.reduce((s, x) => s + x.total, 0),
-    totalTax:         sales.reduce((s, x) => s + x.tax_amount, 0),
-    transactionCount: sales.length,
-    avgOrder:         sales.length ? Math.round(sales.reduce((s, x) => s + x.total, 0) / sales.length) : 0,
-    revenueByDay,
-    byMethod,
-    topProducts,
-    byCategory,
-  };
-}
+	return {
+		analytics: {
+			shopTz,
+			currency,
+			period,
+			kpis,
+			trend,
+			paymentMethods,
+			hourly,
+			weekday,
+			products,
+			categories,
+			customers: customerInsights,
+			heatmap,
+			slowMovers,
+		},
+	};
+};

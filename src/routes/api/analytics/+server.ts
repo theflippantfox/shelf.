@@ -1,311 +1,216 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { directus } from '$lib/server/directus';
+import { adminClient, readItems } from '$lib/server/directus';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
-import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
-import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isBetween from 'dayjs/plugin/isBetween';
+import {
+  parsePeriod,
+  calcDelta,
+  buildKpis,
+  buildTrend,
+  buildPaymentMethods,
+  buildHourly,
+  buildWeekday,
+  buildProducts,
+  buildCategories,
+  buildCustomerInsights,
+  buildHeatmap,
+  buildSlowMovers,
+  type Period,
+  type Delta,
+  type KpiSet,
+  type TrendPoint,
+  type PaymentRow,
+  type TimeSlot,
+  type ProductRow,
+  type CategoryRow,
+  type CustomerInsights,
+  type SlowMover,
+} from '$lib/analytics';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
-dayjs.extend(isSameOrBefore);
-dayjs.extend(isSameOrAfter);
+dayjs.extend(isBetween);
+
+export interface AnalyticsPayload {
+  shop: { currency_symbol: string; timezone: string };
+  period: Period;
+  kpis: {
+    revenue:      { current: number; previous: number; delta: Delta };
+    transactions: { current: number; previous: number; delta: Delta };
+    aov:          { current: number; previous: number; delta: Delta };
+    margin:       { current: number; previous: number; delta: Delta; coverage: number } | null;
+  };
+  trends: { current: TrendPoint[]; previous: TrendPoint[] };
+  distributions: {
+    paymentMethods: PaymentRow[];
+    hourly: TimeSlot[];
+    weekday: TimeSlot[];
+  };
+  products: { byRevenue: ProductRow[]; byUnits: ProductRow[] };
+  categories: CategoryRow[];
+  customers: CustomerInsights;
+  heatmap: number[][];
+  slowMovers: SlowMover[];
+}
 
 export const GET: RequestHandler = async ({ url, locals }) => {
-  const { shopId } = locals;
+  const { shopId } = locals as any;
   if (!shopId) return json({ error: 'Unauthorized' }, { status: 401 });
 
-  // 1. Resolve Shop Context
-  const shop = await directus.request('GET', '/items/shops', {
+  const client = adminClient();
+
+  // ── Shop context ─────────────────────────────────────────────────────────
+  const shop = await client.request('GET', '/items/shops', {
     params: {
       filter: { id: { _eq: shopId } },
-      fields: ['*', 'currency_symbol', 'timezone']
-    }
+      fields: ['*', 'currency_symbol', 'timezone'],
+    },
   });
-  const shopData = shop[0];
+  const shopData = shop[0] as { currency_symbol?: string; timezone?: string } | undefined;
   const shopTz = shopData?.timezone || 'UTC';
+  const currencySymbol = shopData?.currency_symbol || 'USD';
 
-  // 2. Period Selection
-  const period = url.searchParams.get('period');
-  const fromParam = url.searchParams.get('from');
-  const toParam = url.searchParams.get('to');
+  // ── Period ───────────────────────────────────────────────────────────────
+  const period = parsePeriod(url, shopTz);
 
-  let start = dayjs().tz(shopTz).startOf('day');
-  let end = dayjs().tz(shopTz);
-
-  if (fromParam && toParam) {
-    start = dayjs.tz(fromParam, shopTz).startOf('day');
-    end = dayjs.tz(toParam, shopTz).endOf('day');
-  } else if (period) {
-    switch (period) {
-      case 'today':
-        start = dayjs().tz(shopTz).startOf('day');
-        end = dayjs().tz(shopTz);
-        break;
-      case 'yesterday':
-        start = dayjs().tz(shopTz).subtract(1, 'day').startOf('day');
-        end = dayjs().tz(shopTz).subtract(1, 'day').endOf('day');
-        break;
-      case '7d':
-        start = dayjs().tz(shopTz).subtract(7, 'day').startOf('day');
-        end = dayjs().tz(shopTz).subtract(1, 'day').endOf('day');
-        break;
-      case '30d':
-        start = dayjs().tz(shopTz).subtract(30, 'day').startOf('day');
-        end = dayjs().tz(shopTz).subtract(1, 'day').endOf('day');
-        break;
-      case '90d':
-        start = dayjs().tz(shopTz).subtract(90, 'day').startOf('day');
-        end = dayjs().tz(shopTz).subtract(1, 'day').endOf('day');
-        break;
-      case 'this_month':
-        start = dayjs().tz(shopTz).startOf('month');
-        end = dayjs().tz(shopTz);
-        break;
-      case 'last_month':
-        start = dayjs().tz(shopTz).subtract(1, 'month').startOf('month');
-        end = dayjs().tz(shopTz).subtract(1, 'month').endOf('month');
-        break;
-      case 'this_year':
-        start = dayjs().tz(shopTz).startOf('year');
-        end = dayjs().tz(shopTz);
-        break;
-    }
-  }
-
-  const diffDays = end.diff(start, 'day') + 1;
-  const compStart = start.subtract(diffDays, 'day');
-  const compEnd = end.subtract(diffDays, 'day');
-
-  const formatISO = (d) => d.toISOString();
-
-  // 3. Data Fetching
-  // Fetch sales for both periods in one go to reduce requests
-  const salesParams = {
+  // ── Current-period sales ─────────────────────────────────────────────────
+  const currentSales = await client.request('GET', '/items/sales', {
     params: {
       filter: {
         shop: { _eq: shopId },
         voided_at: { _null: true },
         _or: [
-          { date_created: { _between: [`${formatISO(start)}`, `${formatISO(end)}`] } },
-          { date_created: { _between: [`${formatISO(compStart)}`, `${formatISO(compEnd)}`] } }
-        ]
-      },
+          { date_created: { _gte: period.from } },
+          { date_created: { _lte: period.to } },
+        ],
+      } as any,
       fields: ['*', { sale_items: ['*', { product: ['*', { category: ['*'] }] }] }],
-      limit: -1
-    }
-  };
+      sort: ['date_created'],
+      limit: -1,
+    },
+  }) as any[];
 
-  const allSales = await directus.request('GET', '/items/sales', salesParams);
-
-  const currentSales = allSales.filter(s => {
+  const currentSalesFiltered = currentSales.filter((s) => {
     const d = dayjs(s.date_created).tz(shopTz);
-    return d.isSameOrAfter(start) && d.isSameOrBefore(end);
+    return d.isSameOrAfter(period.from) && d.isSameOrBefore(period.to);
   });
 
-  const prevSales = allSales.filter(s => {
+  // ── Comparison-period sales ──────────────────────────────────────────────
+  const compareSalesRaw = await client.request('GET', '/items/sales', {
+    params: {
+      filter: {
+        shop: { _eq: shopId },
+        voided_at: { _null: true },
+        _or: [
+          { date_created: { _gte: period.cFrom } },
+          { date_created: { _lte: period.cTo } },
+        ],
+      } as any,
+      fields: ['*', { sale_items: ['*', { product: ['*', { category: ['*'] }] }] }],
+      sort: ['date_created'],
+      limit: -1,
+    },
+  }) as any[];
+
+  const compareSales = compareSalesRaw.filter((s) => {
     const d = dayjs(s.date_created).tz(shopTz);
-    return d.isSameOrAfter(compStart) && d.isSameOrBefore(compEnd);
+    return d.isSameOrAfter(period.cFrom) && d.isSameOrBefore(period.cTo);
   });
 
-  // --- KPI Calculations ---
-  const calcKpis = (sales) => {
-    let revenue = 0;
-    let txns = sales.length;
-    let totalCogs = 0;
-    let productsWithCost = 0;
-    let totalItemsSold = 0;
+  // ── Current-period items ─────────────────────────────────────────────────
+  const currentSaleIds = currentSalesFiltered.map((s) => s.id);
+  const currentItems = currentSaleIds.length
+    ? (await client.request('GET', '/items/sale_items', {
+        params: {
+          filter: { sale: { _in: currentSaleIds } },
+          fields: ['*', { product: ['*', { category: ['*'] }] }],
+          limit: -1,
+        },
+      }) as any[])
+    : [];
 
-    sales.forEach(s => {
-      revenue += s.total || 0;
-      s.sale_items?.forEach(item => {
-        const cost = item.product?.cost_price || 0;
-        if (cost > 0) {
-          totalCogs += cost * item.qty;
-          productsWithCost++;
-        }
-        totalItemsSold += item.qty;
-      });
-    });
+  // ── Comparison-period items ───────────────────────────────────────────────
+  const compareSaleIds = compareSales.map((s) => s.id);
+  const compareItems = compareSaleIds.length
+    ? (await client.request('GET', '/items/sale_items', {
+        params: {
+          filter: { sale: { _in: compareSaleIds } },
+          fields: ['*', { product: ['*', { category: ['*'] }] }],
+          limit: -1,
+        },
+      }) as any[])
+    : [];
 
-    const aov = txns > 0 ? revenue / txns : 0;
-    const margin = revenue > 0 ? ((revenue - totalCogs) / revenue) * 100 : 0;
-    const costCoverage = sales.flatMap(s => s.sale_items || []).length > 0 
-      ? (productsWithCost / sales.flatMap(s => s.sale_items || []).length) * 100 
-      : 0;
+  // ── Customer directory (from compare period for richer leaderboard) ──────
+  const customerIds = Array.from(
+    new Set([
+      ...currentSalesFiltered.map((s) => typeof s.customer === 'string' ? s.customer : s.customer?.id).filter(Boolean),
+      ...compareSales.map((s) => typeof s.customer === 'string' ? s.customer : s.customer?.id).filter(Boolean),
+    ])
+  );
 
-    return { revenue, txns, aov, margin, costCoverage, totalCogs, totalItemsSold };
-  };
-
-  const currentKpi = calcKpis(currentSales);
-  const prevKpi = calcKpis(prevSales);
-
-  const getDelta = (curr, prev) => {
-    if (prev === 0) return curr > 0 ? 100 : 0;
-    return ((curr - prev) / prev) * 100;
-  };
-
-  // --- Revenue Trend ---
-  const getTrend = (sales, start, end, granularity = 'day') => {
-    const map = {};
-    sales.forEach(s => {
-      const d = dayjs(s.date_created).tz(shopTz);
-      const key = granularity === 'day' ? d.format('YYYY-MM-DD') : d.format('YYYY-MM-DD HH');
-      map[key] = (map[key] || 0) + s.total;
-    });
-    return map;
-  };
-
-  const currentTrend = getTrend(currentSales, start, end);
-  const prevTrend = getTrend(prevSales, compStart, compEnd);
-
-  // --- Distributions ---
-  const paymentMethods = {};
-  currentSales.forEach(s => {
-    const method = s.payment_method || 'Unknown';
-    paymentMethods[method] = (paymentMethods[method] || 0) + s.total;
-  });
-
-  const hourlyDist = Array(24).fill(0);
-  const dailyDist = Array(7).fill(0); // 0=Sun, 6=Sat
-  currentSales.forEach(s => {
-    const d = dayjs(s.date_created).tz(shopTz);
-    hourlyDist[d.hour()] += s.total;
-    dailyDist[d.day()] += s.total;
-  });
-
-  // --- Product Performance ---
-  const productStats = {};
-  currentSales.forEach(s => {
-    s.sale_items?.forEach(item => {
-      const id = item.product?.id || item.product_sku;
-      if (!productStats[id]) {
-        productStats[id] = { 
-          name: item.product_name, 
-          revenue: 0, 
-          units: 0, 
-          cost: 0,
-          category: item.product?.category?.name || 'Uncategorized'
-        };
-      }
-      productStats[id].revenue += item.line_total;
-      productStats[id].units += item.qty;
-      productStats[id].cost += (item.product?.cost_price || 0) * item.qty;
-    });
-  });
-
-  const productsArray = Object.values(productStats).map(p => ({
-    ...p,
-    margin: p.revenue > 0 ? ((p.revenue - p.cost) / p.revenue) * 100 : 0
-  }));
-
-  const topRevenue = [...productsArray].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  const topUnits = [...productsArray].sort((a, b) => b.units - a.units).slice(0, 10);
-
-  // --- Category Breakdown ---
-  const categories = {};
-  productsArray.forEach(p => {
-    if (!categories[p.category]) {
-      categories[p.category] = { revenue: 0, profit: 0, units: 0 };
-    }
-    categories[p.category].revenue += p.revenue;
-    categories[p.category].profit += (p.revenue - p.cost);
-    categories[p.category].units += p.units;
-  });
-
-  // --- Customer Insights ---
-  const customerStats = {};
-  currentSales.forEach(s => {
-    const cid = s.customer;
-    if (!cid) return;
-    if (!customerStats[cid]) {
-      customerStats[cid] = { spend: 0, visits: 0 };
-    }
-    customerStats[cid].spend += s.total;
-    customerStats[cid].visits += 1;
-  });
-
-  const topCustomers = Object.entries(customerStats)
-    .map(([id, stats]) => ({ id, ...stats }))
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 8);
-
-  // --- Heatmap ---
-  const heatmap = Array(7).fill(0).map(() => Array(24).fill(0));
-  const counts = Array(7).fill(0).map(() => Array(24).fill(0));
-  currentSales.forEach(s => {
-    const d = dayjs(s.date_created).tz(shopTz);
-    const day = d.day();
-    const hour = d.hour();
-    heatmap[day][hour] += s.total;
-    counts[day][hour]++;
-  });
-
-  // Average the heatmap
-  for (let d = 0; d < 7; d++) {
-    for (let h = 0; h < 24; h++) {
-      if (counts[d][h] > 0) heatmap[d][h] /= counts[d][h];
-    }
+  let customers: any[] = [];
+  if (customerIds.length) {
+    customers = (await client.request('GET', '/items/customers', {
+      params: {
+        filter: { id: { _in: customerIds } },
+        fields: ['*'],
+        limit: -1,
+      },
+    })) as any[];
   }
 
-  // --- Slow Movers ---
-  const slowMovers = productsArray
-    .filter(p => p.units <= 2)
-    .sort((a, b) => a.units - b.units);
+  // ── Build the response via the shared analytics library ──────────────────
+  const kpis         = buildKpis(currentSalesFiltered, compareSales, currentItems, compareItems, shopTz);
+  const trend        = buildTrend(currentSalesFiltered, period.from, period.to, compareSales, period.cFrom, shopTz);
+  const paymentMethods = buildPaymentMethods(currentSalesFiltered);
+  const hourly       = buildHourly(currentSalesFiltered, shopTz);
+  const weekday      = buildWeekday(currentSalesFiltered, shopTz);
+  const products     = buildProducts(currentItems);
+  const categories   = buildCategories(currentItems);
+  const customerInsights = buildCustomerInsights(currentSalesFiltered, customers);
+  const heatmap      = buildHeatmap(currentSalesFiltered, shopTz);
+  const slowMovers   = buildSlowMovers(currentItems, (currentSalesFiltered[0]?.sale_items ?? []) as any[]);
 
-  return json({
+  const payload: AnalyticsPayload = {
     shop: {
-      currency_symbol: shopData.currency_symbol,
-      timezone: shopTz
+      currency_symbol: currencySymbol,
+      timezone: shopTz,
     },
-    period: {
-      start,
-      end,
-      compStart,
-      compEnd,
-      diffDays
-    },
+    period,
     kpis: {
-      revenue: {
-        current: currentKpi.revenue,
-        previous: prevKpi.revenue,
-        delta: getDelta(currentKpi.revenue, prevKpi.revenue)
-      },
-      transactions: {
-        current: currentKpi.txns,
-        previous: prevKpi.txns,
-        delta: getDelta(currentKpi.txns, prevKpi.txns)
-      },
-      aov: {
-        current: currentKpi.aov,
-        previous: prevKpi.aov,
-        delta: getDelta(currentKpi.aov, prevKpi.aov)
-      },
-      margin: {
-        current: currentKpi.margin,
-        previous: prevKpi.margin,
-        delta: currentKpi.margin - prevKpi.margin, // percentage points
-        coverage: currentKpi.costCoverage
-      }
+      revenue:      { current: kpis.revenue.current,      previous: kpis.revenue.previous,      delta: kpis.revenue.delta },
+      transactions: { current: kpis.transactions.current, previous: kpis.transactions.previous, delta: kpis.transactions.delta },
+      aov:          { current: kpis.avgOrder.current,     previous: kpis.avgOrder.previous,     delta: kpis.avgOrder.delta },
+      margin:       kpis.margin
+        ? {
+            current:   kpis.margin.current,
+            previous:  kpis.margin.previous,
+            delta:     kpis.margin.delta,
+            coverage:  kpis.margin.coverage,
+          }
+        : null,
     },
     trends: {
-      current: currentTrend,
-      previous: prevTrend
+      current:  trend,
+      previous: [],
     },
     distributions: {
       paymentMethods,
-      hourlyDist,
-      dailyDist
+      hourly,
+      weekday,
     },
     products: {
-      topRevenue,
-      topUnits
+      byRevenue: products.byRevenue,
+      byUnits:   products.byUnits,
     },
     categories,
-    customers: {
-      topCustomers
-    },
+    customers: customerInsights,
     heatmap,
-    slowMovers
-  });
+    slowMovers,
+  };
+
+  return json(payload);
 };
