@@ -18,15 +18,15 @@ import {
   type DirectusClient,
   type RestClient,
 } from '@directus/sdk';
-import { DIRECTUS_URL, DIRECTUS_ADMIN_TOKEN } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import type { ShelfSchema } from '$lib/types/directus';
 
 export type DirectusRestClient = DirectusClient<ShelfSchema> & RestClient<ShelfSchema>;
 
 /** Admin client — used for all server-side data operations */
 export function adminClient(): DirectusRestClient {
-  return createDirectus<ShelfSchema>(DIRECTUS_URL)
-    .with(staticToken(DIRECTUS_ADMIN_TOKEN))
+  return createDirectus<ShelfSchema>(env.DIRECTUS_URL)
+    .with(staticToken(env.DIRECTUS_ADMIN_TOKEN))
     .with(rest()) as DirectusRestClient;
 }
 
