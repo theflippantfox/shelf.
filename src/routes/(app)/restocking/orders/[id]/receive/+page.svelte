@@ -151,7 +151,7 @@
 
     <!-- Action Footer -->
     <div class="flex justify-end">
-      <Button variant="primary" on:click={handleReceive} disabled={saving} class="px-8">
+      <Button variant="primary" onclick={handleReceive} disabled={saving} class="px-8">
         {#if saving}
           <span class="flex items-center gap-2">
             <span class="animate-spin">🌀</span> Processing...

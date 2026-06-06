@@ -65,19 +65,25 @@ export async function POST({ request, params, locals }) {
           reason: 'restock',
           reference: po[0].order_ref,
           purchase_order: params.id,
-          created_by: locals.userId,
+          created_by: locals.user?.id ?? null,
         }));
 
-        // 5. Create Supplier Price History
-        await client.request(createItem('supplier_price_history', {
-          shop: shopId,
-          supplier: currentPoi.supplier, // This might need to be fetched from the PO
-          product: p.id,
-          unit_cost: unit_cost,
-          currency_code: locals.currentShop.currency_code,
-          purchase_order: params.id,
-          recorded_at: new Date().toISOString(),
-        }));
+      // 5. Create Supplier Price History
+      const poForPrice = await client.request(readItems('purchase_orders', {
+        filter: { id: { _eq: params.id } },
+        limit: 1,
+        fields: ['supplier'],
+      }));
+
+      await client.request(createItem('supplier_price_history', {
+        shop: shopId,
+        supplier: poForPrice[0]?.supplier ?? currentPoi.supplier ?? null,
+        product: p.id,
+        unit_cost: unit_cost,
+        currency_code: locals.currentShop.currency_code,
+        purchase_order: params.id,
+        recorded_at: new Date().toISOString(),
+      }));
 
         // 6. Create Product Batch if expiry tracking is enabled
         if (p.expiry_tracking) {

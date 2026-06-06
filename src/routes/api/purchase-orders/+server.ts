@@ -27,19 +27,29 @@ export async function GET({ locals, url }) {
 
 export async function POST({ request, locals }) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
+
   const body = await request.json();
+  if (!body.supplier) {
+    return json({ error: 'Missing supplier' }, { status: 400 });
+  }
+
   const client = adminClient();
+  const now = new Date().toISOString().split('T')[0];
 
-  // Auto-generate order_ref if not provided
-  const orderRef = body.order_ref ?? `PO-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${Math.random().toString(36).substring(2,6).toUpperCase()}`;
+  const order = await client.request(
+    createItem('purchase_orders', {
+      shop: locals.currentShop.id,
+      supplier: body.supplier,
+      status: body.status ?? 'draft',
+      order_date: body.order_date ?? now,
+      expected_delivery_date: body.expected_delivery_date ?? null,
+      order_ref: body.order_ref ?? `PO-${now.replace(/-/g, '')}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+      notes: body.notes ?? null,
+      tax_amount: body.tax_amount ?? 0,
+      shipping_cost: body.shipping_cost ?? 0,
+      created_by: locals.user?.id ?? null,
+    })
+  );
 
-  const order = await client.request(createItem('purchase_orders', {
-    ...body,
-    order_ref: orderRef,
-    shop: locals.currentShop.id,
-    status: body.status ?? 'draft',
-    order_date: body.order_date ?? new Date().toISOString().split('T')[0],
-  }));
-  
   return json(order, { status: 201 });
 }
