@@ -285,11 +285,12 @@ textarea.input { resize: vertical; min-height: 80px; }
 .mono        { font-family: var(--font-mono); font-size: 0.9em; }
 
 /* ─── Animation ─────────────────────────────────────── */
+.fade-up { animation: fadeUp 200ms ease-out both; }
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
-.fade-up { animation: fadeUp 200ms ease-out both; }
 
 /* ─── Scrollbar ─────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
