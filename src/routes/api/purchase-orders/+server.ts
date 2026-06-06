@@ -47,7 +47,9 @@ export async function POST({ request, locals }) {
       notes: body.notes ?? null,
       tax_amount: body.tax_amount ?? 0,
       shipping_cost: body.shipping_cost ?? 0,
-      created_by: locals.user?.id ?? null,
+      ...(locals.user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locals.user.id)
+        ? { created_by: locals.user.id }
+        : {}),
     })
   );
 
