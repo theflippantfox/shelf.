@@ -14,10 +14,18 @@ const BASE  = (process.env.DIRECTUS_URL ?? 'http://localhost:8055').replace(/\/$
 const TOKEN = process.env.DIRECTUS_ADMIN_TOKEN ?? '';
 if (!TOKEN) { console.error('❌  DIRECTUS_ADMIN_TOKEN not set'); process.exit(1); }
 
+try {
+  await fetch('http://shelf_directus:8055/health');
+} catch (err: any) {
+  console.error(`❌  Directus not reachable at ${BASE}: ${err?.message ?? err}`);
+  process.exit(1);
+}
+
 const H = { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` };
 
 async function req(method: string, path: string, body?: unknown) {
-  const res  = await fetch(`${BASE}${path}`, { method, headers: H, body: body ? JSON.stringify(body) : undefined });
+  const directusBase = (process.env.DIRECTUS_URL ?? 'http://localhost:8055').replace(/\/$/, '');
+  const res  = await fetch(`${directusBase}${path}`, { method, headers: H, body: body ? JSON.stringify(body) : undefined });
   const text = await res.text();
   let json: any;
   try { json = JSON.parse(text); } catch { json = { _raw: text }; }

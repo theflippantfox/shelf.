@@ -25,8 +25,8 @@
     email: "",
     address: "",
     payment_terms: "cash",
-    currency_code: "USD",
-    lead_time_days: "",
+    currency_code: "INR",
+    lead_time_days: "1",
     notes: "",
   });
 
