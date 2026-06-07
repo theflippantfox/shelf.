@@ -281,14 +281,14 @@
                 <div class="flex items-baseline justify-between">
                   <span class="text-[10px] text-[var(--text-3)]">At cost</span>
                   <span class="text-sm font-semibold tabular-nums"
-                    >{formatCurrency(stockValue.costValue)}</span
+                    >{formatCurrency(stockValue.costValue / 100)}</span
                   >
                 </div>
                 <div class="flex items-baseline justify-between">
                   <span class="text-[10px] text-[var(--text-3)]">At retail</span
                   >
                   <span class="text-sm font-semibold tabular-nums"
-                    >{formatCurrency(stockValue.retailValue)}</span
+                    >{formatCurrency(stockValue.retailValue / 100)}</span
                   >
                 </div>
                 <div
