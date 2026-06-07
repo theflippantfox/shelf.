@@ -59,23 +59,81 @@ async function addField(col: string, field: any) {
   else console.log(`     + ${field.field}`);
 }
 
+/**
+ * Nullify FK column values that reference non-existent rows in the target table.
+ * Only acts on nullable columns — non-nullable ones are skipped (can't be NULLed
+ * without a schema change, so those need manual data repair).
+ * Returns the number of rows patched.
+ */
+async function nullifyOrphanedFk(col: string, field: string, related: string): Promise<number> {
+  // Only safe to NULL out if the column allows it
+  const fi = await req('GET', `/fields/${col}/${field}`);
+  if (!fi.ok || fi.data?.schema?.is_nullable === false) return 0;
+
+  // Fetch rows where the FK is already set (non-null)
+  const rows = await req('GET',
+    `/items/${col}?filter[${field}][_nnull]=true&fields=id,${field}&limit=500`);
+  if (!rows.ok || !Array.isArray(rows.data) || rows.data.length === 0) return 0;
+
+  // Fetch all valid IDs in the referenced table
+  const rel = await req('GET', `/items/${related}?fields=id&limit=-1`);
+  if (!rel.ok || !Array.isArray(rel.data)) return 0;
+
+  const valid  = new Set(rel.data.map((r: any) => r.id));
+  const orphans = rows.data.filter((row: any) => !valid.has(row[field]));
+  if (orphans.length === 0) return 0;
+
+  console.log(`     🔧  Clearing ${orphans.length} orphaned ${col}.${field} value(s)…`);
+  const patch = await req('PATCH', `/items/${col}`,
+    orphans.map((row: any) => ({ id: row.id, [field]: null })));
+  if (!patch.ok) console.warn(`     ⚠  Patch failed:`, JSON.stringify(patch.data));
+  return orphans.length;
+}
+
 async function addRelation(col: string, field: string, related: string) {
+  // Attempt 1 — standard (DB-level FK + meta record)
   let r = await req('POST', '/relations', { collection: col, field, related_collection: related });
 
-  // SQLite doesn't support ALTER TABLE … ADD CONSTRAINT FOREIGN KEY.
-  // Retry with schema: null so Directus stores only the meta record in
-  // directus_relations without attempting a DB-level FK constraint.
   if (!r.ok && r.status !== 409) {
     const errStr = JSON.stringify(r.data);
-    if (errStr.includes('alter table') || errStr.includes('foreign key') || errStr.includes('SQLITE')) {
-      r = await req('POST', '/relations', {
-        collection: col, field, related_collection: related,
-        schema: null,
-      });
+    const isFkErr = errStr.includes('alter table') || errStr.includes('foreign key')
+                 || errStr.includes('SQLITE')      || errStr.includes('constraint');
+
+    if (isFkErr) {
+      // Show the full error so the actual Postgres message is visible (not truncated)
+      console.warn(`     FK error on ${col}.${field}: ${errStr}`);
+
+      // Attempt 2 — clean orphaned FK values (nullable columns only) then retry
+      const cleaned = await nullifyOrphanedFk(col, field, related);
+      if (cleaned > 0) {
+        r = await req('POST', '/relations', { collection: col, field, related_collection: related });
+      }
+
+      // Attempt 3 — schema: null (meta-only; reliable on SQLite, sometimes on PG)
+      if (!r.ok && r.status !== 409) {
+        r = await req('POST', '/relations', {
+          collection: col, field, related_collection: related, schema: null,
+        });
+      }
+
+      // Attempt 4 — PATCH the field meta so at least the Directus UI wires up
+      // correctly. This does NOT create a directus_relations record or a DB FK,
+      // but it's better than nothing and will be upgraded on the next clean run.
+      if (!r.ok && r.status !== 409) {
+        const patchR = await req('PATCH', `/fields/${col}/${field}`, {
+          meta: { interface: 'select-dropdown-m2o', special: ['m2o'], related_collection: related },
+        });
+        if (patchR.ok) {
+          console.warn(`  ↗  ${col}.${field} → ${related}  (⚠ meta-only — DB FK pending data fix)`);
+        } else {
+          console.warn(`  ⚠  ${col}.${field} → ${related}:`, JSON.stringify(r.data));
+        }
+        return;
+      }
     }
   }
 
-  if (!r.ok && r.status !== 409) console.warn(`  ⚠  ${col}.${field} → ${related}:`, JSON.stringify(r.data).slice(0, 120));
+  if (!r.ok && r.status !== 409) console.warn(`  ⚠  ${col}.${field} → ${related}:`, JSON.stringify(r.data));
   else console.log(`  ↗  ${col}.${field} → ${related}`);
 }
 
