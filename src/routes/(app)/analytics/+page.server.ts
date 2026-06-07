@@ -27,6 +27,78 @@ import timezone from 'dayjs/plugin/timezone';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+// ─── Inline helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Returns the last 12 calendar months of revenue + transaction counts.
+ * Independent of the selected period — always the rolling 12 months to now.
+ */
+function buildMonthlyTrend(sales: any[], shopTz: string) {
+	const now = dayjs().tz(shopTz);
+	return Array.from({ length: 12 }, (_, i) => {
+		const m = now.subtract(11 - i, 'month');
+		const start = m.startOf('month').valueOf();
+		const end = m.endOf('month').valueOf();
+		const slice = sales.filter((s) => {
+			const d = dayjs(s.date_created).tz(shopTz).valueOf();
+			return d >= start && d <= end;
+		});
+		return {
+			label: m.format('MMM'),
+			month: m.format('YYYY-MM'),
+			revenue: slice.reduce((acc, s) => acc + (s.total ?? 0), 0),
+			count: slice.length,
+		};
+	});
+}
+
+/**
+ * Calculates total inventory value at cost and at retail.
+ * `price` and `cost_price` are stored as integers (÷100 = actual value).
+ */
+function buildStockValue(products: any[]) {
+	let costValue = 0;
+	let retailValue = 0;
+	let totalUnits = 0;
+	for (const p of products) {
+		const qty = Math.max(0, p.qty ?? 0);
+		costValue += qty * (p.cost_price ?? 0);
+		retailValue += qty * (p.price ?? 0);
+		totalUnits += qty;
+	}
+	return {
+		costValue,
+		retailValue,
+		totalUnits,
+		potentialMargin: retailValue > 0 ? ((retailValue - costValue) / retailValue) * 100 : 0,
+	};
+}
+
+/**
+ * Derives absolute gross profit from sale_items using line_total vs cost.
+ * Both values are stored as integers (÷100 = actual).
+ */
+function buildGrossProfit(items: any[], compareItems: any[]) {
+	const calc = (arr: any[]) =>
+		arr.reduce((sum, item) => {
+			const cost = (item.product?.cost_price ?? 0) * (item.qty ?? 0);
+			return sum + (item.line_total ?? 0) - cost;
+		}, 0);
+	const current = calc(items);
+	const previous = calc(compareItems);
+	const deltaPct = previous > 0 ? ((current - previous) / previous) * 100 : null;
+	return {
+		current,
+		previous,
+		delta:
+			deltaPct !== null
+				? { pct: Math.round(deltaPct), direction: deltaPct >= 0 ? 'up' : 'down' }
+				: null,
+	};
+}
+
+// ─── Load ─────────────────────────────────────────────────────────────────────
+
 export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 	const shop = locals.currentShop;
 	if (!shop) return {};
@@ -38,7 +110,11 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 
 	const client = adminClient();
 
-	const [currentSales, compareSales, customers] = await Promise.all([
+	// Monthly window — last 12 full calendar months, always fixed
+	const monthlyFrom = dayjs().tz(shopTz).subtract(11, 'month').startOf('month').toISOString();
+	const monthlyTo = dayjs().tz(shopTz).endOf('month').toISOString();
+
+	const [currentSales, compareSales, customers, monthlySales, stockProducts] = await Promise.all([
 		client.request(
 			readItems('sales', {
 				filter: {
@@ -86,15 +162,31 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 				limit: 100,
 			})
 		),
+		// Rolling 12-month window (independent of selected period)
+		client.request(
+			readItems('sales', {
+				filter: {
+					shop: { _eq: shopId },
+					voided_at: { _null: true },
+					date_created: { _gte: monthlyFrom, _lte: monthlyTo },
+				},
+				fields: ['id', 'total', 'date_created'],
+				sort: ['date_created'],
+				limit: -1,
+			})
+		),
+		// All products for stock value calculation
+		client.request(
+			readItems('products', {
+				filter: { shop: { _eq: shopId } },
+				fields: ['id', 'price', 'cost_price', 'qty'],
+				limit: -1,
+			})
+		),
 	]);
 
-	const currentIds = (currentSales as any[])
-		.map((sale) => sale.id)
-		.filter(Boolean);
-
-	const compareIds = (compareSales as any[])
-		.map((sale) => sale.id)
-		.filter(Boolean);
+	const currentIds = (currentSales as any[]).map((s) => s.id).filter(Boolean);
+	const compareIds = (compareSales as any[]).map((s) => s.id).filter(Boolean);
 
 	const [allCurrentItems, allCompareItems] = await Promise.all([
 		currentIds.length
@@ -136,8 +228,8 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 	const kpis = buildKpis(
 		currentSales as any[],
 		compareSales as any[],
-		saleItems as any[],
-		compareSaleItems as any[],
+		saleItems,
+		compareSaleItems,
 		shopTz
 	);
 	const trend = buildTrend(
@@ -151,21 +243,16 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 	const paymentMethods = buildPaymentMethods(currentSales as any[]);
 	const hourly = buildHourly(currentSales as any[], shopTz);
 	const weekday = buildWeekday(currentSales as any[], shopTz);
-	const products = buildProducts(saleItems as any[]);
-	const categories = buildCategories(saleItems as any[]);
-	const customerInsights = buildCustomerInsights(
-		currentSales as any[],
-		customers as any[]
-	);
+	const products = buildProducts(saleItems);
+	const categories = buildCategories(saleItems);
+	const customerInsights = buildCustomerInsights(currentSales as any[], customers as any[]);
 	const heatmap = buildHeatmap(currentSales as any[], shopTz);
-	const slowMovers = buildSlowMovers(
-		saleItems as any[],
-		(currentSales as any[])[0]?.sale_items ?? []
-	);
+	const slowMovers = buildSlowMovers(saleItems, (currentSales as any[])[0]?.sale_items ?? []);
+	const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
+	const stockValue = buildStockValue(stockProducts as any[]);
+	const grossProfit = buildGrossProfit(saleItems, compareSaleItems);
 
-	setHeaders({
-		'cache-control': 'private, max-age=60',
-	});
+	setHeaders({ 'cache-control': 'private, max-age=60' });
 
 	return {
 		analytics: {
@@ -182,6 +269,9 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 			customers: customerInsights,
 			heatmap,
 			slowMovers,
+			monthlyTrend,
+			stockValue,
+			grossProfit,
 		},
 	};
 };

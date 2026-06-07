@@ -1,8 +1,21 @@
 import { json } from '@sveltejs/kit';
 import { adminClient, createItem, updateItem, readItems } from '$lib/server/directus';
 
+async function retryRequest(fn, retries = 5) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err?.response?.status === 429 && retries > 0) {
+      await new Promise((r) => setTimeout(r, 100));
+      return retryRequest(fn, retries - 1);
+    }
+    throw err;
+  }
+}
+
 export async function POST({ request, params, locals }) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
+
   const shopId = locals.currentShop.id;
   const body = await request.json();
   const client = adminClient();
@@ -10,127 +23,190 @@ export async function POST({ request, params, locals }) {
   const { received_date, items, notes } = body;
 
   try {
-    // In a real production environment with a DB supporting transactions, 
-    // we would wrap all of this in a single transaction.
-    // Directus API doesn't support arbitrary multi-collection transactions 
-    // via REST in a single call, so we implement the logic sequentially.
-    
-    const results = [];
-    for (const item of items) {
-      const { id, quantity_received, unit_cost, update_cost_price } = item;
-      
-      // 1. Update PO Item
-      const poi = await client.request(readItems('purchase_order_items', {
-        filter: { id: { _eq: id } },
-        limit: 1,
-      }));
-      const currentPoi = poi[0];
-      const lineTotal = quantity_received * unit_cost;
-      
-      await client.request(updateItem('purchase_order_items', id, {
-        quantity_received,
-        unit_cost,
-        line_total: lineTotal,
-      }));
-
-      // 2. Update Product Quantity
-      if (currentPoi.product) {
-        const product = await client.request(readItems('products', {
-          filter: { id: { _eq: currentPoi.product } },
-          limit: 1,
-        }));
-        const p = product[0];
-        
-        await client.request(updateItem('products', p.id, {
-          qty: p.qty + quantity_received,
-        }));
-
-        // 3. Update Product Cost Price if requested
-        if (update_cost_price) {
-          await client.request(updateItem('products', p.id, {
-            cost_price: unit_cost,
-          }));
-        }
-
-        // 4. Create Stock Log entry
-        const po = await client.request(readItems('purchase_orders', {
+    // Load purchase order once
+    const poResult = await retryRequest(() =>
+      client.request(
+        readItems('purchase_orders', {
           filter: { id: { _eq: params.id } },
           limit: 1,
-        }));
-        
-        await client.request(createItem('stock_log', {
-          shop: shopId,
-          product: p.id,
-          delta: quantity_received,
-          reason: 'restock',
-          reference: po[0].order_ref,
-          purchase_order: params.id,
-          created_by: locals.user?.id ?? null,
-        }));
+          fields: ['id', 'order_ref', 'supplier']
+        })
+      )
+    );
 
-      // 5. Create Supplier Price History
-      const poForPrice = await client.request(readItems('purchase_orders', {
-        filter: { id: { _eq: params.id } },
-        limit: 1,
-        fields: ['supplier'],
-      }));
+    const purchaseOrder = poResult[0];
 
-      await client.request(createItem('supplier_price_history', {
-        shop: shopId,
-        supplier: poForPrice[0]?.supplier ?? currentPoi.supplier ?? null,
-        product: p.id,
-        unit_cost: unit_cost,
-        currency_code: locals.currentShop.currency_code,
-        purchase_order: params.id,
-        recorded_at: new Date().toISOString(),
-      }));
+    // Load PO items once
+    const itemIds = items.map((i) => i.id);
 
-        // 6. Create Product Batch if expiry tracking is enabled
-        if (p.expiry_tracking) {
-          await client.request(createItem('product_batches', {
+    const poItems = await retryRequest(() =>
+      client.request(
+        readItems('purchase_order_items', {
+          filter: {
+            id: { _in: itemIds }
+          },
+          limit: -1
+        })
+      )
+    );
+
+    const poItemMap = new Map(poItems.map((i) => [i.id, i]));
+
+    // Load products once
+    const productIds = poItems.map((i) => i.product).filter(Boolean);
+
+    const products = await retryRequest(() =>
+      client.request(
+        readItems('products', {
+          filter: {
+            id: { _in: productIds }
+          },
+          limit: -1
+        })
+      )
+    );
+
+    const productMap = new Map(products.map((p) => [p.id, p]));
+
+    for (const item of items) {
+      const { id, quantity_received, unit_cost, update_cost_price } = item;
+
+      const currentPoi = poItemMap.get(id);
+      if (!currentPoi) continue;
+
+      const lineTotal = quantity_received * unit_cost;
+
+      await retryRequest(() =>
+        client.request(
+          updateItem('purchase_order_items', id, {
+            quantity_received,
+            unit_cost,
+            line_total: lineTotal
+          })
+        )
+      );
+
+      if (!currentPoi.product) continue;
+
+      const product = productMap.get(currentPoi.product);
+      if (!product) continue;
+
+      const productUpdate = {
+        qty: product.qty + quantity_received,
+        ...(update_cost_price ? { cost_price: unit_cost } : {})
+      };
+
+      await retryRequest(() =>
+        client.request(updateItem('products', product.id, productUpdate))
+      );
+
+      await retryRequest(() =>
+        client.request(
+          createItem('stock_log', {
             shop: shopId,
-            product: p.id,
-            purchase_order_item: id,
-            quantity_remaining: quantity_received,
-            // expiry_date and batch_number should be passed in the item body
-            expiry_date: item.expiry_date || null,
-            batch_number: item.batch_number || null,
-          }));
-        }
+            product: product.id,
+            delta: quantity_received,
+            reason: 'restock',
+            reference: purchaseOrder.order_ref,
+            purchase_order: params.id,
+            created_by: locals.user?.id ?? null
+          })
+        )
+      );
+
+      await retryRequest(() =>
+        client.request(
+          createItem('supplier_price_history', {
+            shop: shopId,
+            supplier: purchaseOrder?.supplier ?? null,
+            product: product.id,
+            unit_cost,
+            currency_code: locals.currentShop.currency_code,
+            purchase_order: params.id,
+            recorded_at: new Date().toISOString()
+          })
+        )
+      );
+
+      if (product.expiry_tracking) {
+        await retryRequest(() =>
+          client.request(
+            createItem('product_batches', {
+              shop: shopId,
+              product: product.id,
+              purchase_order_item: id,
+              quantity_remaining: quantity_received,
+              expiry_date: item.expiry_date || null,
+              batch_number: item.batch_number || null
+            })
+          )
+        );
       }
-      results.push({ id, status: 'received' });
     }
 
-    // 7. Recalculate PO Totals & Status
-    const allItems = await client.request(readItems('purchase_order_items', {
-      filter: { purchase_order: { _eq: params.id } },
-      limit: -1,
-    }));
-    
+    const allItems = await retryRequest(() =>
+      client.request(
+        readItems('purchase_order_items', {
+          filter: { purchase_order: { _eq: params.id } },
+          limit: -1
+        })
+      )
+    );
+
     let subtotal = 0;
     let allReceived = true;
     let anyReceived = false;
 
     for (const item of allItems) {
-      subtotal += (item.quantity_received * item.unit_cost);
+      subtotal += item.quantity_received * item.unit_cost;
+
       if (item.quantity_received < item.quantity_ordered) allReceived = false;
       if (item.quantity_received > 0) anyReceived = true;
     }
 
-    const status = allReceived ? 'received' : (anyReceived ? 'partial' : 'ordered');
-    
-    await client.request(updateItem('purchase_orders', params.id, {
-      subtotal,
-      total_cost: subtotal + (body.tax_amount || 0) + (body.shipping_cost || 0),
-      status,
-      received_date: received_date || new Date().toISOString().split('T')[0],
-      notes: notes || undefined,
-    }));
+    const status = allReceived
+      ? 'received'
+      : anyReceived
+      ? 'partial'
+      : 'ordered';
+
+    await retryRequest(() =>
+      client.request(
+        updateItem('purchase_orders', params.id, {
+          subtotal,
+          total_cost:
+            subtotal +
+            (body.tax_amount || 0) +
+            (body.shipping_cost || 0),
+          status,
+          received_date:
+            received_date ||
+            new Date().toISOString().split('T')[0],
+          notes: notes || undefined
+        })
+      )
+    );
 
     return json({ success: true }, { status: 200 });
-
   } catch (e) {
     console.error('Receive error:', e);
-    return json({ error: 'Internal Server Error', details: e.message }, { status: 500 });
+
+    if (e?.response?.status === 429) {
+      return json(
+        {
+          error: 'Rate limited by Directus'
+        },
+        { status: 429 }
+      );
+    }
+
+    return json(
+      {
+        error: 'Internal Server Error',
+        details: e?.message
+      },
+      { status: 500 }
+    );
   }
 }
+
