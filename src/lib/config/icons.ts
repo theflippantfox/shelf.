@@ -95,6 +95,7 @@ export const ICONS = {
   accessories: 'Watch',
   tools:       'Wrench',
   supplements: 'Pill',
+  truck:        'Truck',
   clothing:    'Shirt',
   food:        'ShoppingBag',
   electronics: 'Zap',

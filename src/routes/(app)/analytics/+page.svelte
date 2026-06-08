@@ -57,37 +57,47 @@
 
   const trendLabels = $derived(trend.map((t: any) => t.label));
 
-  const trendDatasets = $derived([
-    {
-      label: "Current",
-      data: trend.map((t: any) => {
-        if (activeMetric === "revenue") return (t.current?.revenue ?? 0) / 100;
-        if (activeMetric === "transactions") return t.current?.txns ?? 0;
-        return (t.current?.avgOrder ?? 0) / 100;
-      }),
-      borderColor: "var(--primary)",
-      backgroundColor: "rgba(123, 79, 138, 0.15)",
-      fill: true,
-      tension: 0.4,
-      pointRadius: 2,
-      borderWidth: 2,
-    },
-    {
-      label: "Previous",
-      data: trend.map((t: any) =>
-        activeMetric === "transactions"
-          ? (t.previous ?? 0)
-          : (t.previous ?? 0) / 100,
-      ),
-      borderColor: "var(--text-3)",
-      backgroundColor: "rgba(255,255,255,0.04)",
-      fill: true,
-      tension: 0.4,
-      pointRadius: 0,
-      borderWidth: 1,
-      borderDash: [5, 5],
-    },
-  ]);
+  const trendDatasets = $derived(
+    activeMetric === 'revenue'
+      ? [
+          {
+            label: 'Revenue',
+            data: trend.map((t: any) => (t.current?.revenue ?? 0) / 100),
+            borderColor: 'var(--primary)',
+            backgroundColor: 'var(--primary-dim)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 2,
+            borderWidth: 2,
+          },
+          {
+            label: 'Profit',
+            // Field name may differ — check your server load fn (e.g. grossProfit, profit)
+            data: trend.map((t: any) => (t.current?.profit ?? 0) / 100),
+            borderColor: 'var(--cobalt)',
+            fill: false,
+            tension: 0.4,
+            pointRadius: 2,
+            borderWidth: 1.5,
+          },
+        ]
+      : [
+          {
+            label: activeMetric === 'transactions' ? 'Transactions' : 'Avg Order',
+            data: trend.map((t: any) =>
+              activeMetric === 'transactions'
+                ? (t.current?.txns ?? 0)
+                : (t.current?.avgOrder ?? 0) / 100,
+            ),
+            borderColor: 'var(--primary)',
+            backgroundColor: 'var(--primary-dim)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 2,
+            borderWidth: 2,
+          },
+        ]
+  );
 
   const hourlyLabels = $derived(
     analytics?.hourly?.map((h: any) => h.label) ?? [],
@@ -118,13 +128,16 @@
     ),
   );
 
-  // Monthly chart
-  const monthlyLabels = $derived(monthlyTrend.map((m: any) => m.label));
+  // Monthly chart — only months that have actual sales
+  const monthlyWithData = $derived(
+    monthlyTrend.filter((m: any) => (m.revenue ?? 0) > 0),
+  );
+  const monthlyLabels = $derived(monthlyWithData.map((m: any) => m.label));
   const monthlyRevData = $derived(
-    monthlyTrend.map((m: any) => (m.revenue ?? 0) / 100),
+    monthlyWithData.map((m: any) => (m.revenue ?? 0) / 100),
   );
 
-  // Current month vs previous month delta
+  // Current month vs previous month delta (used by §B This Month card)
   const currentMonth = $derived<any>(
     monthlyTrend[monthlyTrend.length - 1] ?? null,
   );
@@ -135,18 +148,6 @@
     currentMonth && prevMonth && prevMonth.revenue > 0
       ? ((currentMonth.revenue - prevMonth.revenue) / prevMonth.revenue) * 100
       : null,
-  );
-
-  // Pre-computed monthly table rows (newest first, with MoM delta)
-  const monthlyRows = $derived(
-    [...monthlyTrend].reverse().map((m: any, i: number, arr: any[]) => {
-      const prev = arr[i + 1];
-      const delta =
-        prev && prev.revenue > 0
-          ? ((m.revenue - prev.revenue) / prev.revenue) * 100
-          : null;
-      return { ...m, delta };
-    }),
   );
 </script>
 
@@ -238,7 +239,7 @@
             <div class="card p-4 space-y-3">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                  <Banknote size={15} style="color:var(--teal)" />
+                  <Banknote size={15} style="color:var(--cobalt)" />
                   <span class="text-xs font-semibold text-[var(--text-2)]"
                     >Gross Profit</span
                   >
@@ -247,11 +248,11 @@
                   <span
                     class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                     style="background:{grossProfit.delta.direction === 'up'
-                      ? 'var(--teal-dim)'
-                      : 'var(--red-dim)'};
+                      ? 'var(--cobalt-dim)'
+                      : 'var(--crimson-dim)'};
                            color:{grossProfit.delta.direction === 'up'
-                      ? 'var(--teal-fg)'
-                      : 'var(--red-fg)'}"
+                      ? 'var(--cobalt-fg)'
+                      : 'var(--crimson-fg)'}"
                   >
                     {grossProfit.delta.direction === "up" ? "↑" : "↓"}{Math.abs(
                       grossProfit.delta.pct,
@@ -281,14 +282,14 @@
                 <div class="flex items-baseline justify-between">
                   <span class="text-[10px] text-[var(--text-3)]">At cost</span>
                   <span class="text-sm font-semibold tabular-nums"
-                    >{formatCurrency(stockValue.costValue / 100)}</span
+                    >{formatCurrency(stockValue.costValue)}</span
                   >
                 </div>
                 <div class="flex items-baseline justify-between">
                   <span class="text-[10px] text-[var(--text-3)]">At retail</span
                   >
                   <span class="text-sm font-semibold tabular-nums"
-                    >{formatCurrency(stockValue.retailValue / 100)}</span
+                    >{formatCurrency(stockValue.retailValue)}</span
                   >
                 </div>
                 <div
@@ -300,7 +301,7 @@
                       100,
                       stockValue.potentialMargin,
                     ).toFixed(1)}%;
-                           background:var(--teal)"
+                           background:var(--cobalt)"
                   ></div>
                 </div>
                 <p class="text-[10px] text-[var(--text-3)]">
@@ -325,11 +326,11 @@
                   <span
                     class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                     style="background:{monthDelta >= 0
-                      ? 'var(--teal-dim)'
-                      : 'var(--red-dim)'};
+                      ? 'var(--cobalt-dim)'
+                      : 'var(--crimson-dim)'};
                            color:{monthDelta >= 0
-                      ? 'var(--teal-fg)'
-                      : 'var(--red-fg)'}"
+                      ? 'var(--cobalt-fg)'
+                      : 'var(--crimson-fg)'}"
                   >
                     {monthDelta >= 0 ? "↑" : "↓"}{Math.abs(monthDelta).toFixed(
                       1,
@@ -348,14 +349,20 @@
           {/if}
         </div>
 
-        <!-- §C  Revenue Trend (selected period) -->
+        <!-- §C  Performance Trend (selected period) -->
         <div class="card p-4 space-y-4">
           <div
             class="flex flex-col md:flex-row md:items-center md:justify-between gap-3"
           >
             <div class="flex items-center gap-2">
               <TrendingUp size={16} style="color:var(--primary)" />
-              <h3 class="font-semibold text-sm">Revenue Trend</h3>
+              <h3 class="font-semibold text-sm">
+                {activeMetric === 'revenue'
+                  ? 'Revenue & Profit'
+                  : activeMetric === 'transactions'
+                    ? 'Transaction Volume'
+                    : 'Average Order Value'}
+              </h3>
             </div>
             <div
               class="flex gap-1 bg-[var(--surface2)] p-1 rounded-lg text-[10px]"
@@ -381,58 +388,24 @@
           </div>
         </div>
 
-        <!-- §D  Monthly Performance — last 12 months, always fixed window -->
+        <!-- §D  Monthly Performance -->
         <div class="card p-4 space-y-4">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <BarChart3 size={16} style="color:var(--primary)" />
               <h3 class="font-semibold text-sm">Monthly Performance</h3>
             </div>
-            <span class="text-[10px] text-[var(--text-3)]">Last 12 months</span>
+            <span class="text-[10px] text-[var(--text-3)]">
+              {monthlyLabels.length} month{monthlyLabels.length === 1 ? '' : 's'} with sales
+            </span>
           </div>
-          <div class="h-52 w-full">
+          <div class="h-64 w-full">
             <BarChart
               labels={monthlyLabels}
               data={monthlyRevData}
               color="var(--primary)"
-              height={208}
+              height={256}
             />
-          </div>
-          <div class="overflow-x-auto">
-            <table class="tbl w-full text-[11px]">
-              <thead>
-                <tr>
-                  <th class="text-left">Month</th>
-                  <th class="text-right">Revenue</th>
-                  <th class="text-right">Sales</th>
-                  <th class="text-right">vs Prev Month</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each monthlyRows as m}
-                  <tr>
-                    <td class="font-medium">{m.label}</td>
-                    <td class="text-right tabular-nums"
-                      >{formatCurrency(m.revenue)}</td
-                    >
-                    <td class="text-right tabular-nums">{m.count}</td>
-                    <td class="text-right">
-                      {#if m.delta !== null}
-                        <span
-                          style="color:{m.delta >= 0
-                            ? 'var(--teal-fg)'
-                            : 'var(--red-fg)'}"
-                        >
-                          {m.delta >= 0 ? "+" : ""}{m.delta.toFixed(1)}%
-                        </span>
-                      {:else}
-                        <span class="text-[var(--text-3)]">—</span>
-                      {/if}
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
           </div>
         </div>
 

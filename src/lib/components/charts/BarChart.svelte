@@ -1,56 +1,84 @@
 <script lang="ts">
-	export let data: number[] = [];
-	export let labels: string[] = [];
-	export let color: string = 'var(--primary)';
-	export let borderRadius: number = 3;
-	export let height: string = '120px';
+  export let data: number[] = [];
+  export let labels: string[] = [];
+  export let color: string = 'var(--primary)';
+  export let borderRadius: number = 3;
+  export let height: number | string = 120;
 
-	let canvas: HTMLCanvasElement;
-	let chart: any;
+  let canvas: HTMLCanvasElement;
+  let chart: any;
+  let observer: MutationObserver;
 
-	import { onMount, onDestroy } from 'svelte';
-	import Chart from 'chart.js/auto';
+  import { onMount, onDestroy } from 'svelte';
+  import Chart from 'chart.js/auto';
 
-	onMount(() => {
-		if (!canvas) return;
-		chart = new Chart(canvas, {
-			type: 'bar',
-			data: {
-				labels,
-				datasets: [
-					{
-						data,
-						backgroundColor: color,
-						borderRadius
-					}
-				]
-			},
-			options: {
-				responsive: true,
-				maintainAspectRatio: false,
-				plugins: { legend: { display: false } },
-				scales: {
-					y: { display: false },
-					x: {
-						grid: { display: false },
-						ticks: { color: 'var(--text-3)', font: { size: 10 } }
-					}
-				}
-			}
-		});
-	});
+  function css(name: string): string {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
 
-	$: if (chart && data) {
-		chart.data.labels = labels;
-		chart.data.datasets[0].data = data;
-		chart.update('none');
-	}
+  // Canvas cannot resolve CSS custom properties — do it ourselves
+  function resolveColor(c: string): string {
+    const m = c.match(/^var\((--[^)]+)\)$/);
+    return m ? css(m[1]) : c;
+  }
 
-	onDestroy(() => {
-		if (chart) chart.destroy();
-	});
+  function px(h: number | string): string {
+    return typeof h === 'number' ? `${h}px` : h;
+  }
+
+  function initChart() {
+    if (!canvas) return;
+    chart?.destroy();
+
+    const barColor  = resolveColor(color);
+    const tickColor = css('--text-3');
+    const gridColor = css('--border');
+
+    chart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data, backgroundColor: barColor, borderRadius }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: {
+            display: false,
+          },
+          x: {
+            grid:  { display: false },
+            ticks: { color: tickColor, font: { size: 10 } },
+          },
+        },
+      },
+    });
+  }
+
+  onMount(() => {
+    initChart();
+    observer = new MutationObserver(initChart);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+  });
+
+  $: if (chart && data) {
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = data;
+    chart.data.datasets[0].backgroundColor = resolveColor(color);
+    chart.update('none');
+  }
+
+  onDestroy(() => {
+    chart?.destroy();
+    observer?.disconnect();
+  });
 </script>
 
-<div style="height: {height};">
-	<canvas bind:this={canvas}></canvas>
+<div style="height: {px(height)};">
+  <canvas bind:this={canvas}></canvas>
 </div>
