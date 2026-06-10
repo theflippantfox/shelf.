@@ -55,13 +55,10 @@ function buildMonthlyTrend(sales: any[], shopTz: string) {
 /**
  * Calculates total inventory value at cost and at retail.
  *
- * NOTE: `price` and `cost_price` on the products table are stored as plain
- * decimal dollar amounts (e.g. 60.00 = sixty dollars), NOT as ÷100 integers
- * like `sales.total` or `sale_items.line_total`. We multiply by 100 here so
- * the returned values are in the same ÷100 integer format that formatCurrency
- * expects throughout the rest of the codebase.
- *
- * If your schema DOES store them as ÷100 integers already, remove the * 100.
+ * `price` and `cost_price` are INT in the schema (÷100 = actual value),
+ * consistent with sales.total and sale_items.line_total. No conversion
+ * needed — qty (plain count) × price (÷100 int) = ÷100 int, which
+ * formatCurrency handles correctly.
  */
 function buildStockValue(products: any[]) {
 	let costValue = 0;
@@ -73,15 +70,9 @@ function buildStockValue(products: any[]) {
 		retailValue += qty * (p.price ?? 0);
 		totalUnits += qty;
 	}
-	// potentialMargin is a ratio — computed before normalisation so the scale cancels out
 	const potentialMargin =
 		retailValue > 0 ? ((retailValue - costValue) / retailValue) * 100 : 0;
-	return {
-		costValue: Math.round(costValue * 100), // normalise to ÷100 integer for formatCurrency
-		retailValue: Math.round(retailValue * 100),
-		totalUnits,
-		potentialMargin,
-	};
+	return { costValue, retailValue, totalUnits, potentialMargin };
 }
 
 /**
@@ -185,10 +176,10 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 				limit: -1,
 			})
 		),
-		// All products for stock value calculation
+		// Active products for stock value (archived_at is the soft-delete field)
 		client.request(
 			readItems('products', {
-				filter: { shop: { _eq: shopId } },
+				filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
 				fields: ['id', 'price', 'cost_price', 'qty'],
 				limit: -1,
 			})
