@@ -185,13 +185,10 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 				limit: -1,
 			})
 		),
-		// All active products for stock value calculation
+		// All products for stock value calculation
 		client.request(
 			readItems('products', {
-				filter: {
-					shop: { _eq: shopId },
-					status: { _eq: 'published' }, // exclude archived / draft products
-				},
+				filter: { shop: { _eq: shopId } },
 				fields: ['id', 'price', 'cost_price', 'qty'],
 				limit: -1,
 			})
