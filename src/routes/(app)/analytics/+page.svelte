@@ -12,7 +12,6 @@
     TrendingUp,
     Users,
     ShoppingBag,
-    Percent,
     BarChart3,
     PieChart,
     LayoutGrid,

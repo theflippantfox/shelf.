@@ -54,7 +54,14 @@ function buildMonthlyTrend(sales: any[], shopTz: string) {
 
 /**
  * Calculates total inventory value at cost and at retail.
- * `price` and `cost_price` are stored as integers (÷100 = actual value).
+ *
+ * NOTE: `price` and `cost_price` on the products table are stored as plain
+ * decimal dollar amounts (e.g. 60.00 = sixty dollars), NOT as ÷100 integers
+ * like `sales.total` or `sale_items.line_total`. We multiply by 100 here so
+ * the returned values are in the same ÷100 integer format that formatCurrency
+ * expects throughout the rest of the codebase.
+ *
+ * If your schema DOES store them as ÷100 integers already, remove the * 100.
  */
 function buildStockValue(products: any[]) {
 	let costValue = 0;
@@ -66,11 +73,14 @@ function buildStockValue(products: any[]) {
 		retailValue += qty * (p.price ?? 0);
 		totalUnits += qty;
 	}
+	// potentialMargin is a ratio — computed before normalisation so the scale cancels out
+	const potentialMargin =
+		retailValue > 0 ? ((retailValue - costValue) / retailValue) * 100 : 0;
 	return {
-		costValue,
-		retailValue,
+		costValue: Math.round(costValue * 100), // normalise to ÷100 integer for formatCurrency
+		retailValue: Math.round(retailValue * 100),
 		totalUnits,
-		potentialMargin: retailValue > 0 ? ((retailValue - costValue) / retailValue) * 100 : 0,
+		potentialMargin,
 	};
 }
 
@@ -175,10 +185,13 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 				limit: -1,
 			})
 		),
-		// All products for stock value calculation
+		// All active products for stock value calculation
 		client.request(
 			readItems('products', {
-				filter: { shop: { _eq: shopId } },
+				filter: {
+					shop: { _eq: shopId },
+					status: { _eq: 'published' }, // exclude archived / draft products
+				},
 				fields: ['id', 'price', 'cost_price', 'qty'],
 				limit: -1,
 			})
@@ -247,7 +260,7 @@ export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
 	const categories = buildCategories(saleItems);
 	const customerInsights = buildCustomerInsights(currentSales as any[], customers as any[]);
 	const heatmap = buildHeatmap(currentSales as any[], shopTz);
-	const slowMovers = buildSlowMovers(saleItems, (currentSales as any[])[0]?.sale_items ?? []);
+	const slowMovers = buildSlowMovers(saleItems, stockProducts as any[]);
 	const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
 	const stockValue = buildStockValue(stockProducts as any[]);
 	const grossProfit = buildGrossProfit(saleItems, compareSaleItems);
