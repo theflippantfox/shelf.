@@ -1,8 +1,10 @@
-import { adminClient, readItems } from '$lib/server/directus';
+import { adminClient, readItems, readItem, readItems as readAllItems } from '$lib/server/directus';
 
-export async function load({ locals }) {
+export async function load({ locals, url }) {
   const shopId = locals.currentShop!.id;
   const client = adminClient();
+  const mode = url.searchParams.get('mode');
+  const editId = url.searchParams.get('id');
 
   const [products, categories, customers] = await Promise.all([
     client.request(readItems('products', {
@@ -21,7 +23,7 @@ export async function load({ locals }) {
     })),
   ]);
 
-  return {
+  const base = {
     products,
     categories,
     customers,
@@ -29,4 +31,17 @@ export async function load({ locals }) {
     taxInclusive: locals.currentShop!.tax_inclusive,
     taxName:      locals.currentShop!.tax_name,
   };
+
+  if (mode === 'edit' && editId) {
+    const sale = await client.request(readItem('sales', editId, {
+      fields: ['*', 'customer.*'],
+    }));
+    const items = await client.request(readAllItems('sale_items', {
+      filter: { sale: { _eq: editId } },
+      fields: ['*'],
+    }));
+    return { ...base, editSale: sale, editItems: items };
+  }
+
+  return base;
 }

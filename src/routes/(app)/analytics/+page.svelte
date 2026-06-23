@@ -61,7 +61,7 @@
       ? [
           {
             label: 'Revenue',
-            data: trend.map((t: any) => (t.current?.revenue ?? 0) / 100),
+            data: trend.map((t: any) => (t.current ?? 0) / 100),
             borderColor: 'var(--primary)',
             backgroundColor: 'var(--primary-dim)',
             fill: true,
@@ -69,24 +69,14 @@
             pointRadius: 2,
             borderWidth: 2,
           },
-          {
-            label: 'Profit',
-            // Field name may differ — check your server load fn (e.g. grossProfit, profit)
-            data: trend.map((t: any) => (t.current?.profit ?? 0) / 100),
-            borderColor: 'var(--cobalt)',
-            fill: false,
-            tension: 0.4,
-            pointRadius: 2,
-            borderWidth: 1.5,
-          },
         ]
       : [
           {
             label: activeMetric === 'transactions' ? 'Transactions' : 'Avg Order',
             data: trend.map((t: any) =>
               activeMetric === 'transactions'
-                ? (t.current?.txns ?? 0)
-                : (t.current?.avgOrder ?? 0) / 100,
+                ? (t.txns ?? 0)
+                : (t.avgOrder ?? 0) / 100,
             ),
             borderColor: 'var(--primary)',
             backgroundColor: 'var(--primary-dim)',
@@ -357,7 +347,7 @@
               <TrendingUp size={16} style="color:var(--primary)" />
               <h3 class="font-semibold text-sm">
                 {activeMetric === 'revenue'
-                  ? 'Revenue & Profit'
+                  ? 'Revenue'
                   : activeMetric === 'transactions'
                     ? 'Transaction Volume'
                     : 'Average Order Value'}

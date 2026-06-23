@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { page } from "$app/state";
   import {
     cart,
     type PaymentMethod,
@@ -36,6 +37,21 @@
   let discountStr = $state("");
   let customerSearch = $state("");
   let showCustPicker = $state(false);
+  const saleId = $derived(page.url.searchParams.get("id"));
+  const isEdit = $derived(page.url.searchParams.get("mode") === "edit");
+
+  $effect(() => {
+    if (isEdit && (data as any).editSale && (data as any).editItems) {
+      cart.loadFromSale((data as any).editSale, (data as any).editItems);
+      if ((data as any).editSale.customer?.name) {
+        cart.setCustomer((data as any).editSale.customer.id, (data as any).editSale.customer.name);
+      }
+      const sale = (data as any).editSale;
+      discountStr = sale.discount_type === 'percent'
+        ? `${sale.discount_value}%`
+        : `${(sale.discount_value / 100).toFixed(2)}`;
+    }
+  });
 
   const products = $derived(() => {
     let list = data.products as any[];
@@ -79,25 +95,29 @@
   async function submitSale() {
     if (cart.isEmpty) return;
     submitting = true;
-    const res = await fetch("/api/sales", {
-      method: "POST",
+    const payload = {
+      items: cart.items,
+      customer_id: cart.customerId,
+      discount_type: cart.discountType,
+      discount_value: cart.discountValue,
+      discount_amount: cart.discountAmount,
+      subtotal: cart.subtotal,
+      total: grandTotal(),
+      tax_amount: taxAmount(),
+      payment_method: cart.paymentMethod,
+      notes: cart.notes,
+    };
+    const url = isEdit && saleId ? `/api/sales/${saleId}` : "/api/sales";
+    const method = isEdit ? "PATCH" : "POST";
+    const res = await fetch(url, {
+      method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: cart.items,
-        customer_id: cart.customerId,
-        discount_type: cart.discountType,
-        discount_value: cart.discountValue,
-        discount_amount: cart.discountAmount,
-        subtotal: cart.subtotal,
-        total: grandTotal(),
-        tax_amount: taxAmount(),
-        payment_method: cart.paymentMethod,
-        notes: cart.notes,
-      }),
+      body: JSON.stringify(payload),
     });
     const data2 = await res.json();
     if (res.ok) {
-      lastSaleRef = data2.sale_ref;
+      const msg = isEdit ? 'Sale updated' : 'Sale recorded';
+      lastSaleRef = isEdit ? (data2.sale_ref ?? saleId) : data2.sale_ref;
       showCheckout = false;
       showReceipt = true;
       cart.clear();
@@ -114,7 +134,7 @@
   };
 </script>
 
-<svelte:head><title>New Sale · Shëlf</title></svelte:head>
+<svelte:head><title>{isEdit ? 'Edit Sale' : 'New Sale'} · Shëlf</title></svelte:head>
 
 <PageShell>
   <!-- Top bar: search + cart toggle -->
@@ -487,14 +507,14 @@
         onclick={submitSale}
         class="flex-1 justify-center"
       >
-        Complete Sale
+        {isEdit ? 'Update Sale' : 'Complete Sale'}
       </Button>
     </div>
   {/snippet}
 </Modal>
 
 <!-- Receipt modal -->
-<Modal bind:open={showReceipt} title="Sale complete 🎉" maxWidth="max-w-sm">
+<Modal bind:open={showReceipt} title={isEdit ? 'Sale updated' : 'Sale complete 🎉'} maxWidth="max-w-sm">
   <div class="text-center py-4">
     <div
       class="w-14 h-14 rounded-full bg-[var(--teal-dim)] flex items-center justify-center mx-auto mb-4"
@@ -510,7 +530,7 @@
         <path d="M20 6 9 17l-5-5" />
       </svg>
     </div>
-    <p class="font-semibold mb-1">Sale recorded</p>
+    <p class="font-semibold mb-1">{isEdit ? 'Sale updated' : 'Sale recorded'}</p>
     <p class="text-xs text-[var(--text-3)]">
       Ref: <span class="font-mono">{lastSaleRef}</span>
     </p>

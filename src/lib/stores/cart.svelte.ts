@@ -93,8 +93,27 @@ class CartStore {
     this.#items         = [];
     this.#customerId    = null;
     this.#customerName  = '';
+    this.#discountType  = 'amount';
     this.#discountValue = 0;
+    this.#paymentMethod = 'cash';
     this.#notes         = '';
+  }
+
+  loadFromSale(sale: { customer: string | null; discount_type: string; discount_value: number; payment_method: string; notes: string | null }, items: { product: string | { id: string }; product_name: string; product_sku: string; unit_price: number; qty: number }[]) {
+    this.#customerId    = sale.customer ?? null;
+    this.#customerName  = ''; // populated by caller if available
+    this.#discountType  = sale.discount_type as DiscountType;
+    this.#discountValue = sale.discount_value;
+    this.#paymentMethod = sale.payment_method as PaymentMethod;
+    this.#notes         = sale.notes ?? '';
+    this.#items         = items.map(i => ({
+      productId: typeof i.product === 'string' ? i.product : i.product.id,
+      name:      i.product_name,
+      sku:       i.product_sku,
+      unitPrice: i.unit_price,
+      qty:       i.qty,
+      maxQty:    9999, // editing past sale, allow qty changes freely
+    }));
   }
 }
 

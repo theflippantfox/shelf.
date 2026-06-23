@@ -7,7 +7,8 @@
   import Button    from '$lib/components/ui/Button.svelte';
   import Modal     from '$lib/components/ui/Modal.svelte';
   import Input     from '$lib/components/ui/Input.svelte';
-  import { ArrowLeft, Ban } from 'lucide-svelte';
+  import { ArrowLeft, Ban, Pencil } from 'lucide-svelte';
+  import { cart } from '$lib/stores/cart.svelte';
 
   let { data } = $props();
   const s = $derived(data.sale as any);
@@ -16,6 +17,12 @@
   let showVoid    = $state(false);
   let voidReason  = $state('');
   let voiding     = $state(false);
+
+  async function startEdit() {
+    cart.loadFromSale(s, items as any[]);
+    if (s.customer?.name) cart.setCustomer(s.customer.id, s.customer.name);
+    goto('/sale?mode=edit&id=' + s.id);
+  }
 
   async function doVoid() {
     voiding = true;
@@ -43,10 +50,15 @@
       <p class="font-semibold text-sm">{s.sale_ref}</p>
       <p class="text-xs text-[var(--text-3)]">{formatDateTime(s.date_created)}</p>
     </div>
-    {#if !s.voided_at && auth.can('sales.void')}
-      <Button variant="danger" size="sm" onclick={() => showVoid = true}>
-        <Ban size={13} strokeWidth={1.75} /> Void
+    {#if !s.voided_at}
+      <Button variant="secondary" size="sm" onclick={startEdit}>
+        <Pencil size={13} strokeWidth={1.75} /> Edit
       </Button>
+      {#if auth.can('sales.void')}
+        <Button variant="danger" size="sm" onclick={() => showVoid = true}>
+          <Ban size={13} strokeWidth={1.75} /> Void
+        </Button>
+      {/if}
     {/if}
     {#if s.voided_at}
       <span class="badge badge-crimson">Voided</span>
