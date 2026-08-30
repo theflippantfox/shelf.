@@ -936,8 +936,61 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_sale: {
+        Args: {
+          p_customer_id: string
+          p_discount_amount: number
+          p_discount_type: string
+          p_discount_value: number
+          p_items: Json
+          p_notes: string
+          p_payment_method: string
+          p_served_by: string
+          p_shop_id: string
+          p_subtotal: number
+          p_tax_amount: number
+          p_total: number
+        }
+        Returns: {
+          created_at: string
+          customer_id: string | null
+          discount_amount: number
+          discount_type: string
+          discount_value: number
+          id: string
+          notes: string | null
+          payment_method: string
+          sale_ref: string
+          served_by: string
+          shop_id: string
+          subtotal: number
+          tax_amount: number
+          total: number
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sales"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       is_shop_member: { Args: { shop: string }; Returns: boolean }
       is_shop_owner: { Args: { shop: string }; Returns: boolean }
+      receive_purchase_order: {
+        Args: {
+          p_items: Json
+          p_notes?: string
+          p_purchase_order_id: string
+          p_received_by?: string
+          p_received_date?: string
+          p_shipping_cost?: number
+          p_tax_amount?: number
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -6,8 +6,7 @@
  *       Delegates to a SQL function `create_sale()` for atomicity.
  */
 import { json } from '@sveltejs/kit';
-import { userClient, adminClient } from '$lib/server/supabase';
-import { generateSaleRef } from '$lib/utils/sku';
+import { userClient } from '$lib/server/supabase';
 
 /**
  * GET /api/sales
@@ -56,10 +55,11 @@ export async function POST({ request, locals }: import('@sveltejs/kit').RequestE
 
   if (!items?.length) return json({ error: 'Cart is empty' }, { status: 400 });
 
-  const admin = adminClient();
+  const supabase = userClient({ locals } as any);
 
-  // Try the atomic function first
-  const { data, error } = await admin.rpc('create_sale' as any, {
+  // Atomic via create_sale() SECURITY DEFINER function.
+  // Uses userClient so auth.uid() is set inside the function (membership check).
+  const { data, error } = await supabase.rpc('create_sale', {
     p_shop_id: locals.currentShop.id,
     p_customer_id: customer_id ?? null,
     p_served_by: locals.user.id,
@@ -80,74 +80,6 @@ export async function POST({ request, locals }: import('@sveltejs/kit').RequestE
     })),
   });
 
-  if (!error && data) {
-    return json(data, { status: 201 });
-  }
-
-  // Fallback: function not installed — use the legacy multi-query path
-  console.warn('[sales] rpc create_sale not available, falling back:', error?.message);
-
-  const supabase = userClient({ locals } as any);
-  const saleRef = generateSaleRef(locals.currentShop.id);
-
-  const { data: sale, error: saleErr } = await supabase
-    .from('sales')
-    .insert({
-      shop_id: locals.currentShop.id,
-      sale_ref: saleRef,
-      customer_id: customer_id ?? null,
-      served_by: locals.user.id,
-      subtotal, discount_type: discount_type ?? 'amount',
-      discount_value: discount_value ?? 0,
-      discount_amount: discount_amount ?? 0,
-      total, tax_amount: tax_amount ?? 0,
-      payment_method, notes: notes ?? null,
-    })
-    .select()
-    .single();
-
-  if (saleErr) return json({ error: saleErr.message }, { status: 400 });
-
-  for (const item of items) {
-    await supabase.from('sale_items').insert({
-      sale_id: sale.id,
-      product_id: item.productId,
-      product_name: item.name,
-      product_sku: item.sku,
-      unit_price: item.unitPrice,
-      qty: item.qty,
-      line_total: item.unitPrice * item.qty,
-    });
-
-    const { data: product } = await supabase
-      .from('products').select('qty').eq('id', item.productId).single();
-    if (product) {
-      await supabase.from('products')
-        .update({ qty: Math.max(0, (product as any).qty - item.qty) })
-        .eq('id', item.productId);
-    }
-
-    await supabase.from('stock_log').insert({
-      shop_id: locals.currentShop.id,
-      product_id: item.productId,
-      delta: -item.qty,
-      reason: 'sale',
-      reference: saleRef,
-      created_by: locals.user.id,
-    });
-  }
-
-  if (customer_id) {
-    const { data: cust } = await supabase
-      .from('customers').select('visit_count, total_spent').eq('id', customer_id).single();
-    if (cust) {
-      await supabase.from('customers').update({
-        visit_count: ((cust as any).visit_count ?? 0) + 1,
-        total_spent: ((cust as any).total_spent ?? 0) + total,
-        last_visit: new Date().toISOString(),
-      }).eq('id', customer_id);
-    }
-  }
-
-  return json(sale, { status: 201 });
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data, { status: 201 });
 }
