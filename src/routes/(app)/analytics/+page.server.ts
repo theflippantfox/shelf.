@@ -80,11 +80,13 @@ function buildStockValue(products: any[]) {
  * Both values are stored as integers (÷100 = actual).
  */
 function buildGrossProfit(items: any[], compareItems: any[]) {
-	const calc = (arr: any[]) =>
-		arr.reduce((sum, item) => {
+	const calc = (arr: any[]) => {
+		if (!arr || !Array.isArray(arr)) return 0;
+		return arr.reduce((sum, item) => {
 			const cost = (item.product?.cost_price ?? 0) * (item.qty ?? 0);
 			return sum + (item.line_total ?? 0) - cost;
 		}, 0);
+	};
 	const current = calc(items);
 	const previous = calc(compareItems);
 	const deltaPct = previous > 0 ? ((current - previous) / previous) * 100 : null;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page }       from '$app/stores';
-  import { formatCurrency } from '$lib/utils/format';
+  import { formatCurrency, formatCurrencyCompact } from '$lib/utils/format';
   import { auth }       from '$lib/stores/auth.svelte';
   import { toasts }     from '$lib/stores/toast.svelte';
   import { inventory as invStore } from '$lib/stores/inventory.svelte';
@@ -12,18 +12,27 @@
   import Input       from '$lib/components/ui/Input.svelte';
   import Select      from '$lib/components/ui/Select.svelte';
   import EmptyState  from '$lib/components/ui/EmptyState.svelte';
+  import KpiCard     from '$lib/components/ui/KpiCard.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
-  import { Plus, Pencil, PackagePlus, Trash2 } from 'lucide-svelte';
+  import { Plus, Pencil, PackagePlus, Trash2, ArrowUpDown, X, Package } from 'lucide-svelte';
   import { appConfig } from '$lib/config/app';
   import { invalidateAll } from '$app/navigation';
 
   let { data } = $props();
 
+  // Sync the inventory store when server data changes (after invalidation).
   $effect(() => { invStore.init(data.products as any[]); });
 
-  let search      = $state('');
-  let filterCat   = $state('');
-  let filterAlert = $state($page.url.searchParams.get('filter') === 'alerts');
+  /* ── Filter & sort state ────────────────────────────────── */
+  let search     = $state('');
+  let filterCat  = $state('');
+  type StockFilter = 'all' | 'in' | 'low' | 'out';
+  let stockFilter = $state<StockFilter>(
+    $page.url.searchParams.get('filter') === 'alerts' ? 'low' : 'all'
+  );
+  type SortKey = 'name-asc' | 'name-desc' | 'stock-asc' | 'stock-desc' | 'updated-desc';
+  let sortKey    = $state<SortKey>('name-asc');
+
   let showAdd     = $state(false);
   let showDelete  = $state(false);
   let editTarget  = $state<any>(null);
@@ -35,28 +44,92 @@
     qty: '', unit: 'piece', category: '', description: '', low_stock_threshold: '',
   });
 
-  const filtered = $derived(() => {
-    let list = data.products as any[];
-    if (filterCat) list = list.filter(p => {
-      const catId = typeof p.category === 'string' ? p.category : p.category?.id;
-      return catId === filterCat;
-    });
-    if (search) {
-      const q = search.toLowerCase();
+  /* ── Derived helpers ────────────────────────────────────── */
+  const thresholdOf = (p: any) => p.low_stock_threshold ?? data.threshold;
+
+  /**
+   * NOTE: `$derived` evaluates an EXPRESSION. The original code wrapped the
+   * body in `() => { ... }` which made `stockStats` a function-of-closure
+   * instead of a reactive value — KPIs and chip counts never updated after
+   * invalidation. Fixed: derive the object.
+   */
+  const stockStats = $derived.by(() => {
+    const list = data.products as any[];
+    let inStock = 0, low = 0, out = 0, value = 0;
+    for (const p of list) {
+      if (p.qty === 0) out++;
+      else if (p.qty <= thresholdOf(p)) low++;
+      else inStock++;
+      value += (p.price || 0) * (p.qty || 0);
+    }
+    return { total: list.length, inStock, low, out, value };
+  });
+
+  const filtered = $derived.by(() => {
+    let list = (data.products as any[]).slice();
+    const q = search.toLowerCase().trim();
+    if (filterCat) {
+      list = list.filter(p => {
+        const catId = typeof p.category === 'string' ? p.category : p.category?.id;
+        return catId === filterCat;
+      });
+    }
+    if (q) {
       list = list.filter(p =>
-        p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q)
       );
     }
-    if (filterAlert) list = list.filter(p =>
-      p.qty === 0 || p.qty <= (p.low_stock_threshold ?? data.threshold)
-    );
+    if (stockFilter === 'in')  list = list.filter(p => p.qty >  thresholdOf(p));
+    if (stockFilter === 'low') list = list.filter(p => p.qty >  0 && p.qty <= thresholdOf(p));
+    if (stockFilter === 'out') list = list.filter(p => p.qty === 0);
+
+    switch (sortKey) {
+      case 'name-asc':     list.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'name-desc':    list.sort((a, b) => b.name.localeCompare(a.name)); break;
+      case 'stock-asc':    list.sort((a, b) => (a.qty || 0) - (b.qty || 0));  break;
+      case 'stock-desc':   list.sort((a, b) => (b.qty || 0) - (a.qty || 0));  break;
+      case 'updated-desc': list.sort((a, b) =>
+        new Date(b.date_updated || b.date_created || 0).getTime() -
+        new Date(a.date_updated || a.date_created || 0).getTime()
+      ); break;
+    }
     return list;
   });
 
+  const activeFilterCount = $derived(
+    (search.trim() ? 1 : 0) +
+    (filterCat    ? 1 : 0) +
+    (stockFilter !== 'all' ? 1 : 0)
+  );
+
+  function clearAll() {
+    search = '';
+    filterCat = '';
+    stockFilter = 'all';
+  }
+
   function getStockBadge(p: any) {
     if (p.qty === 0) return { label: 'Out of stock', cls: 'badge-crimson' };
-    if (p.qty <= (p.low_stock_threshold ?? data.threshold)) return { label: `Low — ${p.qty}`, cls: 'badge-gold' };
-    return { label: String(p.qty), cls: 'badge-neutral' };
+    if (p.qty <= thresholdOf(p)) return { label: `Low — ${p.qty}`, cls: 'badge-gold' };
+    return { label: 'In stock', cls: 'badge-teal' };
+  }
+
+  function stockPct(p: any): number {
+    const cap = Math.max(thresholdOf(p) * 2, 10);
+    return Math.min(100, Math.round((p.qty / cap) * 100));
+  }
+
+  function stockBarColor(p: any): string {
+    if (p.qty === 0) return 'var(--crimson)';
+    if (p.qty <= thresholdOf(p)) return 'var(--gold)';
+    return 'var(--teal)';
+  }
+
+  function marginPct(p: any): number | null {
+    if (!p.cost_price || !p.price) return null;
+    return Math.round(((p.price - p.cost_price) / p.price) * 100);
   }
 
   function openAdd() {
@@ -125,44 +198,160 @@
     ...(data.categories as any[]).map((c: any) => ({ value: c.id, label: c.name })),
   ]);
   const unitOptions = appConfig.inventory.units.map(u => ({ value: u, label: u }));
+  const sortOptions = [
+    { value: 'name-asc',     label: 'Name · A → Z' },
+    { value: 'name-desc',    label: 'Name · Z → A' },
+    { value: 'stock-desc',   label: 'Stock · High → Low' },
+    { value: 'stock-asc',    label: 'Stock · Low → High' },
+    { value: 'updated-desc', label: 'Recently updated' },
+  ];
+
+  type ChipKey = StockFilter;
+  const stockChips: { key: ChipKey; label: string; tone: 'neutral' | 'teal' | 'gold' | 'crimson' }[] = [
+    { key: 'all', label: 'All',      tone: 'neutral' },
+    { key: 'in',  label: 'In stock', tone: 'teal'    },
+    { key: 'low', label: 'Low',      tone: 'gold'    },
+    { key: 'out', label: 'Out',      tone: 'crimson' },
+  ];
+
+  /** Chip count, looked up against the reactive `stockStats` object */
+  function chipCount(key: ChipKey): number {
+    if (key === 'all') return stockStats.total;
+    if (key === 'in')  return stockStats.inStock;
+    if (key === 'low') return stockStats.low;
+    return stockStats.out;
+  }
+
+  const chipActiveCls = (tone: 'neutral' | 'teal' | 'gold' | 'crimson'): string => {
+    const map = {
+      primary: 'bg-[var(--primary)] text-white shadow-sm',
+      teal:    'bg-[var(--teal)] text-white shadow-sm',
+      gold:    'bg-[var(--gold)] text-white shadow-sm',
+      crimson: 'bg-[var(--crimson)] text-white shadow-sm',
+      neutral: 'bg-[var(--surface2)] text-[var(--text)]',
+    };
+    return map[tone] + ' border-transparent';
+  };
+  const chipInactiveCls = 'bg-transparent text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface2)] hover:text-[var(--text)]';
 </script>
 
 <svelte:head><title>Inventory · Shëlf</title></svelte:head>
 
 <PageShell>
+  <!-- Header -->
   <div class="page-header">
-    <div class="flex-1">
+    <div class="flex-1 min-w-0">
       <p class="text-base font-semibold">Inventory</p>
-      <p class="text-xs text-[var(--text-3)]">{(data.products as any[]).length} products</p>
+      <p class="text-xs text-[var(--text-3)]">
+        {stockStats.total} products · {formatCurrencyCompact(stockStats.value)} in stock value
+      </p>
     </div>
-    <div class="flex gap-2">
-      {#if auth.can('inventory.manage')}
+    {#if auth.can('inventory.manage')}
+      <div class="flex gap-2 shrink-0">
         <Button onclick={() => window.location.href = '/restocking/orders/new'} variant="secondary" size="sm">
           <PackagePlus size={14} strokeWidth={2} /> Restock
         </Button>
         <Button onclick={openAdd} size="sm"><Plus size={14} strokeWidth={2} /> Add product</Button>
+      </div>
+    {/if}
+  </div>
+
+  <!-- KPI strip -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5 stagger-fade">
+    <KpiCard
+      label="Total products"
+      value={String(stockStats.total)}
+      icon="Package"
+      iconColor="var(--primary)"
+      sub="In catalog"
+    />
+    <KpiCard
+      label="Stock value"
+      value={formatCurrencyCompact(stockStats.value)}
+      icon="Wallet"
+      iconColor="var(--cobalt)"
+      sub="At selling price"
+    />
+    <KpiCard
+      label="Low stock"
+      value={String(stockStats.low)}
+      icon="AlertTriangle"
+      iconColor={stockStats.low > 0 ? 'var(--gold)' : 'var(--teal)'}
+      sub={stockStats.low > 0 ? 'Needs restocking' : 'All good'}
+    />
+    <KpiCard
+      label="Out of stock"
+      value={String(stockStats.out)}
+      icon="Package"
+      iconColor={stockStats.out > 0 ? 'var(--crimson)' : 'var(--teal)'}
+      sub={stockStats.out > 0 ? 'Cannot fulfill' : 'All good'}
+    />
+  </div>
+
+  <!-- Filter bar -->
+  <div class="card-flat p-3 mb-4">
+    <div class="flex flex-col md:flex-row md:items-center gap-3">
+      <div class="flex-1 min-w-0">
+        <SearchBar bind:value={search} placeholder="Search by name, SKU or description…" />
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap md:flex-nowrap">
+        <Select
+          class="min-w-[150px]"
+          bind:value={filterCat}
+          options={catOptions}
+        />
+        <div class="relative">
+          <ArrowUpDown size={13} strokeWidth={1.75} class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)] pointer-events-none" />
+          <select
+            bind:value={sortKey}
+            class="input pl-8 pr-3 text-sm"
+            style="min-width:170px"
+            aria-label="Sort"
+          >
+            {#each sortOptions as opt}<option value={opt.value}>{opt.label}</option>{/each}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status chips + active-filter indicator -->
+    <div class="flex items-center justify-between gap-2 mt-3 flex-wrap">
+      <div class="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter by stock status">
+        {#each stockChips as chip}
+          {@const active = stockFilter === chip.key}
+          {@const count  = chipCount(chip.key)}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onclick={() => stockFilter = chip.key}
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-pill)] border transition-all {active ? chipActiveCls(chip.tone) : chipInactiveCls}"
+          >
+            {chip.label}
+            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold
+              {active ? 'bg-white/20 text-white' : 'bg-[var(--surface2)] text-[var(--text-3)]'}">
+              {count}
+            </span>
+          </button>
+        {/each}
+      </div>
+
+      {#if activeFilterCount > 0}
+        <button
+          onclick={clearAll}
+          class="inline-flex items-center gap-1 text-xs font-semibold text-[var(--text-3)] hover:text-[var(--text)] transition-colors"
+        >
+          <X size={12} strokeWidth={2} />
+          Clear {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}
+        </button>
       {/if}
     </div>
   </div>
 
-  <div class="flex gap-2 mb-4">
-    <SearchBar bind:value={search} placeholder="Search products…" class="flex-1" />
-    <select class="input" style="width:auto;min-width:0" bind:value={filterCat}>
-      {#each catOptions as opt}<option value={opt.value}>{opt.label}</option>{/each}
-    </select>
-  </div>
-
-  {#if invStore.alertCount > 0}
-    <button
-      class="badge mb-4 cursor-pointer {filterAlert ? 'badge-crimson' : 'badge-neutral'}"
-      onclick={() => filterAlert = !filterAlert}
-    >
-      {invStore.alertCount} stock alert{invStore.alertCount > 1 ? 's' : ''}
-    </button>
-  {/if}
-
-  {#if filtered().length === 0}
-    <EmptyState icon="Package" title="No products found" message="Try adjusting your search or add a product.">
+  <!-- Cards grid (replaces table) -->
+  {#if filtered.length === 0}
+    <EmptyState icon="Package" title="No products found" message="Try adjusting your search or filters.">
       {#snippet action()}
         {#if auth.can('inventory.manage')}
           <Button onclick={openAdd} size="sm"><Plus size={14} strokeWidth={2} /> Add first product</Button>
@@ -170,52 +359,76 @@
       {/snippet}
     </EmptyState>
   {:else}
-    <div class="card overflow-hidden">
-      <table class="tbl">
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Price</th>
-            <th>Stock</th>
-            {#if auth.can('inventory.manage')}<th></th>{/if}
-          </tr>
-        </thead>
-        <tbody>
-          {#each filtered() as p}
-            {@const badge = getStockBadge(p)}
-            <tr>
-              <td>
-                <div class="flex items-center gap-2">
-                  <div class="w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center"
-                       style="background:color-mix(in srgb,{p.category?.color ?? 'var(--primary)'} 15%,transparent)">
-                    <DynamicIcon name={p.category?.icon ?? 'Package'} size={13}
-                                 style="color:{p.category?.color ?? 'var(--primary)'}" />
-                  </div>
-                  <div>
-                    <p class="text-xs font-semibold">{p.name}</p>
-                    <p class="text-[10px] text-[var(--text-3)]">{p.sku}</p>
-                  </div>
-                </div>
-              </td>
-              <td class="text-xs">{formatCurrency(p.price)}</td>
-              <td><span class="badge {badge.cls} text-[10px]">{badge.label}</span></td>
-              {#if auth.can('inventory.manage')}
-                <td>
-                  <div class="flex items-center gap-1 justify-end">
-                    <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)}>
-                      <Pencil size={14} strokeWidth={1.75} />
-                    </button>
-                    <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]"
-                      title="Archive" onclick={() => confirmDelete(p)}>
-                      <Trash2 size={14} strokeWidth={1.75} />
-                    </button>
-                  </div>
-                </td>
-              {/if}
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+    <div class="text-xs text-[var(--text-3)] mb-2 px-1">
+      Showing <span class="font-semibold text-[var(--text-2)]">{filtered.length}</span>
+      of {stockStats.total} products
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger-fade">
+      {#each filtered as p (p.id)}
+        {@const badge  = getStockBadge(p)}
+        {@const pct    = stockPct(p)}
+        {@const margin = marginPct(p)}
+        {@const catColor = p.category?.color ?? 'var(--primary)'}
+        <div class="card p-4 group hover:border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] hover:-translate-y-0.5 hover:shadow-[var(--shadow)] transition-all">
+          <!-- Top: icon + name + actions -->
+          <div class="flex items-start gap-3">
+            <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center"
+                 style="background:color-mix(in srgb,{catColor} 15%,transparent)">
+              <DynamicIcon name={p.category?.icon ?? 'Package'} size={16}
+                           style="color:{catColor}" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="text-[13px] font-semibold truncate" title={p.name}>{p.name}</p>
+              <div class="flex items-center gap-1.5 mt-0.5">
+                <span class="font-mono text-[10px] text-[var(--text-3)]">{p.sku}</span>
+                {#if p.category?.name}
+                  <span class="text-[10px] text-[var(--text-3)]">·</span>
+                  <span class="text-[10px] text-[var(--text-2)] truncate">{p.category.name}</span>
+                {/if}
+              </div>
+            </div>
+            {#if auth.can('inventory.manage')}
+              <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)}>
+                  <Pencil size={13} strokeWidth={1.75} />
+                </button>
+                <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]"
+                        title="Archive" onclick={() => confirmDelete(p)}>
+                  <Trash2 size={13} strokeWidth={1.75} />
+                </button>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Price row -->
+          <div class="flex items-baseline justify-between mt-3">
+            <p class="text-lg font-bold tabular-nums">{formatCurrency(p.price)}</p>
+            {#if margin !== null}
+              <span class="text-[10px] font-semibold {margin >= 30 ? 'text-[var(--teal-fg)]' : margin >= 15 ? 'text-[var(--gold-fg)]' : 'text-[var(--crimson-fg)]'}"
+                    title="Gross margin">
+                {margin}% margin
+              </span>
+            {/if}
+          </div>
+
+          <!-- Stock section: bar + qty + status -->
+          <div class="mt-3">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] uppercase tracking-wide font-semibold text-[var(--text-3)]">Stock</span>
+              <span class="text-[12px] font-semibold tabular-nums">
+                {p.qty}<span class="text-[var(--text-3)] font-normal"> {p.unit ?? 'in stock'}</span>
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex-1 h-1.5 rounded-full bg-[var(--surface2)] overflow-hidden">
+                <div class="h-full rounded-full transition-all"
+                     style="width:{pct}%; background:{stockBarColor(p)}"></div>
+              </div>
+              <span class="badge {badge.cls} text-[10px] whitespace-nowrap">{badge.label}</span>
+            </div>
+          </div>
+        </div>
+      {/each}
     </div>
   {/if}
 </PageShell>

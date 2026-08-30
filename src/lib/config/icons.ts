@@ -84,40 +84,95 @@ export const ICONS = {
   location:    'MapPin',
   website:     'Link',
 
-  // Categories
-  skincare:    'Sparkles',
-  makeup:      'Wand2',
-  haircare:    'Scissors',
-  fragrance:   'Wind',
-  bodycare:    'Droplets',
-  nails:       'Brush',
-  wellness:    'Heart',
-  accessories: 'Watch',
-  tools:       'Wrench',
-  supplements: 'Pill',
-  truck:        'Truck',
-  clothing:    'Shirt',
-  food:        'ShoppingBag',
-  electronics: 'Zap',
-  home:        'Home',
-  books:       'BookOpen',
-  sports:      'Dumbbell',
-  toys:        'Gamepad2',
-  art:         'PaintBucket',
-  medical:     'Stethoscope',
-  automotive:  'Car',
-  garden:      'Flower2',
-  pets:        'PawPrint',
-  gifts:       'Gift',
-  jewelry:     'Diamond',
+  // Categories - Beauty & Personal Care
+  skincare:    'sparkles',
+  makeup:      'wand-2',
+  haircare:    'scissors',
+  fragrance:   'wind',
+  bodycare:    'droplets',
+  nails:       'brush',
+  wellness:    'heart',
+  spa:         'flower',
+  
+  // Categories - Fashion & Accessories
+  accessories: 'watch',
+  clothing:    'shirt',
+  jewelry:     'diamond',
+  glasses:     'glasses',
+  bag:         'backpack',
+  shoe:        'footprints',
+  
+  // Categories - Tools & Equipment
+  tools:       'wrench',
+  brush:       'brush',
+  hammer:      'hammer',
+  
+  // Categories - Health & Nutrition
+  supplements: 'pill',
+  medical:     'stethoscope',
+  nutrition:   'apple',
+  fitness:     'activity',
+  
+  // Categories - Home & Living
+  home:        'home',
+  food:        'shopping-bag',
+  garden:      'flower-2',
+  flower2:     'flower-2',
+  kitchen:     'coffee',
+  furniture:   'armchair',
+  
+  // Categories - Electronics & Tech
+  electronics: 'zap',
+  smartphone:  'smartphone',
+  computer:    'laptop',
+  camera:      'camera',
+  
+  // Categories - Sports & Recreation
+  sports:      'dumbbell',
+  toys:        'gamepad-2',
+  music:       'music',
+  gaming:      'gamepad',
+  
+  // Categories - Professional & Creative
+  art:         'paint-bucket',
+  books:       'book-open',
+  office:      'briefcase',
+  education:   'graduation-cap',
+  
+  // Categories - Vehicles & Transport
+  automotive:  'car',
+  truck:       'Truck',
+  bicycle:     'bike',
+  
+  // Categories - Animals & Gifts
+  pets:        'paw-print',
+  gifts:       'gift',
+  baby:        'baby',
+  party:       'party-popper',
 } as const;
 
 export type IconKey = keyof typeof ICONS;
 export type IconName = typeof ICONS[IconKey];
 
 export const CATEGORY_ICON_KEYS: IconKey[] = [
-  'skincare','makeup','haircare','fragrance','bodycare','nails',
-  'wellness','accessories','tools','supplements','clothing','food',
-  'electronics','home','books','sports','toys','art','medical',
-  'automotive','garden','pets','gifts','jewelry',
+  // Beauty & Personal Care
+  'skincare','makeup','haircare','fragrance','bodycare','nails','wellness','spa',
+  // Fashion & Accessories
+  'accessories','clothing','jewelry','glasses','bag','shoe',
+  // Tools & Equipment
+  'tools','brush','hammer',
+  // Health & Nutrition
+  'supplements','medical','nutrition','fitness',
+  // Home & Living
+  'home','food','garden','flower2','kitchen','furniture',
+  // Electronics & Tech
+  'electronics','smartphone','computer','camera',
+  // Sports & Recreation
+  'sports','toys','music','gaming',
+  // Professional & Creative
+  'art','books','office','education',
+  // Vehicles & Transport
+  'automotive','truck','bicycle',
+  // Animals & Gifts
+  'pets','gifts','baby','party',
 ];

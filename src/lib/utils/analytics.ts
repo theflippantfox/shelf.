@@ -82,7 +82,14 @@ export interface Delta {
 }
 
 export function calcDelta(current: number, previous: number): Delta {
-  if (previous === 0) return { pct: 0, pp: 0, direction: 'flat' };
+  // When previous period has no data, show current as the baseline
+  if (previous === 0) {
+    return { 
+      pct: current > 0 ? 100 : 0, 
+      pp: current, 
+      direction: current > 0 ? 'up' : 'flat' 
+    };
+  }
   const pct = Math.round((current - previous) / Math.abs(previous) * 100);
   const pp  = Math.round((current - previous) * 10) / 10;
   return {
@@ -135,6 +142,7 @@ function sumField(arr: any[], field: string): number {
 }
 
 function calcMargin(items: any[]): { margin: number; coverage: number } {
+  if (!items || !items.length) return { margin: 0, coverage: 0 };
   let revenue = 0, cogs = 0, withCost = 0;
   for (const item of items) {
     const cost = item.product?.cost_price ?? 0;
@@ -309,6 +317,7 @@ export interface ProductRow {
 }
 
 export function buildProducts(items: any[]): { byRevenue: ProductRow[]; byUnits: ProductRow[] } {
+  if (!items || !Array.isArray(items)) return { byRevenue: [], byUnits: [] };
   const map: Record<string, ProductRow> = {};
 
   for (const item of items) {
@@ -353,6 +362,7 @@ export interface CategoryRow {
 }
 
 export function buildCategories(items: any[]): CategoryRow[] {
+  if (!items || !Array.isArray(items)) return [];
   const map: Record<string, CategoryRow> = {};
 
   for (const item of items) {
@@ -456,6 +466,7 @@ export interface MarginData {
 export function buildMargin(
   items: any[], sales: any[], from: string, shopTz: string,
 ): MarginData | null {
+  if (!items || !Array.isArray(items)) return null;
   const { coverage } = calcMargin(items);
   if (coverage < 30) return null;  // not enough data
 
@@ -508,6 +519,8 @@ export interface SlowMover {
 }
 
 export function buildSlowMovers(items: any[], products: any[]): SlowMover[] {
+  if (!items || !Array.isArray(items)) return [];
+  if (!products || !Array.isArray(products)) return [];
   const soldMap: Record<string, number> = {};
   for (const item of items) {
     const id = typeof item.product === 'string' ? item.product : item.product?.id;

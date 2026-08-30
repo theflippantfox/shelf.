@@ -27,7 +27,7 @@
     onchange?:    (e: Event) => void;
   } = $props();
 
-  const inputId = id ?? `input-${Math.random().toString(36).slice(2)}`;
+  const inputId = $derived(id ?? `input-${Math.random().toString(36).slice(2)}`);
 </script>
 
 <div class="input-group {cls}">

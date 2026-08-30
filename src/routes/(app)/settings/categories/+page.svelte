@@ -10,23 +10,24 @@
   import IconPicker  from '$lib/components/ui/IconPicker.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import EmptyState  from '$lib/components/ui/EmptyState.svelte';
-  import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-svelte';
+  import { ArrowLeft, Plus, Pencil, Trash2, Grip } from 'lucide-svelte';
 
   let { data } = $props();
 
   let showModal = $state(false);
   let editing   = $state<any>(null);
   let saving    = $state(false);
-  let form      = $state({ name: '', icon: 'Sparkles', color: CATEGORY_COLORS[0] });
+  let deleting  = $state<string | null>(null);
+  let form      = $state({ name: '', icon: 'sparkles', color: CATEGORY_COLORS[0] });
 
   function openAdd() {
-    form    = { name: '', icon: 'Sparkles', color: CATEGORY_COLORS[0] };
+    form    = { name: '', icon: 'sparkles', color: CATEGORY_COLORS[0] };
     editing = null;
     showModal = true;
   }
 
   function openEdit(c: any) {
-    form    = { name: c.name, icon: c.icon, color: c.color };
+    form    = { name: c.name, icon: c.icon.toLowerCase(), color: c.color };
     editing = c;
     showModal = true;
   }
@@ -50,17 +51,26 @@
 
   async function archive(c: any) {
     if (!confirm(`Archive "${c.name}"?`)) return;
+    deleting = c.id;
     const res = await fetch(`/api/categories/${c.id}`, { method: 'DELETE' });
-    if (res.ok) { toasts.success('Category archived'); await invalidateAll(); }
-    else toasts.error('Failed to archive');
+    if (res.ok) { 
+      toasts.success('Category archived'); 
+      await invalidateAll(); 
+    } else {
+      toasts.error('Failed to archive');
+    }
+    deleting = null;
   }
 </script>
 
 <svelte:head><title>Categories · Shëlf</title></svelte:head>
 <PageShell>
-  <div class="flex items-center gap-3 mb-5">
+  <div class="flex items-center gap-3 mb-6">
     <a href="/settings" class="btn btn-ghost btn-icon btn-sm"><ArrowLeft size={16} strokeWidth={1.75} /></a>
-    <p class="font-semibold text-sm flex-1">Categories</p>
+    <div class="flex-1">
+      <p class="font-semibold text-base">Categories</p>
+      <p class="text-xs text-[var(--text-3)] mt-0.5">Organize your inventory with custom categories</p>
+    </div>
     <Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add</Button>
   </div>
 
@@ -69,24 +79,65 @@
       {#snippet action()}<Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add category</Button>{/snippet}
     </EmptyState>
   {:else}
-    <div class="card overflow-hidden">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 stagger-fade">
       {#each data.categories as cat}
-        <div class="flex items-center gap-3 px-4 py-3 border-b last:border-0 border-[var(--border)]">
-          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-               style="background:color-mix(in srgb,{(cat as any).color} 18%,transparent)">
-            <DynamicIcon name={(cat as any).icon} size={15} style="color:{(cat as any).color}" />
-          </div>
-          <p class="text-xs font-semibold flex-1">{(cat as any).name}</p>
-          <div class="flex gap-1">
-            <button class="btn btn-ghost btn-icon btn-sm" onclick={() => openEdit(cat)}>
-              <Pencil size={13} strokeWidth={1.75} />
-            </button>
-            <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]" onclick={() => archive(cat)}>
-              <Trash2 size={13} strokeWidth={1.75} />
-            </button>
+        <div 
+          class="card p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+          style="border-left: 3px solid {(cat as any).color}"
+        >
+          <div class="flex items-start gap-3">
+            <!-- Icon -->
+            <div 
+              class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform hover:scale-110"
+              style="background:color-mix(in srgb,{(cat as any).color} 15%,transparent)"
+            >
+              <DynamicIcon name={(cat as any).icon} size={18} style="color:{(cat as any).color}" />
+            </div>
+            
+            <!-- Content -->
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold mb-1 truncate">{(cat as any).name}</p>
+              <div class="flex items-center gap-1.5">
+                <div 
+                  class="w-3 h-3 rounded-full"
+                  style="background:{(cat as any).color}"
+                ></div>
+                <span class="text-[10px] text-[var(--text-3)] font-mono">{(cat as any).color.toUpperCase()}</span>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-1">
+              <button 
+                class="btn btn-ghost btn-icon btn-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                onclick={() => openEdit(cat)}
+                title="Edit category"
+              >
+                <Pencil size={13} strokeWidth={1.75} />
+              </button>
+              <button 
+                class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)] opacity-0 group-hover:opacity-100 transition-opacity"
+                onclick={() => archive(cat)}
+                disabled={deleting === (cat as any).id}
+                title="Archive category"
+              >
+                {#if deleting === (cat as any).id}
+                  <div class="w-3 h-3 border-2 border-[var(--crimson)] border-t-transparent rounded-full animate-spin"></div>
+                {:else}
+                  <Trash2 size={13} strokeWidth={1.75} />
+                {/if}
+              </button>
+            </div>
           </div>
         </div>
       {/each}
+    </div>
+
+    <!-- Category count -->
+    <div class="mt-4 text-center">
+      <p class="text-xs text-[var(--text-3)]">
+        {(data.categories as any[]).length} {(data.categories as any[]).length === 1 ? 'category' : 'categories'}
+      </p>
     </div>
   {/if}
 </PageShell>

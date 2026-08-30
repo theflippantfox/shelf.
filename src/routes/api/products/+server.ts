@@ -1,6 +1,47 @@
 import { json } from '@sveltejs/kit';
 import { adminClient, readItems, createItem } from '$lib/server/directus';
 
+/**
+ * Generate a unique SKU for a product.
+ * Format: SKU-YYYY-XXXX where XXXX is a random alphanumeric string
+ */
+async function generateUniqueSKU(shopId: string): Promise<string> {
+  const client = adminClient();
+  const year = new Date().getFullYear();
+  
+  // Generate random 4-character alphanumeric string
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding confusing chars
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    let randomStr = '';
+    for (let i = 0; i < 4; i++) {
+      randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    const sku = `SKU-${year}-${randomStr}`;
+    
+    // Check if SKU already exists in this shop
+    const existing = await client.request(readItems('products', {
+      filter: {
+        shop: { _eq: shopId },
+        sku: { _eq: sku },
+      },
+      limit: 1,
+    }));
+    
+    if (existing.length === 0) {
+      return sku;
+    }
+    
+    attempts++;
+  }
+  
+  // Fallback with timestamp if all attempts fail
+  return `SKU-${year}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+}
+
 export async function GET({ locals, url }) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const shopId = locals.currentShop.id;
@@ -40,8 +81,15 @@ export async function POST({ request, locals }) {
   const body = await request.json();
   const client = adminClient();
 
+  // Auto-generate SKU if not provided
+  let sku = body.sku?.trim();
+  if (!sku) {
+    sku = await generateUniqueSKU(locals.currentShop.id);
+  }
+
   const product = await client.request(createItem('products', {
     ...body,
+    sku,
     shop: locals.currentShop.id,
   }));
   return json(product, { status: 201 });

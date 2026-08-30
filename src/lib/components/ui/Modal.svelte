@@ -17,7 +17,7 @@
     footer?:   Snippet;
   } = $props();
 
-  let dialogEl: HTMLElement;
+  let dialogEl = $state<HTMLElement | null>(null);
 
   $effect(() => {
     if (open && dialogEl) {
@@ -29,6 +29,10 @@
   });
 
   function close() { open = false; }
+
+  function handleOverlayClick(e: MouseEvent) {
+    if (e.target === e.currentTarget) close();
+  }
 </script>
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape' && open) close(); }} />
@@ -38,7 +42,8 @@
   <div
     class="fixed inset-0 z-50 bg-black/50"
     transition:fade={{ duration: 180 }}
-    onclick={close}
+    onclick={handleOverlayClick}
+    onkeydown={(e) => { if (e.key === 'Escape' && open) close(); }}
     role="presentation"
   ></div>
 
@@ -53,7 +58,7 @@
     <div
       class="card w-full {maxWidth} flex flex-col max-h-[90vh]"
       transition:fly={{ y: 20, duration: 220 }}
-      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => { if (e.key === 'Escape') close(); }}
     >
       <!-- Header -->
       <div class="flex items-center justify-between p-5 pb-4 border-b border-[var(--border)]">

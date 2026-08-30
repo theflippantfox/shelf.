@@ -73,3 +73,61 @@ export function fromMinorUnits(minor: number): number {
 export function toMinorUnits(amount: number): number {
   return Math.round(amount * 100);
 }
+
+/**
+ * Compact Indian-system number shorthand.
+ *  999      → 999
+ *  1.2k     → 1.2k
+ *  18k      → 18k
+ *  1.5L     → 1.5L    (1 Lakh = 100,000)
+ *  12L      → 12L
+ *  1.5Cr    → 1.5Cr   (1 Crore = 10,000,000)
+ *  21Cr     → 21Cr
+ *
+ * Currency prefix (e.g. ₹) is added by callers; this returns the number part.
+ * Decimals are trimmed: 18.0k → 18k, 1.50L → 1.5L.
+ * Pass `currency=true` to also format without leading currency (e.g. for sub-labels
+ * where we want the same look as formatCurrency).
+ */
+export function formatCompact(n: number, opts: { decimals?: number } = {}): string {
+  const decimals = opts.decimals ?? 1;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+
+  if (abs < 1_000) {
+    return `${sign}${abs.toFixed(0)}`;
+  }
+  if (abs < 100_000) {
+    // k
+    const v = abs / 1_000;
+    return `${sign}${trimZeros(v.toFixed(decimals))}k`;
+  }
+  if (abs < 10_000_000) {
+    // Lakh
+    const v = abs / 100_000;
+    return `${sign}${trimZeros(v.toFixed(decimals))}L`;
+  }
+  // Crore
+  const v = abs / 10_000_000;
+  return `${sign}${trimZeros(v.toFixed(decimals))}Cr`;
+}
+
+function trimZeros(s: string): string {
+  if (!s.includes('.')) return s;
+  return s.replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
+}
+
+/** Compact currency formatter — for KPI big numbers and table cells.
+ *  Reads the active currency symbol from the Intl formatter when possible.
+ *  Falls back to a manual prefix when the locale doesn't expose a symbol.
+ */
+export function formatCurrencyCompact(minorUnits: number): string {
+  let symbol = _currency;
+  try {
+    const parts = new Intl.NumberFormat(_locale, { style: 'currency', currency: _currency })
+      .formatToParts(0);
+    const sym = parts.find(p => p.type === 'currency')?.value;
+    if (sym) symbol = sym;
+  } catch { /* keep _currency as text fallback */ }
+  return `${symbol}${formatCompact(minorUnits / 100)}`;
+}

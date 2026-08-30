@@ -106,11 +106,11 @@
             <p class="text-xs font-semibold">{formatCurrency((c as any).total_spent)}</p>
             <p class="text-[10px] text-[var(--text-3)]">total spent</p>
           </div>
-          <div class="flex gap-1" onclick={(e) => e.stopPropagation()}>
-            <button class="btn btn-ghost btn-icon btn-sm" onclick={(e) => openEdit(e, c)}>
+          <div class="flex gap-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="group">
+            <button class="btn btn-ghost btn-icon btn-sm" onclick={(e) => openEdit(e, c)} aria-label="Edit customer">
               <Pencil size={13} strokeWidth={1.75} />
             </button>
-            <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]" onclick={(e) => remove(e, c)}>
+            <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]" onclick={(e) => remove(e, c)} aria-label="Delete customer">
               <Trash2 size={13} strokeWidth={1.75} />
             </button>
           </div>
@@ -126,8 +126,8 @@
     <Input label="Phone"     bind:value={form.phone}  type="tel" />
     <Input label="Email"     bind:value={form.email}  type="email" />
     <div class="input-group">
-      <label class="input-label">Notes</label>
-      <textarea bind:value={form.notes} class="input" rows="2"></textarea>
+      <label for="customer-notes" class="input-label">Notes</label>
+      <textarea id="customer-notes" bind:value={form.notes} class="input" rows="2"></textarea>
     </div>
   </form>
   {#snippet footer()}

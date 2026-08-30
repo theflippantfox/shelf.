@@ -341,8 +341,9 @@
     </div>
     <Input label="Email" bind:value={form.email} type="email" />
     <div class="input-group">
-      <label class="input-label">Address</label>
+      <label for="supplier-address" class="input-label">Address</label>
       <textarea
+        id="supplier-address"
         bind:value={form.address}
         class="input"
         rows="2"
@@ -372,8 +373,9 @@
       <div></div>
     </div>
     <div class="input-group">
-      <label class="input-label">Internal notes</label>
+      <label for="supplier-notes" class="input-label">Internal notes</label>
       <textarea
+        id="supplier-notes"
         bind:value={form.notes}
         class="input"
         rows="2"
