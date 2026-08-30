@@ -1,35 +1,43 @@
-import { json }     from '@sveltejs/kit';
-import { hashPassword, createSession, SESSION_COOKIE_NAME, SESSION_COOKIE_OPTS } from '$lib/server/auth';
-import { adminClient, readItems, updateItem } from '$lib/server/directus';
+/**
+ * POST /api/auth/reset-password
+ * Used after the user clicks the reset link in their email.
+ * Supabase handles the token exchange; we just need to update the password.
+ */
+import { json } from '@sveltejs/kit';
+import { createServerClient } from '@supabase/ssr';
+import {
+  PUBLIC_SUPABASE_URL,
+  PUBLIC_SUPABASE_ANON_KEY,
+} from '$env/static/public';
 
-export async function POST({ request, cookies }) {
-  const { token, password } = await request.json();
-  if (!token || !password || password.length < 8)
-    return json({ error: 'Token and password (min 8 chars) are required' }, { status: 400 });
+const COOKIE_OPTS = {
+  path: '/',
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: false,
+  maxAge: 60 * 60 * 24 * 30,
+};
+
+export async function POST({ request, cookies }: import('@sveltejs/kit').RequestEvent) {
+  const { password } = await request.json();
+  if (!password || password.length < 8) {
+    return json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  }
 
   try {
-    const users = await adminClient().request(readItems('users', {
-      filter: {
-        reset_token:            { _eq: token },
-        reset_token_expires_at: { _gt: new Date().toISOString() },
+    const supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+      cookies: {
+        getAll: () => cookies.getAll(),
+        setAll: (settable) => {
+          for (const { name, value, options } of settable) {
+            cookies.set(name, value, { ...COOKIE_OPTS, ...options });
+          }
+        },
       },
-      fields: ['id'],
-      limit:  1,
-    })) as any[];
+    });
 
-    if (!users.length) return json({ error: 'Reset link is invalid or has expired' }, { status: 400 });
-
-    const userId       = users[0].id;
-    const password_hash = await hashPassword(password);
-
-    await adminClient().request(updateItem('users', userId, {
-      password_hash,
-      reset_token:            null,
-      reset_token_expires_at: null,
-    }));
-
-    const sessionToken = await createSession(userId);
-    cookies.set(SESSION_COOKIE_NAME, sessionToken, SESSION_COOKIE_OPTS);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return json({ error: error.message }, { status: 400 });
 
     return json({ ok: true });
   } catch (err) {

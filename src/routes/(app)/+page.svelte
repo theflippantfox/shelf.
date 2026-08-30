@@ -197,7 +197,7 @@
                 </div>
                 <div class="min-w-0">
                   <p class="text-[13px] font-semibold truncate">{sale.customer?.name ?? 'Walk-in customer'}</p>
-                  <p class="text-[11px] text-[var(--text-3)]">{meta?.label ?? sale.payment_method} · {formatTime(sale.date_created)}</p>
+                  <p class="text-[11px] text-[var(--text-3)]">{meta?.label ?? sale.payment_method} · {formatTime(sale.created_at)}</p>
                 </div>
               </div>
               <p class="text-[13px] font-semibold tabular-nums ml-3 shrink-0">{formatCurrency(sale.total)}</p>

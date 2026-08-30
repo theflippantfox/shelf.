@@ -1,36 +1,33 @@
-import { json }     from '@sveltejs/kit';
-import { getUserByEmail, hashPassword } from '$lib/server/auth';
-import { adminClient, updateItem } from '$lib/server/directus';
+/**
+ * POST /api/auth/forgot-password
+ * Sends a password-reset email via Supabase Auth.
+ * Always returns 200 (don't leak whether the account exists).
+ */
+import { json } from '@sveltejs/kit';
+import { createServerClient } from '@supabase/ssr';
+import {
+  PUBLIC_SUPABASE_URL,
+  PUBLIC_SUPABASE_ANON_KEY,
+} from '$env/static/public';
 
-// In production wire this up to an email provider (Resend, Postmark, etc.)
-// For now it generates a reset token and logs it — replace the console.log
-// with an email send call.
-
-export async function POST({ request }) {
+export async function POST({ request, cookies }: import('@sveltejs/kit').RequestEvent) {
   const { email } = await request.json();
-  if (!email) return json({ error: 'Email required' }, { status: 400 });
+  if (!email) return json({ ok: true }); // never error on missing email
 
-  // Always return 200 — don't reveal whether the account exists
   try {
-    const user = await getUserByEmail(email);
-    if (user) {
-      const reset_token  = crypto.randomUUID();
-      const reset_expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    const supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+      cookies: {
+        getAll: () => cookies.getAll(),
+        setAll: () => { /* no-op — reset flow uses PKCE, not cookies here */ },
+      },
+    });
 
-      await adminClient().request(updateItem('users', user.id, {
-        reset_token,
-        reset_token_expires_at: reset_expiry,
-      }));
-
-      // TODO: replace with real email
-      console.log(
-        `[Shëlf] Password reset for ${email}:\n` +
-        `  Token: ${reset_token}\n` +
-        `  Link:  ${process.env.ORIGIN}/reset-password?token=${reset_token}`
-      );
-    }
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'http://127.0.0.1:5180/reset-password',
+    });
   } catch (err) {
     console.error('[forgot-password]', err);
+    // Still 200 — don't leak whether the account exists
   }
 
   return json({ ok: true });

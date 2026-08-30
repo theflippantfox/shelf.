@@ -1,24 +1,52 @@
-import { json }     from '@sveltejs/kit';
+/**
+ * POST /api/auth        — login
+ * DELETE /api/auth      — logout
+ *
+ * Login is done via the anon-key Supabase client (which sets the auth cookie
+ * via @supabase/ssr). We deliberately use a fresh client (not userClient)
+ * so the cookie write happens on this request's cookie jar.
+ */
+import { json } from '@sveltejs/kit';
+import { createServerClient } from '@supabase/ssr';
 import {
-  getUserByEmail, verifyPassword, createSession, deleteSession,
-  SESSION_COOKIE_NAME, SESSION_COOKIE_OPTS,
-} from '$lib/server/auth';
+  PUBLIC_SUPABASE_URL,
+  PUBLIC_SUPABASE_ANON_KEY,
+} from '$env/static/public';
+
+const COOKIE_OPTS = {
+  path: '/',
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: false, // local dev; set true behind HTTPS
+  maxAge: 60 * 60 * 24 * 30, // 30 days
+};
+
+function makeAuthClient(cookies: import('@sveltejs/kit').Cookies) {
+  return createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll: () => cookies.getAll(),
+      setAll: (settable) => {
+        for (const { name, value, options } of settable) {
+          cookies.set(name, value, { ...COOKIE_OPTS, ...options });
+        }
+      },
+    },
+  });
+}
 
 export async function POST({ request, cookies }) {
   const { email, password } = await request.json();
-  if (!email || !password)
+  if (!email || !password) {
     return json({ error: 'Email and password are required' }, { status: 400 });
+  }
 
   try {
-    const user = await getUserByEmail(email);
-    if (!user) return json({ error: 'Invalid email or password' }, { status: 401 });
-
-    const valid = await verifyPassword(password, user.password_hash);
-    if (!valid)  return json({ error: 'Invalid email or password' }, { status: 401 });
-
-    const token = await createSession(user.id);
-    cookies.set(SESSION_COOKIE_NAME, token, SESSION_COOKIE_OPTS);
-    return json({ ok: true, userId: user.id });
+    const supabase = makeAuthClient(cookies);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.user) {
+      return json({ error: 'Invalid email or password' }, { status: 401 });
+    }
+    return json({ ok: true, userId: data.user.id });
   } catch (err) {
     console.error('[auth login]', err);
     return json({ error: 'Login failed — please try again' }, { status: 500 });
@@ -26,11 +54,15 @@ export async function POST({ request, cookies }) {
 }
 
 export async function DELETE({ cookies }) {
-  const token = cookies.get(SESSION_COOKIE_NAME);
-  if (token) {
-    await deleteSession(token).catch(() => {});
+  try {
+    const supabase = makeAuthClient(cookies);
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.error('[auth logout]', err);
   }
-  cookies.delete(SESSION_COOKIE_NAME,   { path: '/' });
-  cookies.delete('shelf-current-shop',  { path: '/' });
+  // Cookie is cleared by signOut via setAll; belt-and-braces also clear any
+  // Supabase cookies we know about.
+  cookies.delete('sb-127-auth-token', { path: '/' });
+  cookies.delete('shelf-current-shop', { path: '/' });
   return json({ ok: true });
 }

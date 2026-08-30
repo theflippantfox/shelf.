@@ -1,11 +1,25 @@
-import { json }     from '@sveltejs/kit';
+/**
+ * POST /api/auth/register
+ * Creates a new Supabase Auth user, then signs them in (sets session cookie).
+ * Profile row is auto-created by the on_auth_user_created DB trigger.
+ */
+import { json } from '@sveltejs/kit';
+import { signUp, getCurrentUser } from '$lib/server/auth';
+import { createServerClient } from '@supabase/ssr';
 import {
-  hashPassword, createSession, getUserByEmail,
-  SESSION_COOKIE_NAME, SESSION_COOKIE_OPTS,
-} from '$lib/server/auth';
-import { adminClient, readItems, createItem } from '$lib/server/directus';
+  PUBLIC_SUPABASE_URL,
+  PUBLIC_SUPABASE_ANON_KEY,
+} from '$env/static/public';
 
-export async function POST({ request, cookies }) {
+const COOKIE_OPTS = {
+  path: '/',
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: false,
+  maxAge: 60 * 60 * 24 * 30,
+};
+
+export async function POST({ request, cookies }: import('@sveltejs/kit').RequestEvent) {
   const { first_name, last_name, email, password } = await request.json();
 
   if (!first_name?.trim())
@@ -16,26 +30,32 @@ export async function POST({ request, cookies }) {
     return json({ error: 'Password must be at least 8 characters' }, { status: 400 });
 
   try {
-    // Check for existing account
-    const existing = await getUserByEmail(email);
-    if (existing) return json({ error: 'An account with that email already exists' }, { status: 409 });
+    const userId = await signUp(email, password, first_name.trim(), (last_name ?? '').trim());
 
-    const password_hash = await hashPassword(password);
+    // Sign the user in immediately so the session cookie is set.
+    // We use the same anon-key client pattern as /api/auth.
+    const supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+      cookies: {
+        getAll: () => cookies.getAll(),
+        setAll: (settable) => {
+          for (const { name, value, options } of settable) {
+            cookies.set(name, value, { ...COOKIE_OPTS, ...options });
+          }
+        },
+      },
+    });
 
-    const client = adminClient();
-    const user   = await client.request(createItem('users', {
-      first_name:    first_name.trim(),
-      last_name:     (last_name ?? '').trim(),
-      email:         email.toLowerCase().trim(),
-      password_hash,
-    })) as any;
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInErr) {
+      // Account created but auto-login failed — user can sign in manually
+      console.error('[auth register] auto-login failed:', signInErr);
+      return json({ ok: true, userId, warning: 'Account created — please sign in' }, { status: 201 });
+    }
 
-    const token = await createSession(user.id);
-    cookies.set(SESSION_COOKIE_NAME, token, SESSION_COOKIE_OPTS);
-
-    return json({ ok: true, userId: user.id }, { status: 201 });
-  } catch (err) {
+    return json({ ok: true, userId }, { status: 201 });
+  } catch (err: any) {
     console.error('[auth register]', err);
-    return json({ error: 'Registration failed — please try again' }, { status: 500 });
+    const msg = err?.message?.includes('already') ? 'An account with that email already exists' : 'Registration failed — please try again';
+    return json({ error: msg }, { status: err?.message?.includes('already') ? 409 : 500 });
   }
 }

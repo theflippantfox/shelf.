@@ -1,87 +1,74 @@
-import { adminClient, readItems } from '$lib/server/directus';
+import { adminClient, userClient } from '$lib/server/supabase';
+import type { RequestEvent } from '@sveltejs/kit';
 
-export async function load({ locals }) {
-  const shopId     = locals.currentShop!.id;
-  const client     = adminClient();
-  const now        = new Date();
+/**
+ * Home/dashboard page — today's revenue, profit, top products, stock alerts.
+ * Aggregation logic is unchanged from the original Directus version;
+ * only the data-fetching layer was rewritten for Supabase.
+ */
+export async function load({ locals }: RequestEvent) {
+  const shopId = locals.currentShop!.id;
+  const supabase = userClient({ locals } as any); // RLS-correct (shop-scoped)
+  const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yStart     = new Date(todayStart);
+  const yStart = new Date(todayStart);
   yStart.setDate(yStart.getDate() - 1);
-  const yEnd       = todayStart;
-  const threshold  = locals.currentShop!.low_stock_threshold ?? 10;
+  const yEnd = todayStart;
+  const threshold = locals.currentShop!.low_stock_threshold ?? 10;
 
-  const [todaySales, yestSales, allLowStock, saleItemsToday, saleItemsYest, allProducts] = await Promise.all([
-    client.request(readItems('sales', {
-      filter: {
-        shop:         { _eq: shopId },
-        voided_at:    { _null: true },
-        date_created: { _gte: todayStart.toISOString() },
-      },
-      fields: ['id', 'total', 'payment_method', 'date_created', 'customer.id', 'customer.name'],
-      sort:   ['-date_created'],
-      limit:  10,
-    })),
-
-    client.request(readItems('sales', {
-      filter: {
-        shop:         { _eq: shopId },
-        voided_at:    { _null: true },
-        date_created: { _gte: yStart.toISOString(), _lt: yEnd.toISOString() },
-      } as any,
-      fields: ['id', 'total'],
-      limit:  -1,
-    })),
-
-    client.request(readItems('products', {
-      filter: {
-        shop:        { _eq: shopId },
-        archived_at: { _null: true },
-        _or: [{ qty: { _eq: 0 } }, { qty: { _lte: threshold } }],
-      },
-      fields: ['id', 'name', 'qty', 'low_stock_threshold', 'unit'],
-      limit:  20,
-    })),
-
-    client.request(readItems('sale_items', {
-      filter: {
-        sale: {
-          shop:         { _eq: shopId },
-          voided_at:    { _null: true },
-          date_created: { _gte: todayStart.toISOString() },
-        },
-      },
-      fields: ['unit_price', 'qty', 'line_total',
-               'product.id', 'product.name', 'product.cost_price',
-               'product.category.id', 'product.category.name', 'product.category.color', 'product.category.icon'],
-      limit:  -1,
-    })),
-
-    client.request(readItems('sale_items', {
-      filter: {
-        sale: {
-          shop:         { _eq: shopId },
-          voided_at:    { _null: true },
-          date_created: { _gte: yStart.toISOString(), _lt: yEnd.toISOString() },
-        },
-      } as any,
-      fields: ['unit_price', 'qty', 'product.cost_price'],
-      limit:  -1,
-    })),
-
-    // All products for stock-value & top-mover calculations
-    client.request(readItems('products', {
-      filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-      fields: ['id', 'name', 'price', 'cost_price', 'qty',
-               'category.id', 'category.name', 'category.color', 'category.icon'],
-      limit:  -1,
-    })),
+  const [
+    { data: todaySales = [] },
+    { data: yestSales = [] },
+    { data: allLowStock = [] },
+    { data: saleItemsToday = [] },
+    { data: saleItemsYest = [] },
+    { data: allProducts = [] },
+  ] = await Promise.all([
+    supabase.from('sales')
+      .select('id, total, payment_method, created_at, customer:customers(id, name)')
+      .eq('shop_id', shopId)
+      .is('voided_at', null)
+      .gte('created_at', todayStart.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(10),
+    supabase.from('sales')
+      .select('id, total')
+      .eq('shop_id', shopId)
+      .is('voided_at', null)
+      .gte('created_at', yStart.toISOString())
+      .lt('created_at', yEnd.toISOString())
+      .limit(1000),
+    supabase.from('products')
+      .select('id, name, qty, low_stock_threshold, unit')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .or('qty.eq.0,qty.lte.' + threshold)
+      .limit(20),
+    supabase.from('sale_items')
+      .select('unit_price, qty, line_total, product:products(id, name, cost_price, category:categories(id, name, color, icon))')
+      .eq('sale.shop_id', shopId) // joins through sale
+      .is('sale.voided_at', null)
+      .gte('sale.created_at', todayStart.toISOString())
+      .limit(1000),
+    supabase.from('sale_items')
+      .select('unit_price, qty, product:products(cost_price)')
+      .eq('sale.shop_id', shopId)
+      .is('sale.voided_at', null)
+      .gte('sale.created_at', yStart.toISOString())
+      .lt('sale.created_at', yEnd.toISOString())
+      .limit(1000),
+    supabase.from('products')
+      .select('id, name, price, cost_price, qty, category:categories(id, name, color, icon)')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .limit(1000),
   ]);
 
   // ── Today ────────────────────────────────────────────────────────────────
   const todayRevenue = (todaySales as any[]).reduce((s, x) => s + x.total, 0);
   const todayCount   = (todaySales as any[]).length;
 
-  const todayCost    = (saleItemsToday as any[]).reduce(
+  const todayCost = (saleItemsToday as any[]).reduce(
     (s, item) => s + (item.product?.cost_price ?? 0) * item.qty, 0,
   );
   const todayProfit  = todayRevenue - todayCost;
@@ -90,12 +77,11 @@ export async function load({ locals }) {
   // ── Yesterday ────────────────────────────────────────────────────────────
   const yestRevenue = (yestSales as any[]).reduce((s, x) => s + x.total, 0);
   const yestCount   = (yestSales as any[]).length;
-  const yestCost    = (saleItemsYest as any[]).reduce(
+  const yestCost = (saleItemsYest as any[]).reduce(
     (s, item) => s + (item.product?.cost_price ?? 0) * item.qty, 0,
   );
   const yestProfit  = yestRevenue - yestCost;
 
-  // ── Deltas (in percentage points, same sign convention as analytics) ─────
   function pctDelta(curr: number, prev: number) {
     if (prev === 0 && curr === 0) return { pct: 0, direction: 'flat' as const };
     if (prev === 0)               return { pct: 100, direction: 'up'   as const };
@@ -110,20 +96,17 @@ export async function load({ locals }) {
   const txnsDelta    = pctDelta(todayCount,   yestCount);
   const profitDelta  = pctDelta(todayProfit,  yestProfit);
 
-  // ── Payment method breakdown ──────────────────────────────────────────────
   const paymentBreakdown = (todaySales as any[]).reduce((acc, sale) => {
     acc[sale.payment_method] = (acc[sale.payment_method] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  // ── Stock: split into critical (out of stock) vs warning (low) ───────────
   const outOfStock = (allLowStock as any[]).filter(p => p.qty === 0);
   const lowStock   = (allLowStock as any[]).filter(p => p.qty > 0);
 
-  // ── Top sellers today (by qty, then by revenue) ──────────────────────────
   const productAgg = new Map<string, { id: string; name: string; qty: number; revenue: number; category: any }>();
   for (const item of saleItemsToday as any[]) {
-    const pid = item.product?.id ?? item.product;          // relation can be string
+    const pid = item.product?.id ?? item.product;
     if (!pid) continue;
     const lineTotal = item.line_total ?? item.unit_price * item.qty;
     const existing  = productAgg.get(pid);
@@ -144,7 +127,6 @@ export async function load({ locals }) {
     .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
     .slice(0, 5);
 
-  // ── Top categories today (by revenue) ────────────────────────────────────
   const categoryAgg = new Map<string, { id: string; name: string; color: string; icon: string; revenue: number; qty: number }>();
   for (const item of saleItemsToday as any[]) {
     const cat = item.product?.category;
@@ -170,18 +152,15 @@ export async function load({ locals }) {
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 4);
 
-  // ── Distinct customers served today ──────────────────────────────────────
   const distinctCustomers = new Set(
     (todaySales as any[])
       .map((s: any) => s.customer?.id ?? s.customer)
       .filter(Boolean),
   ).size;
 
-  // ── Average basket size (items per sale) ──────────────────────────────────
   const totalItemsToday = (saleItemsToday as any[]).reduce((s, x) => s + x.qty, 0);
   const avgBasket       = todayCount > 0 ? +(totalItemsToday / todayCount).toFixed(1) : 0;
 
-  // ── Stock value (at retail & at cost) ────────────────────────────────────
   let stockValueRetail = 0;
   let stockValueCost   = 0;
   for (const p of allProducts as any[]) {
@@ -189,7 +168,6 @@ export async function load({ locals }) {
     stockValueCost   += (p.cost_price ?? 0) * (p.qty ?? 0);
   }
 
-  // ── Greeting ─────────────────────────────────────────────────────────────
   const hour = now.getHours();
   const greeting = hour < 5  ? 'Working late'
                   : hour < 12 ? 'Good morning'
