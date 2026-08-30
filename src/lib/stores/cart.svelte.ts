@@ -1,4 +1,4 @@
-import type { RecordModel } from 'pocketbase';
+
 
 export interface CartItem {
   productId: string;
@@ -46,7 +46,7 @@ class CartStore {
     return Math.max(0, this.subtotal - this.discountAmount);
   }
 
-  add(product: RecordModel) {
+  add(product: any) {
     const exists = this.#items.find(i => i.productId === product.id);
     if (exists) {
       this.setQty(product.id, exists.qty + 1);

@@ -1,16 +1,16 @@
-import type { RecordModel } from 'pocketbase';
+
 import { appConfig } from '$lib/config/app';
 
 export type StockStatus = 'ok' | 'low' | 'out';
 
-export function getStockStatus(product: RecordModel): StockStatus {
+export function getStockStatus(product: any): StockStatus {
   if (product.qty === 0) return 'out';
   if (product.qty <= (product.low_stock_threshold ?? appConfig.inventory.defaultLowStockThreshold)) return 'low';
   return 'ok';
 }
 
 class InventoryStore {
-  #items  = $state<RecordModel[]>([]);
+  #items  = $state<any[]>([]);
   #search = $state('');
   #cat    = $state('');
 
@@ -34,16 +34,16 @@ class InventoryStore {
   get outOfStock(){ return this.#items.filter(p => getStockStatus(p) === 'out'); }
   get alertCount(){ return this.lowStock.length + this.outOfStock.length; }
 
-  init(items: RecordModel[]) { this.#items = items; }
+  init(items: any[]) { this.#items = items; }
 
   setSearch(q: string) { this.#search = q; }
   setCategory(id: string) { this.#cat = id; }
 
-  add(product: RecordModel) {
+  add(product: any) {
     this.#items = [...this.#items, product];
   }
 
-  update(product: RecordModel) {
+  update(product: any) {
     this.#items = this.#items.map(p => p.id === product.id ? product : p);
   }
 

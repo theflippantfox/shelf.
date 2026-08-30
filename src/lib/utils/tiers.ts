@@ -1,9 +1,9 @@
 import { appConfig } from '$lib/config/app';
-import type { RecordModel } from 'pocketbase';
+
 
 export type CustomerTier = 'vip' | 'regular' | 'new';
 
-export function getCustomerTier(customer: RecordModel): CustomerTier {
+export function getCustomerTier(customer: any): CustomerTier {
   const { vip, regular } = appConfig.tiers;
   if (
     customer.visit_count >= vip.minVisits ||

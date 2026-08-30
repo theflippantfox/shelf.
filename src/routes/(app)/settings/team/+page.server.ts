@@ -1,14 +1,21 @@
-import { adminClient, readItems } from '$lib/server/directus';
 import { redirect } from '@sveltejs/kit';
+import { userClient } from '$lib/server/supabase';
 
-export async function load({ locals }) {
+/**
+ * Team management page — owner only.
+ * Lists members with profile + email (loaded separately via admin API).
+ */
+export async function load({ locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) throw redirect(302, '/');
-  if (!locals.shopMember || locals.shopMember.role !== 'owner') throw redirect(302, '/settings');
-  const client  = adminClient();
-  const members = await client.request(readItems('shop_members', {
-    filter: { shop: { _eq: locals.currentShop.id } },
-    fields: ['id','role','status','permissions','user.id','user.first_name','user.last_name','user.email'],
-    sort:   ['role', 'user.first_name'], limit: -1,
-  }));
-  return { members };
+  if (!locals.shopMember || locals.shopMember.role !== 'owner')
+    throw redirect(302, '/settings');
+
+  const supabase = userClient({ locals } as any);
+  const { data: members = [] } = await supabase
+    .from('shop_members')
+    .select('id, role, status, permissions, created_at, user:profiles!shop_members_user_id_fkey(id, first_name, last_name, avatar_url)')
+    .eq('shop_id', locals.currentShop.id)
+    .order('role');
+
+  return { members: members as any[] };
 }

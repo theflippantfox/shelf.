@@ -1,8 +1,8 @@
-import type { RecordModel } from 'pocketbase';
+
 import { setFormatLocale } from '$lib/utils/format';
 
 class ShopStore {
-  #data = $state<RecordModel | null>(null);
+  #data = $state<any | null>(null);
 
   get data() { return this.#data; }
 
@@ -16,7 +16,7 @@ class ShopStore {
   get taxInclusive(){ return this.#data?.tax_inclusive     ?? false; }
   get taxName()     { return this.#data?.tax_name          ?? 'Tax'; }
 
-  init(shop: RecordModel | null) {
+  init(shop: any | null) {
     this.#data = shop;
     if (shop) {
       setFormatLocale({
@@ -29,7 +29,7 @@ class ShopStore {
     }
   }
 
-  update(data: Partial<RecordModel>) {
+  update(data: Partial<any>) {
     if (this.#data) {
       this.#data = { ...this.#data, ...data };
     }

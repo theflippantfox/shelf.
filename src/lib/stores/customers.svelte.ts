@@ -1,7 +1,7 @@
-import type { RecordModel } from 'pocketbase';
+
 
 class CustomersStore {
-  #items  = $state<RecordModel[]>([]);
+  #items  = $state<any[]>([]);
   #search = $state('');
 
   get all()    { return this.#items; }
@@ -17,14 +17,14 @@ class CustomersStore {
     );
   }
 
-  init(items: RecordModel[]) { this.#items = items; }
+  init(items: any[]) { this.#items = items; }
   setSearch(q: string) { this.#search = q; }
 
-  add(customer: RecordModel) {
+  add(customer: any) {
     this.#items = [...this.#items, customer];
   }
 
-  update(customer: RecordModel) {
+  update(customer: any) {
     this.#items = this.#items.map(c => c.id === customer.id ? customer : c);
   }
 

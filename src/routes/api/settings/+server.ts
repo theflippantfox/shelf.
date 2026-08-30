@@ -1,24 +1,37 @@
+/**
+ * /api/settings — shop settings.
+ *
+ * PATCH: update shop settings. Owner only. Whitelisted fields.
+ */
 import { json } from '@sveltejs/kit';
-import { adminClient, updateItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function PATCH({ request, locals }) {
-  if (!locals.currentShop || locals.shopMember?.role !== 'owner')
-    return json({ error: 'Forbidden' }, { status: 403 });
+export async function PATCH({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!locals.currentShop)
+    return json({ error: 'No shop' }, { status: 401 });
+  if (locals.shopMember?.role !== 'owner')
+    return json({ error: 'Only owners can update shop settings' }, { status: 403 });
 
-  const body   = await request.json();
-  const client = adminClient();
-
-  // Whitelist updatable fields
-  const allowed = [
+  const body = await request.json();
+  const ALLOWED = [
     'name', 'timezone', 'currency_code', 'currency_symbol', 'currency_locale',
     'date_format', 'time_format', 'tax_rate', 'tax_inclusive', 'tax_name',
     'theme', 'primary_color', 'sidebar_bg', 'low_stock_threshold',
     'receipt_header', 'receipt_footer', 'country_code',
   ];
-  const safe = Object.fromEntries(
-    Object.entries(body).filter(([k]) => allowed.includes(k))
-  );
+  const safe: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (ALLOWED.includes(k)) safe[k] = v;
+  }
 
-  const shop = await client.request(updateItem('shops', locals.currentShop.id, safe));
-  return json(shop);
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('shops')
+    .update(safe as any)
+    .eq('id', locals.currentShop.id)
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data);
 }

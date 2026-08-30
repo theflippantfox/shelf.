@@ -1,24 +1,19 @@
-import type { RequestHandler } from '@sveltejs/kit';
-import { adminClient, readItems } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 import {
-	buildKpis,
-	buildTrend,
-	buildPaymentMethods,
-	buildHourly,
-	buildWeekday,
-	buildProducts,
-	buildCategories,
-	buildCustomerInsights,
-	buildHeatmap,
-	buildSlowMovers,
-	parsePeriod,
-	type Period,
-	type KpiSet,
-	type PaymentRow,
-	type TimeSlot,
-	type ProductSet,
-	type CategoryRow,
-	type CustomerInsights,
+  buildKpis,
+  buildTrend,
+  buildPaymentMethods,
+  buildHourly,
+  buildWeekday,
+  buildProducts,
+  buildCategories,
+  buildCustomerInsights,
+  buildHeatmap,
+  buildSlowMovers,
+  parsePeriod,
+  type Period,
+  type KpiSet,
+  type CustomerInsights,
 } from '$lib/utils/analytics';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
@@ -29,252 +24,156 @@ dayjs.extend(timezone);
 
 // ─── Inline helpers ──────────────────────────────────────────────────────────
 
-/**
- * Returns the last 12 calendar months of revenue + transaction counts.
- * Independent of the selected period — always the rolling 12 months to now.
- */
 function buildMonthlyTrend(sales: any[], shopTz: string) {
-	const now = dayjs().tz(shopTz);
-	return Array.from({ length: 12 }, (_, i) => {
-		const m = now.subtract(11 - i, 'month');
-		const start = m.startOf('month').valueOf();
-		const end = m.endOf('month').valueOf();
-		const slice = sales.filter((s) => {
-			const d = dayjs(s.date_created).tz(shopTz).valueOf();
-			return d >= start && d <= end;
-		});
-		return {
-			label: m.format('MMM'),
-			month: m.format('YYYY-MM'),
-			revenue: slice.reduce((acc, s) => acc + (s.total ?? 0), 0),
-			count: slice.length,
-		};
-	});
+  const now = dayjs().tz(shopTz);
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = now.subtract(11 - i, 'month');
+    const start = m.startOf('month').valueOf();
+    const end = m.endOf('month').valueOf();
+    const slice = sales.filter((s) => {
+      const d = dayjs(s.created_at).tz(shopTz).valueOf();
+      return d >= start && d <= end;
+    });
+    return {
+      label: m.format('MMM'),
+      month: m.format('YYYY-MM'),
+      revenue: slice.reduce((acc, s) => acc + (s.total ?? 0), 0),
+      count: slice.length,
+    };
+  });
 }
 
-/**
- * Calculates total inventory value at cost and at retail.
- *
- * `price` and `cost_price` are INT in the schema (÷100 = actual value),
- * consistent with sales.total and sale_items.line_total. No conversion
- * needed — qty (plain count) × price (÷100 int) = ÷100 int, which
- * formatCurrency handles correctly.
- */
 function buildStockValue(products: any[]) {
-	let costValue = 0;
-	let retailValue = 0;
-	let totalUnits = 0;
-	for (const p of products) {
-		const qty = Math.max(0, p.qty ?? 0);
-		costValue += qty * (p.cost_price ?? 0);
-		retailValue += qty * (p.price ?? 0);
-		totalUnits += qty;
-	}
-	const potentialMargin =
-		retailValue > 0 ? ((retailValue - costValue) / retailValue) * 100 : 0;
-	return { costValue, retailValue, totalUnits, potentialMargin };
+  let costValue = 0;
+  let retailValue = 0;
+  let totalUnits = 0;
+  for (const p of products) {
+    const qty = Math.max(0, p.qty ?? 0);
+    costValue += qty * (p.cost_price ?? 0);
+    retailValue += qty * (p.price ?? 0);
+    totalUnits += qty;
+  }
+  const potentialMargin =
+    retailValue > 0 ? ((retailValue - costValue) / retailValue) * 100 : 0;
+  return { costValue, retailValue, totalUnits, potentialMargin };
 }
 
-/**
- * Derives absolute gross profit from sale_items using line_total vs cost.
- * Both values are stored as integers (÷100 = actual).
- */
 function buildGrossProfit(items: any[], compareItems: any[]) {
-	const calc = (arr: any[]) => {
-		if (!arr || !Array.isArray(arr)) return 0;
-		return arr.reduce((sum, item) => {
-			const cost = (item.product?.cost_price ?? 0) * (item.qty ?? 0);
-			return sum + (item.line_total ?? 0) - cost;
-		}, 0);
-	};
-	const current = calc(items);
-	const previous = calc(compareItems);
-	const deltaPct = previous > 0 ? ((current - previous) / previous) * 100 : null;
-	return {
-		current,
-		previous,
-		delta:
-			deltaPct !== null
-				? { pct: Math.round(deltaPct), direction: deltaPct >= 0 ? 'up' : 'down' }
-				: null,
-	};
+  const profit = items.reduce(
+    (acc, it) => acc + ((it.line_total ?? 0) - (it.cost_price ?? 0) * (it.qty ?? 0)),
+    0
+  );
+  const cprofit = compareItems.reduce(
+    (acc, it) => acc + ((it.line_total ?? 0) - (it.cost_price ?? 0) * (it.qty ?? 0)),
+    0
+  );
+  return { profit, cprofit };
 }
 
-// ─── Load ─────────────────────────────────────────────────────────────────────
+// ─── Load ────────────────────────────────────────────────────────────────────
 
-export const load: RequestHandler = async ({ locals, url, setHeaders }) => {
-	const shop = locals.currentShop;
-	if (!shop) return {};
+export async function load({ locals, url, setHeaders }: any) {
+  setHeaders?.({ 'cache-control': 'private, max-age=60' });
 
-	const shopId = shop.id;
-	const shopTz = shop.timezone ?? 'UTC';
-	const currency = shop.currency_symbol ?? '$';
-	const period: Period = parsePeriod(url, shopTz);
+  const shop = locals.currentShop;
+  if (!shop) return {};
 
-	const client = adminClient();
+  const shopId = shop.id;
+  const shopTz = shop.timezone ?? 'UTC';
+  const currency = shop.currency_symbol ?? '$';
+  const period: Period = parsePeriod(url, shopTz);
 
-	// Monthly window — last 12 full calendar months, always fixed
-	const monthlyFrom = dayjs().tz(shopTz).subtract(11, 'month').startOf('month').toISOString();
-	const monthlyTo = dayjs().tz(shopTz).endOf('month').toISOString();
+  const supabase = userClient({ locals } as any);
 
-	const [currentSales, compareSales, customers, monthlySales, stockProducts] = await Promise.all([
-		client.request(
-			readItems('sales', {
-				filter: {
-					shop: { _eq: shopId },
-					voided_at: { _null: true },
-					date_created: { _gte: period.from, _lte: period.to },
-				},
-				fields: [
-					'id',
-					'total',
-					'subtotal',
-					'tax_amount',
-					'payment_method',
-					'date_created',
-					'customer',
-				],
-				sort: ['date_created'],
-				limit: -1,
-			})
-		),
-		client.request(
-			readItems('sales', {
-				filter: {
-					shop: { _eq: shopId },
-					voided_at: { _null: true },
-					date_created: { _gte: period.cFrom, _lte: period.cTo },
-				},
-				fields: [
-					'id',
-					'total',
-					'subtotal',
-					'tax_amount',
-					'payment_method',
-					'date_created',
-					'customer',
-				],
-				sort: ['date_created'],
-				limit: -1,
-			})
-		),
-		client.request(
-			readItems('customers', {
-				filter: { shop: { _eq: shopId } },
-				fields: ['*'],
-				limit: 100,
-			})
-		),
-		// Rolling 12-month window (independent of selected period)
-		client.request(
-			readItems('sales', {
-				filter: {
-					shop: { _eq: shopId },
-					voided_at: { _null: true },
-					date_created: { _gte: monthlyFrom, _lte: monthlyTo },
-				},
-				fields: ['id', 'total', 'date_created'],
-				sort: ['date_created'],
-				limit: -1,
-			})
-		),
-		// Active products for stock value (archived_at is the soft-delete field)
-		client.request(
-			readItems('products', {
-				filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-				fields: ['id', 'price', 'cost_price', 'qty'],
-				limit: -1,
-			})
-		),
-	]);
+  const monthlyFrom = dayjs().tz(shopTz).subtract(11, 'month').startOf('month').toISOString();
+  const monthlyTo = dayjs().tz(shopTz).endOf('month').toISOString();
 
-	const currentIds = (currentSales as any[]).map((s) => s.id).filter(Boolean);
-	const compareIds = (compareSales as any[]).map((s) => s.id).filter(Boolean);
+  const [
+    { data: currentSales = [] },
+    { data: compareSales = [] },
+    { data: customers = [] },
+    { data: monthlySales = [] },
+    { data: stockProducts = [] },
+  ] = await Promise.all([
+    supabase.from('sales')
+      .select('id, total, subtotal, tax_amount, payment_method, created_at, customer_id')
+      .eq('shop_id', shopId)
+      .is('voided_at', null)
+      .gte('created_at', period.from)
+      .lte('created_at', period.to),
+    supabase.from('sales')
+      .select('id, total, subtotal, tax_amount, payment_method, created_at, customer_id')
+      .eq('shop_id', shopId)
+      .is('voided_at', null)
+      .gte('created_at', period.cFrom)
+      .lte('created_at', period.cTo),
+    supabase.from('customers')
+      .select('*')
+      .eq('shop_id', shopId)
+      .limit(100),
+    supabase.from('sales')
+      .select('id, total, created_at')
+      .eq('shop_id', shopId)
+      .is('voided_at', null)
+      .gte('created_at', monthlyFrom)
+      .lte('created_at', monthlyTo),
+    supabase.from('products')
+      .select('id, name, price, cost_price, qty, category_id')
+      .eq('shop_id', shopId)
+      .is('archived_at', null),
+  ]);
 
-	const [allCurrentItems, allCompareItems] = await Promise.all([
-		currentIds.length
-			? client.request(
-					readItems('sale_items', {
-						filter: { sale: { _in: currentIds } },
-						fields: [
-							'id',
-							'sale',
-							'product',
-							'product_name',
-							'product_sku',
-							'qty',
-							'unit_price',
-							'line_total',
-							'product.cost_price',
-							'product.category.id',
-							'product.category.name',
-							'product.category.color',
-						],
-						limit: -1,
-					})
-			  )
-			: [],
-		compareIds.length
-			? client.request(
-					readItems('sale_items', {
-						filter: { sale: { _in: compareIds } },
-						fields: ['id', 'sale', 'product', 'qty', 'line_total', 'product.cost_price'],
-						limit: -1,
-					})
-			  )
-			: [],
-	]);
+  const currentIds = (currentSales as any[]).map((s) => s.id).filter(Boolean);
+  const compareIds = (compareSales as any[]).map((s) => s.id).filter(Boolean);
 
-	const saleItems = allCurrentItems as any[];
-	const compareSaleItems = allCompareItems as any[];
+  const [
+    { data: allCurrentItems = [] },
+    { data: allCompareItems = [] },
+  ] = await Promise.all([
+    currentIds.length
+      ? supabase.from('sale_items')
+          .select('id, sale_id, product_id, qty, unit_price, cost_at_sale, line_total, product:products(id, name, price, cost_price, category:categories(id, name, color))')
+          .in('sale_id', currentIds)
+      : { data: [] },
+    compareIds.length
+      ? supabase.from('sale_items')
+          .select('id, sale_id, product_id, qty, line_total, cost_at_sale')
+          .in('sale_id', compareIds)
+      : { data: [] },
+  ]);
 
-	const kpis = buildKpis(
-		currentSales as any[],
-		compareSales as any[],
-		saleItems,
-		compareSaleItems,
-		shopTz
-	);
-	const trend = buildTrend(
-		currentSales as any[],
-		period.from,
-		period.to,
-		compareSales as any[],
-		period.cFrom,
-		shopTz
-	);
-	const paymentMethods = buildPaymentMethods(currentSales as any[]);
-	const hourly = buildHourly(currentSales as any[], shopTz);
-	const weekday = buildWeekday(currentSales as any[], shopTz);
-	const products = buildProducts(saleItems);
-	const categories = buildCategories(saleItems);
-	const customerInsights = buildCustomerInsights(currentSales as any[], customers as any[]);
-	const heatmap = buildHeatmap(currentSales as any[], shopTz);
-	const slowMovers = buildSlowMovers(saleItems, stockProducts as any[]);
-	const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
-	const stockValue = buildStockValue(stockProducts as any[]);
-	const grossProfit = buildGrossProfit(saleItems, compareSaleItems);
+  const saleItems = allCurrentItems as any[];
+  const compareSaleItems = allCompareItems as any[];
 
-	setHeaders({ 'cache-control': 'private, max-age=60' });
+  const kpis: KpiSet = buildKpis(
+    currentSales as any[], compareSales as any[], saleItems, compareSaleItems, shopTz
+  );
+  const trend = buildTrend(
+    currentSales as any[], period.from, period.to,
+    compareSales as any[], period.cFrom, shopTz
+  );
+  const paymentMethods = buildPaymentMethods(currentSales as any[]);
+  const hourly = buildHourly(currentSales as any[], shopTz);
+  const weekday = buildWeekday(currentSales as any[], shopTz);
+  const products = buildProducts(saleItems);
+  const categories = buildCategories(saleItems);
+  const customerInsights: CustomerInsights = buildCustomerInsights(
+    currentSales as any[], customers as any[]
+  );
+  const heatmap = buildHeatmap(currentSales as any[], shopTz);
+  const slowMovers = buildSlowMovers(saleItems, stockProducts as any[]);
+  const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
+  const stockValue = buildStockValue(stockProducts as any[]);
+  const grossProfit = buildGrossProfit(saleItems, compareSaleItems);
 
-	return {
-		analytics: {
-			shopTz,
-			currency,
-			period,
-			kpis,
-			trend,
-			paymentMethods,
-			hourly,
-			weekday,
-			products,
-			categories,
-			customers: customerInsights,
-			heatmap,
-			slowMovers,
-			monthlyTrend,
-			stockValue,
-			grossProfit,
-		},
-	};
-};
+  return {
+    analytics: {
+      shopTz, currency, period,
+      kpis, trend, paymentMethods, hourly, weekday,
+      products, categories,
+      customers: customerInsights,
+      heatmap, slowMovers,
+      monthlyTrend, stockValue, grossProfit,
+    },
+  };
+}
