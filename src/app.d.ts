@@ -1,11 +1,9 @@
-import type { DirectusRestClient } from '$lib/server/directus';
-import type { User, Shop, ShopMember } from '$lib/types/directus';
+import type { Profile, Shop, ShopMember } from '$lib/server/auth';
 
 declare global {
   namespace App {
     interface Locals {
-      directus:    DirectusRestClient | null;
-      user:        Omit<User, 'password_hash'> | null;
+      user:        Profile | null;
       shopMember:  ShopMember | null;
       currentShop: Shop | null;
     }
