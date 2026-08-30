@@ -1,17 +1,27 @@
-import { adminClient, readItem, readItems } from '$lib/server/directus';
-import { error } from '@sveltejs/kit';
+import { userClient } from '$lib/server/supabase';
 
-export async function load({ params }) {
-  const client = adminClient();
-  try {
-    const sale  = await client.request(readItem('sales', params.id, {
-      fields: ['*','customer.*','served_by.first_name','served_by.last_name','served_by.email'],
-    }));
-    const items = await client.request(readItems('sale_items', {
-      filter: { sale: { _eq: params.id } }, fields: ['*'], limit: -1,
-    }));
-    return { sale, items };
-  } catch {
-    throw error(404, 'Sale not found');
+/**
+ * Single sale detail page — sale + line items.
+ */
+export async function load({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return { sale: null, items: [] };
+  const supabase = userClient({ locals } as any);
+
+  const [
+    { data: sale, error: saleErr },
+    { data: items, error: itemsErr },
+  ] = await Promise.all([
+    supabase.from('sales')
+      .select('*, customer:customers(*), served_by:profiles!sales_served_by_fkey(first_name, last_name, email)')
+      .eq('id', params.id)
+      .single(),
+    supabase.from('sale_items')
+      .select('*')
+      .eq('sale_id', params.id),
+  ]);
+
+  if (saleErr || itemsErr || !sale) {
+    return { sale: null, items: [] };
   }
+  return { sale, items: items ?? [] };
 }

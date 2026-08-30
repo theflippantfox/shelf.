@@ -1,46 +1,54 @@
-import { adminClient, readItems, readItem, readItems as readAllItems } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function load({ locals, url }) {
+/**
+ * Sale / POS page — products (in stock), categories, customers.
+ * In edit mode: load the sale + items to prefill the cart.
+ */
+export async function load({ locals, url }: import('@sveltejs/kit').RequestEvent) {
   const shopId = locals.currentShop!.id;
-  const client = adminClient();
-  const mode = url.searchParams.get('mode');
-  const editId = url.searchParams.get('id');
+  const supabase = userClient({ locals } as any);
+  const mode    = url.searchParams.get('mode');
+  const editId  = url.searchParams.get('id');
 
-  const [products, categories, customers] = await Promise.all([
-    client.request(readItems('products', {
-      filter: { shop: { _eq: shopId }, archived_at: { _null: true }, qty: { _gt: 0 } },
-      fields: ['id','name','sku','price','qty','category.id','category.name','category.color','category.icon','image'],
-      sort:   ['name'], limit: -1,
-    })),
-    client.request(readItems('categories', {
-      filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-      sort:   ['sort_order','name'], limit: -1,
-    })),
-    client.request(readItems('customers', {
-      filter: { shop: { _eq: shopId } },
-      fields: ['id','name','phone'],
-      sort:   ['name'], limit: -1,
-    })),
+  const [
+    { data: products = [] },
+    { data: categories = [] },
+    { data: customers = [] },
+  ] = await Promise.all([
+    supabase.from('products')
+      .select('id, name, sku, price, qty, image_url, category_id, category:categories(id, name, color, icon)')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .gt('qty', 0)
+      .order('name'),
+    supabase.from('categories')
+      .select('*')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .order('sort_order')
+      .order('name'),
+    supabase.from('customers')
+      .select('id, name, phone')
+      .eq('shop_id', shopId)
+      .order('name'),
   ]);
 
   const base = {
-    products,
-    categories,
-    customers,
+    products, categories, customers,
     taxRate:      locals.currentShop!.tax_rate,
     taxInclusive: locals.currentShop!.tax_inclusive,
     taxName:      locals.currentShop!.tax_name,
   };
 
   if (mode === 'edit' && editId) {
-    const sale = await client.request(readItem('sales', editId, {
-      fields: ['*', 'customer.*'],
-    }));
-    const items = await client.request(readAllItems('sale_items', {
-      filter: { sale: { _eq: editId } },
-      fields: ['*'],
-    }));
-    return { ...base, editSale: sale, editItems: items };
+    const [
+      { data: sale },
+      { data: items },
+    ] = await Promise.all([
+      supabase.from('sales').select('*, customer:customers(*)').eq('id', editId).single(),
+      supabase.from('sale_items').select('*').eq('sale_id', editId),
+    ]);
+    return { ...base, editSale: sale, editItems: items ?? [] };
   }
 
   return base;
