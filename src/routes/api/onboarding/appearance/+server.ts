@@ -1,14 +1,21 @@
-import { json }     from '@sveltejs/kit';
-import { adminClient, updateItem } from '$lib/server/directus';
+import { json } from '@sveltejs/kit';
+import { userClient } from '$lib/server/supabase';
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/onboarding/appearance — save theme/colors.
+ * Advances to the 'team' step.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop context' }, { status: 401 });
+
   const { primary_color, sidebar_bg, theme } = await request.json();
-  await adminClient().request(updateItem('shops', locals.currentShop.id, {
-    primary_color,
-    sidebar_bg,
-    theme,
-    onboarding_step: 'team',   // ← was 'categories', now correctly advances to team
-  }));
+  const supabase = userClient({ locals } as any);
+
+  const { error } = await supabase
+    .from('shops')
+    .update({ primary_color, sidebar_bg, theme, onboarding_step: 'team' })
+    .eq('id', locals.currentShop.id);
+
+  if (error) return json({ error: error.message }, { status: 400 });
   return json({ ok: true });
 }

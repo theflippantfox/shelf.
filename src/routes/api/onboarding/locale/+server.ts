@@ -1,12 +1,20 @@
-import { json }     from '@sveltejs/kit';
-import { adminClient, updateItem } from '$lib/server/directus';
+import { json } from '@sveltejs/kit';
+import { userClient } from '$lib/server/supabase';
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/onboarding/locale — save locale/currency/timezone settings.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop context' }, { status: 401 });
+
   const body = await request.json();
-  await adminClient().request(updateItem('shops', locals.currentShop.id, {
-    ...body,
-    onboarding_step: 'appearance',
-  }));
+  const supabase = userClient({ locals } as any);
+
+  const { error } = await supabase
+    .from('shops')
+    .update({ ...body, onboarding_step: 'appearance' })
+    .eq('id', locals.currentShop.id);
+
+  if (error) return json({ error: error.message }, { status: 400 });
   return json({ ok: true });
 }

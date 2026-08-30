@@ -1,20 +1,25 @@
-import { adminClient, readItem, readItems } from '$lib/server/directus';
-import { error } from '@sveltejs/kit';
+import { userClient } from '$lib/server/supabase';
 
-export async function load({ params, locals }) {
-  const client = adminClient();
-  try {
-    const [customer, sales] = await Promise.all([
-      client.request(readItem('customers', params.id)),
-      client.request(readItems('sales', {
-        filter: { customer: { _eq: params.id }, voided_at: { _null: true } },
-        fields: ['id','sale_ref','total','payment_method','date_created'],
-        sort:   ['-date_created'],
-        limit:  20,
-      })),
-    ]);
-    return { customer, sales };
-  } catch {
-    throw error(404, 'Customer not found');
-  }
+/**
+ * Single customer page — customer + their sales history.
+ */
+export async function load({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return { customer: null, sales: [] };
+  const supabase = userClient({ locals } as any);
+
+  const [
+    { data: customer },
+    { data: sales = [] },
+  ] = await Promise.all([
+    supabase.from('customers').select('*').eq('id', params.id).maybeSingle(),
+    supabase
+      .from('sales')
+      .select('id, sale_ref, total, payment_method, created_at, voided_at')
+      .eq('customer_id', params.id)
+      .is('voided_at', null)
+      .order('created_at', { ascending: false })
+      .limit(100),
+  ]);
+
+  return { customer, sales };
 }

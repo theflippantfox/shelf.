@@ -1,23 +1,31 @@
-import { json }     from '@sveltejs/kit';
-import { adminClient, createItem, updateItem } from '$lib/server/directus';
+import { json } from '@sveltejs/kit';
+import { userClient } from '$lib/server/supabase';
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/onboarding/categories — bulk-create starter categories.
+ * Marks the shop as onboarding_complete when done.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop context' }, { status: 401 });
-  const { categories } = await request.json();
-  const client = adminClient();
 
-  for (let i = 0; i < (categories ?? []).length; i++) {
-    await client.request(createItem('categories', {
-      ...categories[i],
-      shop:       locals.currentShop.id,
+  const { categories } = await request.json();
+  const supabase = userClient({ locals } as any);
+
+  if (categories?.length) {
+    const rows = categories.map((c: any, i: number) => ({
+      ...c,
+      shop_id: locals.currentShop!.id,
       sort_order: i,
     }));
+    const { error } = await supabase.from('categories').insert(rows);
+    if (error) return json({ error: error.message }, { status: 400 });
   }
 
-  // Mark onboarding complete — this is what the layout guard checks
-  await client.request(updateItem('shops', locals.currentShop.id, {
-    onboarding_complete: true,
-    onboarding_step:     'complete',
-  }));
+  const { error: shopErr } = await supabase
+    .from('shops')
+    .update({ onboarding_complete: true, onboarding_step: 'complete' })
+    .eq('id', locals.currentShop.id);
+
+  if (shopErr) return json({ error: shopErr.message }, { status: 400 });
   return json({ ok: true });
 }

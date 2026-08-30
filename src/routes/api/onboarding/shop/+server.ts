@@ -1,14 +1,17 @@
-import { json }     from '@sveltejs/kit';
-import { adminClient, createItem, readItems } from '$lib/server/directus';
+import { json } from '@sveltejs/kit';
+import { adminClient } from '$lib/server/supabase';
 
 const SHOP_COOKIE = 'shelf-current-shop';
 
-export async function POST({ request, locals, cookies }) {
+/**
+ * POST /api/onboarding/shop — create the first shop for the current user.
+ * User becomes the owner via a shop_members row.
+ */
+export async function POST({ request, locals, cookies }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.user) return json({ error: 'Not authenticated' }, { status: 401 });
+
   const { name, slug } = await request.json();
   if (!name) return json({ error: 'Shop name required' }, { status: 400 });
-
-  const client = adminClient();
 
   // Slug — unique, lowercase, hyphens only
   const finalSlug = (slug || name)
@@ -16,47 +19,61 @@ export async function POST({ request, locals, cookies }) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 
-  const existing = await client.request(
-    readItems('shops', { filter: { slug: { _eq: finalSlug } }, limit: 1 })
-  );
-  if (existing.length > 0)
-    return json({ error: 'That handle is already taken' }, { status: 409 });
+  const admin = adminClient();
+  const { data: existing } = await admin
+    .from('shops')
+    .select('id')
+    .eq('slug', finalSlug)
+    .maybeSingle();
 
-  const shop = await client.request(createItem('shops', {
-    name,
-    slug:                finalSlug,
-    currency_code:       'USD',
-    currency_symbol:     '$',
-    currency_locale:     'en-US',
-    timezone:            'UTC',
-    date_format:         'D MMM YYYY',
-    time_format:         '12h',
-    tax_rate:            0,
-    tax_inclusive:       false,
-    tax_name:            'Tax',
-    theme:               'system',
-    primary_color:       '#7B4F8A',
-    sidebar_bg:          '#150F1C',
-    onboarding_complete: false,
-    onboarding_step:     'locale',
-    low_stock_threshold: 10,
-  })) as any;
+  if (existing) return json({ error: 'That handle is already taken' }, { status: 409 });
 
-  await client.request(createItem('shop_members', {
-    shop:   shop.id,
-    user:   locals.user.id,
-    role:   'owner',
-    status: 'active',
-  }));
+  const { data: shop, error: shopErr } = await admin
+    .from('shops')
+    .insert({
+      owner_id: locals.user.id,
+      name,
+      slug: finalSlug,
+      currency_code: 'USD',
+      currency_symbol: '$',
+      currency_locale: 'en-US',
+      timezone: 'UTC',
+      date_format: 'D MMM YYYY',
+      time_format: '12h',
+      tax_rate: 0,
+      tax_inclusive: false,
+      tax_name: 'Tax',
+      theme: 'system',
+      primary_color: '#7B4F8A',
+      sidebar_bg: '#150F1C',
+      onboarding_complete: false,
+      onboarding_step: 'locale',
+      low_stock_threshold: 10,
+    } as any)
+    .select()
+    .single();
 
-  // ✅ Fix 1: pin this shop immediately so hooks.server.ts finds it on
-  //    every subsequent request, including the rest of onboarding.
-  cookies.set(SHOP_COOKIE, shop.id, {
-    httpOnly: false,   // needs to be readable by client redirects too
-    path:     '/',
+  if (shopErr || !shop) return json({ error: shopErr?.message ?? 'Failed to create shop' }, { status: 500 });
+
+  // Add the creator as owner
+  const { error: memberErr } = await admin
+    .from('shop_members')
+    .insert({
+      shop_id: (shop as any).id,
+      user_id: locals.user.id,
+      role: 'owner',
+      status: 'active',
+    });
+
+  if (memberErr) return json({ error: memberErr.message }, { status: 500 });
+
+  // Pin the shop cookie so subsequent onboarding requests have a shop context
+  cookies.set(SHOP_COOKIE, (shop as any).id, {
+    httpOnly: false,
+    path: '/',
     sameSite: 'lax',
-    maxAge:   60 * 60 * 24 * 30,
+    maxAge: 60 * 60 * 24 * 30,
   });
 
-  return json({ shopId: shop.id }, { status: 201 });
+  return json({ shopId: (shop as any).id }, { status: 201 });
 }

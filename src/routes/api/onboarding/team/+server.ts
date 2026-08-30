@@ -1,56 +1,62 @@
-import { json }     from '@sveltejs/kit';
-import { adminClient, createItem, updateItem } from '$lib/server/directus';
-import { DIRECTUS_URL, DIRECTUS_ADMIN_TOKEN } from '$env/static/private';
+/**
+ * /api/onboarding/team — create invited teammates (onboarding-time only).
+ *
+ * Supabase note: the user provides a password during onboarding because the
+ * default email confirmation flow requires a real SMTP server. After onboarding
+ * is complete, teammates should be invited via /api/users which uses Supabase's
+ * built-in invite (recovery link).
+ */
+import { json } from '@sveltejs/kit';
+import { adminClient, userClient } from '$lib/server/supabase';
 
-export async function POST({ request, locals }) {
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'No shop context' }, { status: 401 });
 
-  const { invites } = await request.json() as {
-    invites: { first_name: string; email: string; password: string; role: string }[]
+  const { invites } = (await request.json()) as {
+    invites: { first_name: string; email: string; password: string; role: string }[];
   };
 
-  const client   = adminClient();
+  const admin = adminClient();
+  const supabase = userClient({ locals } as any);
   const failures: string[] = [];
 
-  for (const invite of (invites ?? [])) {
+  for (const invite of invites ?? []) {
     if (!invite.email || !invite.password) continue;
     try {
-      // Create the Directus user account
-      const userRes = await fetch(`${DIRECTUS_URL}/users`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${DIRECTUS_ADMIN_TOKEN}` },
-        body:    JSON.stringify({
-          first_name: invite.first_name,
-          email:      invite.email,
-          password:   invite.password,
-        }),
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email: invite.email,
+        password: invite.password,
+        email_confirm: true,
+        user_metadata: { first_name: invite.first_name, last_name: '' },
       });
-
-      if (!userRes.ok) {
-        const err = await userRes.json().catch(() => ({}));
-        failures.push(`${invite.email}: ${err?.errors?.[0]?.message ?? 'failed'}`);
+      if (createErr || !created?.user) {
+        failures.push(`${invite.email}: ${createErr?.message ?? 'failed'}`);
         continue;
       }
 
-      const { data: newUser } = await userRes.json();
+      const { error: memberErr } = await admin
+        .from('shop_members')
+        .insert({
+          shop_id: locals.currentShop.id,
+          user_id: created.user.id,
+          role: invite.role ?? 'cashier',
+          status: 'active',
+        });
 
-      // Link them to the shop
-      await client.request(createItem('shop_members', {
-        shop:   locals.currentShop!.id,
-        user:   newUser.id,
-        role:   invite.role ?? 'cashier',
-        status: 'active',
-      }));
-    } catch (err) {
+      if (memberErr) {
+        failures.push(`${invite.email}: ${memberErr.message}`);
+      }
+    } catch {
       failures.push(`${invite.email}: unexpected error`);
     }
   }
 
-  // Advance onboarding step regardless of partial failures
-  await client.request(updateItem('shops', locals.currentShop.id, {
-    onboarding_step: 'categories',
-  }));
+  // Advance the onboarding step regardless of partial failures
+  await supabase
+    .from('shops')
+    .update({ onboarding_step: 'categories' })
+    .eq('id', locals.currentShop.id);
 
   if (failures.length > 0) {
     return json({ ok: true, warnings: failures });
