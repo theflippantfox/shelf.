@@ -1,20 +1,37 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, updateItem, deleteItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function PATCH({ params, request, locals }) {
-  if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
+/**
+ * PATCH /api/suppliers/[id] — update a supplier.
+ */
+export async function PATCH({ params, request, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   const body = await request.json();
-  const client = adminClient();
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('suppliers')
+    .update(body)
+    .eq('id', params.id)
+    .select()
+    .single();
 
-  const supplier = await client.request(updateItem('suppliers', params.id, body));
-  return json(supplier);
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data);
 }
 
-export async function DELETE({ params, locals }) {
-  if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
-  const client = adminClient();
+/**
+ * DELETE /api/suppliers/[id] — soft delete (set is_active = false).
+ */
+export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('suppliers')
+    .update({ is_active: false })
+    .eq('id', params.id)
+    .select()
+    .single();
 
-  // Soft delete as per spec: set is_active to false
-  const supplier = await client.request(updateItem('suppliers', params.id, { is_active: false }));
-  return json(supplier);
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data);
 }

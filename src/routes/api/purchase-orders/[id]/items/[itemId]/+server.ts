@@ -1,31 +1,56 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, createItem, updateItem, deleteItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function POST({ request, params, locals }) {
-  if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
+/**
+ * POST /api/purchase-orders/[id]/items/[itemId] — duplicate endpoint from the items route.
+ * Kept for parity with the previous URL shape.
+ */
+export async function POST({ request, params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   const body = await request.json();
-  const client = adminClient();
+  const supabase = userClient({ locals } as any);
 
-  const item = await client.request(createItem('purchase_order_items', {
-    ...body,
-    purchase_order: params.id,
-  }));
-  return json(item, { status: 201 });
+  const { data, error } = await supabase
+    .from('purchase_order_items')
+    .insert({ ...body, purchase_order_id: params.id })
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data, { status: 201 });
 }
 
-export async function PATCH({ request, params, locals }) {
-  if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
+/**
+ * PATCH /api/purchase-orders/[id]/items/[itemId] — update a line item.
+ */
+export async function PATCH({ request, params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.itemId) return json({ error: 'Missing itemId' }, { status: 400 });
   const body = await request.json();
-  const client = adminClient();
+  const supabase = userClient({ locals } as any);
 
-  const item = await client.request(updateItem('purchase_order_items', params.itemId, body));
-  return json(item);
+  const { data, error } = await supabase
+    .from('purchase_order_items')
+    .update(body)
+    .eq('id', params.itemId)
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data);
 }
 
-export async function DELETE({ request, params, locals }) {
-  if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
-  const client = adminClient();
+/**
+ * DELETE /api/purchase-orders/[id]/items/[itemId] — remove a line item.
+ */
+export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.itemId) return json({ error: 'Missing itemId' }, { status: 400 });
+  const supabase = userClient({ locals } as any);
 
-  await client.request(deleteItem('purchase_order_items', params.itemId));
+  const { error } = await supabase
+    .from('purchase_order_items')
+    .delete()
+    .eq('id', params.itemId);
+
+  if (error) return json({ error: error.message }, { status: 400 });
   return json({ success: true });
 }

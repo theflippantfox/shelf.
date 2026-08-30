@@ -1,35 +1,42 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, readItems, createItem, updateItem, deleteItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function GET({ locals, url }) {
+/**
+ * /api/suppliers — list (active, with search filter) and create.
+ */
+export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
-  const shopId = locals.currentShop.id;
   const search = url.searchParams.get('search') ?? '';
 
-  const filter: Record<string, unknown> = {
-    shop: { _eq: shopId },
-    is_active: { _eq: true },
-  };
-  if (search) filter['name'] = { _icontains: search };
+  const supabase = userClient({ locals } as any);
+  let q = supabase
+    .from('suppliers')
+    .select('*')
+    .eq('shop_id', locals.currentShop.id)
+    .eq('is_active', true)
+    .order('name');
 
-  const client = adminClient();
-  const suppliers = await client.request(readItems('suppliers', {
-    filter,
-    sort: ['name'],
-    limit: -1,
-  }));
+  if (search) q = q.ilike('name', `%${search}%`);
 
-  return json(suppliers);
+  const { data, error } = await q;
+  if (error) return json({ error: error.message }, { status: 500 });
+  return json(data ?? []);
 }
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/suppliers — create a supplier.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const body = await request.json();
-  const client = adminClient();
+  const supabase = userClient({ locals } as any);
 
-  const supplier = await client.request(createItem('suppliers', {
-    ...body,
-    shop: locals.currentShop.id,
-  }));
-  return json(supplier, { status: 201 });
+  const { data, error } = await supabase
+    .from('suppliers')
+    .insert({ ...body, shop_id: locals.currentShop.id })
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data, { status: 201 });
 }

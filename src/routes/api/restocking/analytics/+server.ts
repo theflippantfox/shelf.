@@ -1,103 +1,91 @@
+/**
+ * /api/restocking/analytics — restocking dashboard data.
+ * Pure data fetch + JS aggregation.
+ */
 import { json } from '@sveltejs/kit';
-import { adminClient, readItems } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function GET({ locals, url }) {
+export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const shopId = locals.currentShop.id;
-  
+
   const period = url.searchParams.get('period') ?? '30d';
   const now = new Date();
   const startDate = new Date();
-  
-  if (period === '7d') startDate.setDate(now.getDate() - 7);
-  else if (period === '30d') startDate.setDate(now.getDate() - 30);
+  if      (period === '7d')  startDate.setDate(now.getDate() - 7);
   else if (period === '90d') startDate.setDate(now.getDate() - 90);
-  else startDate.setDate(now.getDate() - 30);
-
+  else                       startDate.setDate(now.getDate() - 30);
   const startDateIso = startDate.toISOString();
 
-  const client = adminClient();
-  
-  // 1. Total Investment (sum of total_cost for 'received' POs)
-  const receivedOrders = await client.request(readItems('purchase_orders', {
-    filter: { 
-      shop: { _eq: shopId }, 
-      status: { _eq: 'received' }, 
-      date_created: { _gte: startDateIso } 
-    },
-    fields: ['total_cost'],
-    limit: -1,
-  }));
+  const supabase = userClient({ locals } as any);
 
-  const totalInvestment = receivedOrders.reduce((sum: number, o: any) => sum + (o.total_cost || 0), 0);
+  // 1. Received POs in period
+  const { data: receivedOrdersRaw = [] } = await supabase
+    .from('purchase_orders')
+    .select('id, total_cost, supplier_id')
+    .eq('shop_id', shopId)
+    .eq('status', 'received')
+    .gte('created_at', startDateIso);
+  const receivedOrders = receivedOrdersRaw as any[];
+
+  const totalInvestment = (receivedOrders as any[]).reduce(
+    (sum, o) => sum + (o.total_cost || 0), 0
+  );
   const totalOrders = receivedOrders.length;
 
-  // 2. Investment by Supplier
-  const suppliers = await client.request(readItems('suppliers', {
-    filter: { shop: { _eq: shopId } },
-    fields: ['id', 'name'],
-    limit: -1,
-  }));
+  // 2. Investment by supplier
+  const { data: suppliers = [] } = await supabase
+    .from('suppliers')
+    .select('id, name')
+    .eq('shop_id', shopId);
 
-  const bySupplier: any[] = [];
-  for (const s of suppliers) {
-    const sOrders = receivedOrders.filter(o => o.supplier === s.id);
-    const sTotal = sOrders.reduce((sum: number, o: any) => sum + (o.total_cost || 0), 0);
-    if (sTotal > 0) {
-      bySupplier.push({
-        supplier: s.name,
-        total: sTotal,
-        order_count: sOrders.length,
-      });
-    }
-  }
+  const bySupplier = (suppliers as any[])
+    .map((s) => {
+      const sOrders = (receivedOrders as any[]).filter((o) => o.supplier_id === s.id);
+      const total = sOrders.reduce((sum, o) => sum + (o.total_cost || 0), 0);
+      return { supplier: s.name, total, order_count: sOrders.length };
+    })
+    .filter((b) => b.total > 0);
 
-  // 3. Top Restocked Products
-  const poItems = await client.request(readItems('purchase_order_items', {
-    filter: { 
-      purchase_order: { 
-        _in: receivedOrders.map(o => o.id) 
-      } 
-    },
-    fields: ['product', 'quantity_received', 'unit_cost'],
-    limit: -1,
-  }));
+  // 3. Top restocked products
+  const { data: poItems = [] } = await supabase
+    .from('purchase_order_items')
+    .select('product_id, quantity_received, unit_cost')
+    .in('purchase_order_id', receivedOrders.map((o: any) => o.id));
 
-  const productTally: Record<string, { name: string, units: number, cost: number }> = {};
-  const products = await client.request(readItems('products', {
-    filter: { shop: { _eq: shopId } },
-    fields: ['id', 'name'],
-    limit: -1,
-  }));
+  const { data: products = [] } = await supabase
+    .from('products')
+    .select('id, name')
+    .eq('shop_id', shopId);
 
-  for (const item of poItems) {
-    if (!productTally[item.product]) {
-      const p = products.find(prod => prod.id === item.product);
-      productTally[item.product] = { 
-        name: p?.name || 'Unknown', 
-        units: 0, 
-        cost: 0 
+  const productMap = new Map((products as any[]).map((p) => [p.id, p.name]));
+  const productTally: Record<string, { name: string; units: number; cost: number }> = {};
+  for (const item of poItems as any[]) {
+    if (!item.product_id) continue;
+    if (!productTally[item.product_id]) {
+      productTally[item.product_id] = {
+        name: productMap.get(item.product_id) || 'Unknown',
+        units: 0,
+        cost: 0,
       };
     }
-    productTally[item.product].units += item.quantity_received;
-    productTally[item.product].cost += (item.quantity_received * item.unit_cost);
+    productTally[item.product_id].units += item.quantity_received ?? 0;
+    productTally[item.product_id].cost  += (item.quantity_received ?? 0) * (item.unit_cost ?? 0);
   }
-
   const topRestockedProducts = Object.values(productTally)
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 5);
 
-  // 4. Pending Orders Value
-  const pendingOrders = await client.request(readItems('purchase_orders', {
-    filter: { 
-      shop: { _eq: shopId }, 
-      status: { _in: ['draft', 'ordered'] } 
-    },
-    fields: ['total_cost'],
-    limit: -1,
-  }));
+  // 4. Pending orders value
+  const { data: pendingOrders = [] } = await supabase
+    .from('purchase_orders')
+    .select('total_cost')
+    .eq('shop_id', shopId)
+    .in('status', ['draft', 'ordered']);
 
-  const pendingOrdersValue = pendingOrders.reduce((sum: number, o: any) => sum + (o.total_cost || 0), 0);
+  const pendingOrdersValue = (pendingOrders as any[]).reduce(
+    (sum, o) => sum + (o.total_cost || 0), 0
+  );
 
   return json({
     totalInvestment,

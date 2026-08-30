@@ -1,46 +1,42 @@
 import { json, error } from '@sveltejs/kit';
-import { adminClient, readItem, readItems, updateItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function GET({ params, locals }) {
-  if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
+/**
+ * GET /api/purchase-orders/[id] — single PO with items.
+ */
+export async function GET({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
+  const supabase = userClient({ locals } as any);
 
-  const client = adminClient();
-  try {
-    const [order, items] = await Promise.all([
-      client.request(readItem('purchase_orders', params.id, {
-        fields: [
-          'id', 'order_ref', 'status', 'order_date', 'expected_delivery_date',
-          'received_date', 'subtotal', 'tax_amount', 'shipping_cost', 'total_cost',
-          'bill_image', 'notes', 'date_created',
-          'supplier.id', 'supplier.name', 'supplier.contact_name', 'supplier.phone',
-          'created_by.first_name', 'created_by.last_name',
-        ],
-      })),
-      client.request(readItems('purchase_order_items', {
-        filter: { purchase_order: { _eq: params.id } },
-        fields: [
-          'id', 'product', 'product_name', 'product_sku',
-          'quantity_ordered', 'quantity_received',
-          'unit_cost', 'line_total', 'is_new_product', 'notes',
-        ],
-        sort:  ['id'],
-        limit: -1,
-      })),
-    ]);
+  const [
+    { data: order, error: oErr },
+    { data: items, error: iErr },
+  ] = await Promise.all([
+    supabase.from('purchase_orders')
+      .select('*, supplier:suppliers(id, name, contact_name, phone), created_by:profiles!purchase_orders_created_by_fkey(first_name, last_name)')
+      .eq('id', params.id)
+      .single(),
+    supabase.from('purchase_order_items')
+      .select('*')
+      .eq('purchase_order_id', params.id)
+      .order('id'),
+  ]);
 
-    return json({ ...order as object, items });
-  } catch {
+  if (oErr || iErr || !order)
     throw error(404, 'Purchase order not found');
-  }
+  return json({ ...order, items: items ?? [] });
 }
 
-export async function PATCH({ params, request, locals }) {
-  if (!locals.currentShop) return json({ error: 'Unauthorized' }, { status: 401 });
+/**
+ * PATCH /api/purchase-orders/[id] — partial update.
+ */
+export async function PATCH({ params, request, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   const body = await request.json();
 
   const ALLOWED = [
     'status', 'expected_delivery_date', 'received_date',
-    'notes', 'bill_image', 'order_ref',
+    'notes', 'order_ref',
     'tax_amount', 'shipping_cost', 'total_cost',
   ];
   const safe: Record<string, unknown> = {};
@@ -48,31 +44,55 @@ export async function PATCH({ params, request, locals }) {
     if (ALLOWED.includes(k)) safe[k] = v;
   }
 
+  const supabase = userClient({ locals } as any);
+
   if ('tax_amount' in safe || 'shipping_cost' in safe) {
-    const current = await adminClient().request(readItem('purchase_orders', params.id, {
-      fields: ['subtotal', 'tax_amount', 'shipping_cost'],
-    })) as any;
-    safe['total_cost'] =
-      (current.subtotal      ?? 0) +
-      Number(safe['tax_amount']    ?? current.tax_amount    ?? 0) +
-      Number(safe['shipping_cost'] ?? current.shipping_cost ?? 0);
+    const { data: current } = await supabase
+      .from('purchase_orders')
+      .select('subtotal, tax_amount, shipping_cost')
+      .eq('id', params.id)
+      .single();
+    if (current) {
+      const sub = (current as any).subtotal ?? 0;
+      const tax = Number(safe['tax_amount']    ?? (current as any).tax_amount    ?? 0);
+      const ship = Number(safe['shipping_cost'] ?? (current as any).shipping_cost ?? 0);
+      safe['total_cost'] = sub + tax + ship;
+    }
   }
 
-  const order = await adminClient().request(updateItem('purchase_orders', params.id, safe));
-  return json(order);
+  const { data, error } = await supabase
+    .from('purchase_orders')
+    .update(safe as any)
+    .eq('id', params.id)
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data);
 }
 
-export async function DELETE({ params, locals }) {
-  if (!locals.currentShop) return json({ error: 'Unauthorized' }, { status: 401 });
+/**
+ * DELETE /api/purchase-orders/[id] — cancel (only draft/ordered allowed).
+ */
+export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
+  const supabase = userClient({ locals } as any);
 
-  const order = await adminClient().request(readItem('purchase_orders', params.id, {
-    fields: ['status'],
-  })) as any;
+  const { data: current } = await supabase
+    .from('purchase_orders')
+    .select('status')
+    .eq('id', params.id)
+    .single();
 
-  if (!['draft', 'ordered'].includes(order.status)) {
+  if (!current || !['draft', 'ordered'].includes((current as any).status)) {
     return json({ error: 'Only draft or ordered POs can be cancelled' }, { status: 400 });
   }
 
-  await adminClient().request(updateItem('purchase_orders', params.id, { status: 'cancelled' }));
+  const { error } = await supabase
+    .from('purchase_orders')
+    .update({ status: 'cancelled' })
+    .eq('id', params.id);
+
+  if (error) return json({ error: error.message }, { status: 400 });
   return json({ ok: true });
 }

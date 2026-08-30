@@ -1,75 +1,68 @@
+/**
+ * /api/price-comparison — for each product, list the latest price from each
+ * supplier, mark the cheapest, and return the matrix for the UI.
+ */
 import { json } from '@sveltejs/kit';
-import { adminClient, readItems } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function GET({ locals, url }) {
+export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
-  const shopId = locals.currentShop.id;
-  
-  const client = adminClient();
-  
-  // 1. Fetch all active products for the shop
-  const products = await client.request(readItems('products', {
-    filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-    fields: ['id', 'name', 'sku', 'cost_price'],
-    limit: -1,
-  }));
+  const supabase = userClient({ locals } as any);
 
-  // 2. Fetch all active suppliers for the shop
-  const suppliers = await client.request(readItems('suppliers', {
-    filter: { shop: { _eq: shopId }, is_active: { _eq: true } },
-    fields: ['id', 'name'],
-    limit: -1,
-  }));
+  const [
+    { data: products = [] },
+    { data: suppliers = [] },
+    { data: history = [] },
+  ] = await Promise.all([
+    supabase.from('products')
+      .select('id, name, sku, cost_price')
+      .eq('shop_id', locals.currentShop.id)
+      .is('archived_at', null),
+    supabase.from('suppliers')
+      .select('id, name')
+      .eq('shop_id', locals.currentShop.id)
+      .eq('is_active', true),
+    supabase.from('supplier_price_history')
+      .select('product_id, supplier_id, unit_cost, recorded_at, purchase_order_id')
+      .eq('shop_id', locals.currentShop.id)
+      .order('recorded_at', { ascending: false }),
+  ]);
 
-  // 3. Fetch latest prices per product/supplier pair
-  // Directus doesn't have a 'DISTINCT ON' helper in the standard readItems filter.
-  // We fetch all price history for the shop and reduce in-memory.
-  const history = await client.request(readItems('supplier_price_history', {
-    filter: { shop: { _eq: shopId } },
-    sort: ['-recorded_at'],
-    limit: -1,
-  }));
-
+  // Build matrix: product_id → supplier_id → latest price
   const matrix: Record<string, Record<string, any>> = {};
-  const productMap = new Map(products.map(p => [p.id, p]));
-  
-  // Since history is sorted by -recorded_at, the first time we see a product-supplier pair, it's the latest.
-  const seen = new Set();
-  for (const record of history) {
-    const key = `${record.product}_${record.supplier}`;
+  const seen = new Set<string>();
+
+  for (const record of history as any[]) {
+    const key = `${record.product_id}_${record.supplier_id}`;
     if (seen.has(key)) continue;
     seen.add(key);
-
-    if (!matrix[record.product]) matrix[record.product] = {};
-    matrix[record.product][record.supplier] = {
+    if (!matrix[record.product_id]) matrix[record.product_id] = {};
+    matrix[record.product_id][record.supplier_id] = {
       unit_cost: record.unit_cost,
       recorded_at: record.recorded_at,
-      purchase_order_ref: record.purchase_order,
+      purchase_order_id: record.purchase_order_id,
     };
   }
 
-  // Determine cheapest for each product
-  for (const prodId in matrix) {
-    const prices = Object.values(matrix[prodId]);
+  // Mark cheapest per product
+  for (const productId of Object.keys(matrix)) {
+    const prices = Object.values(matrix[productId]);
     if (prices.length === 0) continue;
-    
-    const minCost = Math.min(...prices.map(p => p.unit_cost));
-    for (const supId in matrix[prodId]) {
-      matrix[prodId][supId].is_cheapest = (matrix[prodId][supId].unit_cost === minCost);
+    const minCost = Math.min(...prices.map((p: any) => p.unit_cost));
+    for (const supplierId of Object.keys(matrix[productId])) {
+      matrix[productId][supplierId].is_cheapest =
+        matrix[productId][supplierId].unit_cost === minCost;
     }
   }
 
   return json({
-    products: products.map(p => ({
+    products: (products as any[]).map((p) => ({
       id: p.id,
       name: p.name,
       sku: p.sku,
-      current_cost_price: p.cost_price
+      current_cost_price: p.cost_price,
     })),
-    suppliers: suppliers.map(s => ({
-      id: s.id,
-      name: s.name
-    })),
-    matrix
+    suppliers: (suppliers as any[]).map((s) => ({ id: s.id, name: s.name })),
+    matrix,
   });
 }

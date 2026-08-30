@@ -1,28 +1,32 @@
-import { adminClient, readItems } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function load({ locals }) {
+/**
+ * New purchase order page — load suppliers, products, categories.
+ */
+export async function load({ locals }: import('@sveltejs/kit').RequestEvent) {
   const shopId = locals.currentShop!.id;
-  const client = adminClient();
+  const supabase = userClient({ locals } as any);
 
-  const [suppliers, products, categories] = await Promise.all([
-    client.request(readItems('suppliers', {
-      filter: { shop: { _eq: shopId }, is_active: { _eq: true } },
-      fields: ['id', 'name', 'currency_code', 'payment_terms'],
-      sort: ['name'],
-      limit: -1,
-    })),
-    client.request(readItems('products', {
-      filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-      fields: ['id', 'name', 'sku', 'cost_price', 'unit', 'category.id', 'category.name'],
-      sort: ['name'],
-      limit: -1,
-    })),
-    client.request(readItems('categories', {
-      filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-      fields: ['id', 'name'],
-      sort: ['name'],
-      limit: -1,
-    })),
+  const [
+    { data: suppliers = [] },
+    { data: products = [] },
+    { data: categories = [] },
+  ] = await Promise.all([
+    supabase.from('suppliers')
+      .select('id, name, currency_code, payment_terms')
+      .eq('shop_id', shopId)
+      .eq('is_active', true)
+      .order('name'),
+    supabase.from('products')
+      .select('id, name, sku, cost_price, unit, category_id, category:categories(id, name)')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .order('name'),
+    supabase.from('categories')
+      .select('id, name')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .order('name'),
   ]);
 
   return { suppliers, products, categories };

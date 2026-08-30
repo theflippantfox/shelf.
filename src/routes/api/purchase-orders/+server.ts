@@ -1,5 +1,5 @@
-import { json, type RequestEvent } from '@sveltejs/kit';
-import { adminClient, readItems, createItem } from '$lib/server/directus';
+import { json } from '@sveltejs/kit';
+import { userClient } from '$lib/server/supabase';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -9,74 +9,79 @@ function genRef() {
   return `PO-${d}-${rand}`;
 }
 
-export async function GET({ locals, url }) {
+/**
+ * GET /api/purchase-orders — list with status/supplier filters.
+ */
+export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
 
   const status   = url.searchParams.get('status')   ?? '';
   const supplier = url.searchParams.get('supplier') ?? '';
   const page     = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
+  const limit    = 50;
 
-  const filter: Record<string, unknown> = { shop: { _eq: locals.currentShop.id } };
-  if (status)   filter['status']   = { _eq: status };
-  if (supplier) filter['supplier'] = { _eq: supplier };
+  const supabase = userClient({ locals } as any);
+  let q = supabase
+    .from('purchase_orders')
+    .select('id, order_ref, status, order_date, expected_delivery_date, received_date, subtotal, tax_amount, shipping_cost, total_cost, notes, created_at, supplier:suppliers(id, name), created_by:profiles!purchase_orders_created_by_fkey(first_name, last_name)')
+    .eq('shop_id', locals.currentShop.id)
+    .order('created_at', { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
 
-  const orders = await adminClient().request(readItems('purchase_orders', {
-    filter,
-    fields: [
-      'id', 'order_ref', 'status', 'order_date', 'expected_delivery_date',
-      'received_date', 'subtotal', 'tax_amount', 'shipping_cost', 'total_cost',
-      'notes', 'date_created',
-      'supplier.id', 'supplier.name',
-      'created_by.first_name', 'created_by.last_name',
-    ],
-    sort:  ['-date_created'],
-    page,
-    limit: 50,
-  }));
+  if (status)   q = q.eq('status', status);
+  if (supplier) q = q.eq('supplier_id', supplier);
 
-  return json(orders);
+  const { data, error } = await q;
+  if (error) return json({ error: error.message }, { status: 500 });
+  return json(data ?? []);
 }
 
-export async function POST({ request, locals }: RequestEvent) {
-  if (!locals.currentShop || !locals.user) {
-    return json({ error: 'Invalid' }, { status: 401 });
-  }
+/**
+ * POST /api/purchase-orders — create a PO header.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!locals.currentShop || !locals.user)
+    return json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
 
-  // ── Validate supplier ──────────────────────────────────────────────────────
   if (!body.supplier) return json({ error: 'supplier is required' }, { status: 400 });
   const supplierStr = String(body.supplier).trim();
 
   if (!UUID_RE.test(supplierStr)) {
     return json(
-      { error: `Invalid supplier value "${supplierStr}". Select a supplier from the dropdown — it must be a valid UUID.` },
+      { error: `Invalid supplier value "${supplierStr}". Select a supplier from the dropdown.` },
       { status: 400 }
     );
   }
 
   if (!body.order_date) return json({ error: 'order_date is required' }, { status: 400 });
 
-  // ── Coerce monetary values to integers (minor units) ───────────────────────
-  const subtotal     = Math.round(Number(body.subtotal      ?? 0));
-  const taxAmount    = Math.round(Number(body.tax_amount    ?? 0));
-  const shippingCost = Math.round(Number(body.shipping_cost ?? 0));
+  const subtotal     = Number(body.subtotal      ?? 0);
+  const taxAmount    = Number(body.tax_amount    ?? 0);
+  const shippingCost = Number(body.shipping_cost ?? 0);
   const totalCost    = subtotal + taxAmount + shippingCost;
 
-  const order = await adminClient().request(createItem('purchase_orders', {
-    shop:                   locals.currentShop.id,
-    supplier:               supplierStr,
-    order_ref:              body.order_ref?.trim() || genRef(),
-    status:                 body.status ?? 'draft',
-    order_date:             body.order_date,
-    expected_delivery_date: body.expected_delivery_date || null,
-    subtotal,
-    tax_amount:             taxAmount,
-    shipping_cost:          shippingCost,
-    total_cost:             totalCost,
-    notes:                  body.notes || null,
-    created_by:             locals.user.id,
-  }));
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('purchase_orders')
+    .insert({
+      shop_id: locals.currentShop.id,
+      supplier_id: supplierStr,
+      order_ref: body.order_ref?.trim() || genRef(),
+      status: body.status ?? 'draft',
+      order_date: body.order_date,
+      expected_delivery_date: body.expected_delivery_date || null,
+      subtotal,
+      tax_amount: taxAmount,
+      shipping_cost: shippingCost,
+      total_cost: totalCost,
+      notes: body.notes || null,
+      created_by: locals.user.id,
+    })
+    .select()
+    .single();
 
-  return json(order, { status: 201 });
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data, { status: 201 });
 }
