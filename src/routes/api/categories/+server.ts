@@ -1,21 +1,37 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, readItems, createItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function GET({ locals }) {
+/**
+ * GET /api/categories — list categories for the current shop.
+ */
+export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json([]);
-  const client = adminClient();
-  const cats   = await client.request(readItems('categories', {
-    filter: { shop: { _eq: locals.currentShop.id }, archived_at: { _null: true } },
-    sort:   ['sort_order', 'name'],
-    limit:  -1,
-  }));
-  return json(cats);
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('shop_id', locals.currentShop.id)
+    .is('archived_at', null)
+    .order('sort_order')
+    .order('name');
+
+  if (error) return json({ error: error.message }, { status: 500 });
+  return json(data ?? []);
 }
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/categories — create a category.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
-  const body   = await request.json();
-  const client = adminClient();
-  const cat    = await client.request(createItem('categories', { ...body, shop: locals.currentShop.id }));
-  return json(cat, { status: 201 });
+  const body = await request.json();
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({ ...body, shop_id: locals.currentShop.id })
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data, { status: 201 });
 }

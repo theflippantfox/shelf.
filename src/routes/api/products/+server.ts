@@ -1,96 +1,69 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, readItems, createItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
 /**
- * Generate a unique SKU for a product.
- * Format: SKU-YYYY-XXXX where XXXX is a random alphanumeric string
+ * GET /api/products — list products for the current shop.
+ * Supports filters: search (name/sku), category, alert (low-stock).
+ *
+ * Uses userClient (RLS-correct) instead of adminClient.
  */
-async function generateUniqueSKU(shopId: string): Promise<string> {
-  const client = adminClient();
-  const year = new Date().getFullYear();
-  
-  // Generate random 4-character alphanumeric string
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding confusing chars
-  let attempts = 0;
-  const maxAttempts = 10;
-  
-  while (attempts < maxAttempts) {
-    let randomStr = '';
-    for (let i = 0; i < 4; i++) {
-      randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    
-    const sku = `SKU-${year}-${randomStr}`;
-    
-    // Check if SKU already exists in this shop
-    const existing = await client.request(readItems('products', {
-      filter: {
-        shop: { _eq: shopId },
-        sku: { _eq: sku },
-      },
-      limit: 1,
-    }));
-    
-    if (existing.length === 0) {
-      return sku;
-    }
-    
-    attempts++;
-  }
-  
-  // Fallback with timestamp if all attempts fail
-  return `SKU-${year}-${Date.now().toString(36).toUpperCase().slice(-4)}`;
-}
-
-export async function GET({ locals, url }) {
-  if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
+export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
+  if (!locals.currentShop) return json([]);
   const shopId = locals.currentShop.id;
   const search = url.searchParams.get('search') ?? '';
   const cat    = url.searchParams.get('category') ?? '';
   const alert  = url.searchParams.get('alert');
 
-  const filter: Record<string, unknown> = {
-    shop: { _eq: shopId },
-    archived_at: { _null: true },
-  };
-  if (cat) filter['category'] = { _eq: cat };
-  if (search) filter['_or'] = [
-    { name: { _icontains: search } },
-    { sku:  { _icontains: search } },
-  ];
+  const supabase = userClient({ locals } as any);
+  let q = supabase
+    .from('products')
+    .select('id, name, sku, description, price, cost_price, qty, low_stock_threshold, barcode, image_url, archived_at, category_id, category:categories(id, name, color, icon)')
+    .eq('shop_id', shopId)
+    .is('archived_at', null)
+    .order('name');
 
-  const client = adminClient();
-  let products = await client.request(readItems('products', {
-    filter,
-    fields: ['*', 'category.id', 'category.name', 'category.color', 'category.icon'],
-    sort:   ['name'],
-    limit:  -1,
-  }));
+  if (cat)    q = q.eq('category_id', cat);
+  if (search) q = q.or(`name.ilike.%${search}%,sku.ilike.%${search}%`);
 
+  const { data: products, error } = await q;
+  if (error) return json({ error: error.message }, { status: 500 });
+
+  let result = products ?? [];
   if (alert === 'true') {
-    products = products.filter((p: any) =>
-      p.qty === 0 || p.qty <= (p.low_stock_threshold ?? locals.currentShop!.low_stock_threshold ?? 10)
+    const threshold = locals.currentShop.low_stock_threshold ?? 10;
+    result = result.filter((p: any) =>
+      p.qty === 0 || p.qty <= (p.low_stock_threshold ?? threshold)
     );
   }
 
-  return json(products);
+  return json(result);
 }
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/products — create a product.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const body = await request.json();
-  const client = adminClient();
+  const supabase = userClient({ locals } as any);
 
   // Auto-generate SKU if not provided
   let sku = body.sku?.trim();
   if (!sku) {
-    sku = await generateUniqueSKU(locals.currentShop.id);
+    const { generateSku } = await import('$lib/utils/sku');
+    sku = await generateSku(locals.currentShop.id, body.name ?? 'PROD');
   }
 
-  const product = await client.request(createItem('products', {
-    ...body,
-    sku,
-    shop: locals.currentShop.id,
-  }));
-  return json(product, { status: 201 });
+  const { data, error } = await supabase
+    .from('products')
+    .insert({
+      ...body,
+      sku,
+      shop_id: locals.currentShop.id,
+    })
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data, { status: 201 });
 }

@@ -1,22 +1,32 @@
-import { adminClient, readItems } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function load({ locals, url }) {
-  const shopId   = locals.currentShop!.id;
-  const client   = adminClient();
-  const filter   = url.searchParams.get('filter');
+/**
+ * Inventory page — list products + categories for the active shop.
+ */
+export async function load({ locals }: import('@sveltejs/kit').RequestEvent) {
+  const shopId = locals.currentShop!.id;
+  const supabase = userClient({ locals } as any);
 
-  const [products, categories] = await Promise.all([
-    client.request(readItems('products', {
-      filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-      fields: ['*', 'category.id','category.name','category.color','category.icon'],
-      sort:   ['name'],
-      limit:  -1,
-    })),
-    client.request(readItems('categories', {
-      filter: { shop: { _eq: shopId }, archived_at: { _null: true } },
-      sort:   ['sort_order','name'], limit: -1,
-    })),
+  const [
+    { data: products = [] },
+    { data: categories = [] },
+  ] = await Promise.all([
+    supabase.from('products')
+      .select('*, category:categories(id, name, color, icon)')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .order('name'),
+    supabase.from('categories')
+      .select('*')
+      .eq('shop_id', shopId)
+      .is('archived_at', null)
+      .order('sort_order')
+      .order('name'),
   ]);
 
-  return { products, categories, threshold: locals.currentShop!.low_stock_threshold ?? 10 };
+  return {
+    products,
+    categories,
+    threshold: locals.currentShop!.low_stock_threshold ?? 10,
+  };
 }

@@ -1,26 +1,53 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, readItem, updateItem, deleteItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function GET({ params }) {
-  const client  = adminClient();
-  const product = await client.request(readItem('products', params.id, {
-    fields: ['*', 'category.*'],
-  }));
-  return json(product);
+/**
+ * GET /api/products/[id] — single product with category join.
+ */
+export async function GET({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, category:categories(*)')
+    .eq('id', params.id)
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 404 });
+  return json(data);
 }
 
-export async function PATCH({ params, request }) {
-  const body    = await request.json();
-  const client  = adminClient();
-  const product = await client.request(updateItem('products', params.id, body));
-  return json(product);
+/**
+ * PATCH /api/products/[id] — update product fields.
+ */
+export async function PATCH({ params, request, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
+  const body = await request.json();
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('products')
+    .update(body)
+    .eq('id', params.id)
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data);
 }
 
-export async function DELETE({ params }) {
-  const client = adminClient();
-  // soft-delete: set archived_at
-  const product = await client.request(updateItem('products', params.id, {
-    archived_at: new Date().toISOString(),
-  }));
-  return json(product);
+/**
+ * DELETE /api/products/[id] — soft-delete by setting archived_at.
+ */
+export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+  if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('products')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', params.id)
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data);
 }

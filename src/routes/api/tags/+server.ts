@@ -1,18 +1,35 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, readItems, createItem } from '$lib/server/directus';
+import { userClient } from '$lib/server/supabase';
 
-export async function GET({ locals }) {
+/**
+ * GET /api/tags — list tags for the current shop.
+ */
+export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json([]);
-  const tags = await adminClient().request(readItems('tags', {
-    filter: { shop: { _eq: locals.currentShop.id } },
-    sort:   ['name'], limit: -1,
-  }));
-  return json(tags);
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('tags')
+    .select('*')
+    .eq('shop_id', locals.currentShop.id)
+    .order('name');
+
+  if (error) return json({ error: error.message }, { status: 500 });
+  return json(data ?? []);
 }
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/tags — create a tag.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const body = await request.json();
-  const tag  = await adminClient().request(createItem('tags', { ...body, shop: locals.currentShop.id }));
-  return json(tag, { status: 201 });
+  const supabase = userClient({ locals } as any);
+  const { data, error } = await supabase
+    .from('tags')
+    .insert({ ...body, shop_id: locals.currentShop.id })
+    .select()
+    .single();
+
+  if (error) return json({ error: error.message }, { status: 400 });
+  return json(data, { status: 201 });
 }

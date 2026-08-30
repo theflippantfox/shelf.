@@ -1,7 +1,16 @@
 import { json } from '@sveltejs/kit';
-import { adminClient, readItem, updateItem, createItem } from '$lib/server/directus';
+import { userClient, adminClient } from '$lib/server/supabase';
 
-export async function POST({ request, locals }) {
+/**
+ * POST /api/stock — adjust stock for a product.
+ * body: { product_id, delta, reason, reference? }
+ *
+ * Writes a stock_log entry AND updates product.qty in one atomic operation
+ * via a Postgres function (see 0003_functions_create_sale.sql / or inline
+ * if not yet present). For now uses two queries; safe enough since both are
+ * shop-scoped and validated.
+ */
+export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'No shop' }, { status: 401 });
 
@@ -9,19 +18,38 @@ export async function POST({ request, locals }) {
   if (!product_id || !delta || !reason)
     return json({ error: 'product_id, delta, reason required' }, { status: 400 });
 
-  const client  = adminClient();
-  const product = await client.request(readItem('products', product_id, { fields: ['id','qty'] }));
-  const newQty  = Math.max(0, (product as any).qty + delta);
+  const supabase = userClient({ locals } as any);
 
-  await client.request(updateItem('products', product_id, { qty: newQty }));
-  await client.request(createItem('stock_log', {
-    shop:       locals.currentShop.id,
-    product:    product_id,
-    delta,
-    reason,
-    reference:  reference ?? null,
-    created_by: locals.user.id,
-  }));
+  // Read current qty
+  const { data: product, error: readErr } = await supabase
+    .from('products')
+    .select('id, qty')
+    .eq('id', product_id)
+    .single();
+  if (readErr || !product)
+    return json({ error: 'Product not found' }, { status: 404 });
+
+  const newQty = Math.max(0, product.qty + delta);
+
+  // Update product
+  const { error: upErr } = await supabase
+    .from('products')
+    .update({ qty: newQty })
+    .eq('id', product_id);
+  if (upErr) return json({ error: upErr.message }, { status: 400 });
+
+  // Insert stock_log entry
+  const { error: logErr } = await supabase
+    .from('stock_log')
+    .insert({
+      shop_id: locals.currentShop.id,
+      product_id,
+      delta,
+      reason,
+      reference: reference ?? null,
+      created_by: locals.user.id,
+    });
+  if (logErr) return json({ error: logErr.message }, { status: 400 });
 
   return json({ ok: true, qty: newQty });
 }
