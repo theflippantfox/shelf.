@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#7B4F8A"/>
+  <!-- Shelf bracket lines -->
+  <g fill="none" stroke="#fff" stroke-width="22" stroke-linecap="round">
+    <line x1="112" y1="176" x2="400" y2="176"/>
+    <line x1="112" y1="336" x2="400" y2="336"/>
+  </g>
+  <!-- Shelf product blocks (boxes) -->
+  <g fill="#fff" opacity="0.95">
+    <rect x="140" y="120" width="80" height="56" rx="10"/>
+    <rect x="240" y="100" width="70" height="76" rx="10"/>
+    <rect x="330" y="130" width="70" height="46" rx="10"/>
+    <rect x="140" y="280" width="60" height="56" rx="10"/>
+    <rect x="220" y="260" width="90" height="76" rx="10"/>
+    <rect x="330" y="290" width="70" height="46" rx="10"/>
+  </g>
+  <!-- Brand dot -->
+  <circle cx="400" cy="416" r="28" fill="#D69E0B"/>
+</svg>

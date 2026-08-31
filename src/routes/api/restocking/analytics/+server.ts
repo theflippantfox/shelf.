@@ -3,9 +3,9 @@
  * Pure data fetch + JS aggregation.
  */
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
-export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const shopId = locals.currentShop.id;
 
@@ -17,7 +17,7 @@ export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent)
   else                       startDate.setDate(now.getDate() - 30);
   const startDateIso = startDate.toISOString();
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   // 1. Received POs in period
   const { data: receivedOrdersRaw = [] } = await supabase

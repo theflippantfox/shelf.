@@ -1,15 +1,15 @@
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * POST /api/onboarding/categories — bulk-create starter categories.
  * Marks the shop as onboarding_complete when done.
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop context' }, { status: 401 });
 
   const { categories } = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   if (categories?.length) {
     const rows = categories.map((c: any, i: number) => ({

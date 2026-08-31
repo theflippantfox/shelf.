@@ -1,14 +1,14 @@
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * POST /api/onboarding/locale — save locale/currency/timezone settings.
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop context' }, { status: 401 });
 
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const { error } = await supabase
     .from('shops')

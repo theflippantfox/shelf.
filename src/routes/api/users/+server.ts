@@ -5,11 +5,11 @@
  * POST: invite a new teammate (admin creates the auth user + member row).
  */
 import { json } from '@sveltejs/kit';
-import { adminClient, userClient } from '$lib/server/supabase';
+import { adminClient, userClient, userClientFromCtx } from '$lib/server/supabase';
 
-export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const admin    = adminClient();
 
   const { data, error } = await supabase
@@ -42,7 +42,7 @@ export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
  * Creates the auth user (admin) + shop_members row.
  * Owner only.
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'Unauthorized' }, { status: 401 });
   if (locals.shopMember?.role !== 'owner')

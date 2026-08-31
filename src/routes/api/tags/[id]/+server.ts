@@ -1,13 +1,13 @@
 import { json } from '@sveltejs/kit';
-import { userClient, adminClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx, adminClient } from '$lib/server/supabase';
 
 /**
  * PATCH /api/tags/[id] — update a tag.
  */
-export async function PATCH({ params, request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function PATCH({ cookies, params, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('tags')
     .update(body)
@@ -24,7 +24,7 @@ export async function PATCH({ params, request, locals }: import('@sveltejs/kit')
  * constraint issues from removing them. The product_tags join rows will
  * cascade-delete via the FK.
  */
-export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function DELETE({ cookies, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   // Use admin client because RLS doesn't grant delete on tags; the user-level
   // policy only allows updates, not deletes. The admin client still enforces

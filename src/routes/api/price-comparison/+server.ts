@@ -3,11 +3,11 @@
  * supplier, mark the cheapest, and return the matrix for the UI.
  */
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
-export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const [
     { data: products = [] },

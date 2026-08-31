@@ -1,12 +1,12 @@
 import { error } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * Purchase order detail page — single PO with items + supplier.
  */
-export async function load({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function load({ cookies,  params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) throw error(404, 'Not found');
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const [
     { data: order, error: oErr },

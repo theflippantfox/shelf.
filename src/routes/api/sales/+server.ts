@@ -6,14 +6,14 @@
  *       Delegates to a SQL function `create_sale()` for atomicity.
  */
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * GET /api/sales
  */
-export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json([]);
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const page  = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
   const limit = Math.min(200, parseInt(url.searchParams.get('limit') ?? '50'));
@@ -43,7 +43,7 @@ export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent)
  * Uses the `create_sale` RPC function for atomicity. Falls back to a
  * multi-query approach if the function isn't installed yet (older DB).
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'No shop' }, { status: 401 });
 
@@ -55,7 +55,7 @@ export async function POST({ request, locals }: import('@sveltejs/kit').RequestE
 
   if (!items?.length) return json({ error: 'Cart is empty' }, { status: 400 });
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   // Atomic via create_sale() SECURITY DEFINER function.
   // Uses userClient so auth.uid() is set inside the function (membership check).

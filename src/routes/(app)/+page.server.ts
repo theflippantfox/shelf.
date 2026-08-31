@@ -1,4 +1,4 @@
-import { adminClient, userClient } from '$lib/server/supabase';
+import { adminClient, userClient, userClientFromCtx } from '$lib/server/supabase';
 import type { RequestEvent } from '@sveltejs/kit';
 
 /**
@@ -6,9 +6,9 @@ import type { RequestEvent } from '@sveltejs/kit';
  * Aggregation logic is unchanged from the original Directus version;
  * only the data-fetching layer was rewritten for Supabase.
  */
-export async function load({ locals }: RequestEvent) {
+export async function load({ cookies,  locals  }: RequestEvent) {
   const shopId = locals.currentShop!.id;
-  const supabase = userClient({ locals } as any); // RLS-correct (shop-scoped)
+  const supabase = userClientFromCtx({ cookies } as any); // RLS-correct (shop-scoped)
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yStart = new Date(todayStart);
@@ -65,19 +65,19 @@ export async function load({ locals }: RequestEvent) {
   ]);
 
   // ── Today ────────────────────────────────────────────────────────────────
-  const todayRevenue = (todaySales as any[]).reduce((s, x) => s + x.total, 0);
-  const todayCount   = (todaySales as any[]).length;
+  const todayRevenue = ((todaySales as any[]) ?? []).reduce((s, x) => s + x.total, 0);
+  const todayCount   = ((todaySales as any[]) ?? []).length;
 
-  const todayCost = (saleItemsToday as any[]).reduce(
+  const todayCost = ((saleItemsToday as any[]) ?? []).reduce(
     (s, item) => s + (item.product?.cost_price ?? 0) * item.qty, 0,
   );
   const todayProfit  = todayRevenue - todayCost;
   const profitMargin = todayRevenue > 0 ? Math.round((todayProfit / todayRevenue) * 100) : 0;
 
   // ── Yesterday ────────────────────────────────────────────────────────────
-  const yestRevenue = (yestSales as any[]).reduce((s, x) => s + x.total, 0);
-  const yestCount   = (yestSales as any[]).length;
-  const yestCost = (saleItemsYest as any[]).reduce(
+  const yestRevenue = ((yestSales as any[]) ?? []).reduce((s, x) => s + x.total, 0);
+  const yestCount   = ((yestSales as any[]) ?? []).length;
+  const yestCost = ((saleItemsYest as any[]) ?? []).reduce(
     (s, item) => s + (item.product?.cost_price ?? 0) * item.qty, 0,
   );
   const yestProfit  = yestRevenue - yestCost;
@@ -96,16 +96,16 @@ export async function load({ locals }: RequestEvent) {
   const txnsDelta    = pctDelta(todayCount,   yestCount);
   const profitDelta  = pctDelta(todayProfit,  yestProfit);
 
-  const paymentBreakdown = (todaySales as any[]).reduce((acc, sale) => {
+  const paymentBreakdown = ((todaySales as any[]) ?? []).reduce((acc, sale) => {
     acc[sale.payment_method] = (acc[sale.payment_method] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const outOfStock = (allLowStock as any[]).filter(p => p.qty === 0);
-  const lowStock   = (allLowStock as any[]).filter(p => p.qty > 0);
+  const outOfStock = ((allLowStock as any[]) ?? []).filter(p => p.qty === 0);
+  const lowStock   = ((allLowStock as any[]) ?? []).filter(p => p.qty > 0);
 
   const productAgg = new Map<string, { id: string; name: string; qty: number; revenue: number; category: any }>();
-  for (const item of saleItemsToday as any[]) {
+  for (const item of (saleItemsToday as any[]) ?? []) {
     const pid = item.product?.id ?? item.product;
     if (!pid) continue;
     const lineTotal = item.line_total ?? item.unit_price * item.qty;
@@ -128,7 +128,7 @@ export async function load({ locals }: RequestEvent) {
     .slice(0, 5);
 
   const categoryAgg = new Map<string, { id: string; name: string; color: string; icon: string; revenue: number; qty: number }>();
-  for (const item of saleItemsToday as any[]) {
+  for (const item of (saleItemsToday as any[]) ?? []) {
     const cat = item.product?.category;
     if (!cat) continue;
     const cid = cat.id ?? cat;
@@ -158,7 +158,7 @@ export async function load({ locals }: RequestEvent) {
       .filter(Boolean),
   ).size;
 
-  const totalItemsToday = (saleItemsToday as any[]).reduce((s, x) => s + x.qty, 0);
+  const totalItemsToday = ((saleItemsToday as any[]) ?? []).reduce((s, x) => s + x.qty, 0);
   const avgBasket       = todayCount > 0 ? +(totalItemsToday / todayCount).toFixed(1) : 0;
 
   let stockValueRetail = 0;

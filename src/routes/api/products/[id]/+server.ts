@@ -1,12 +1,12 @@
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * GET /api/products/[id] — single product with category join.
  */
-export async function GET({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('products')
     .select('*, category:categories(*)')
@@ -20,10 +20,10 @@ export async function GET({ params, locals }: import('@sveltejs/kit').RequestEve
 /**
  * PATCH /api/products/[id] — update product fields.
  */
-export async function PATCH({ params, request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function PATCH({ cookies, params, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('products')
     .update(body)
@@ -38,9 +38,9 @@ export async function PATCH({ params, request, locals }: import('@sveltejs/kit')
 /**
  * DELETE /api/products/[id] — soft-delete by setting archived_at.
  */
-export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function DELETE({ cookies, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('products')
     .update({ archived_at: new Date().toISOString() })

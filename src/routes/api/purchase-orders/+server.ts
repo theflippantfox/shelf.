@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -12,7 +12,7 @@ function genRef() {
 /**
  * GET /api/purchase-orders — list with status/supplier filters.
  */
-export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
 
   const status   = url.searchParams.get('status')   ?? '';
@@ -20,7 +20,7 @@ export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent)
   const page     = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
   const limit    = 50;
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   let q = supabase
     .from('purchase_orders')
     .select('id, order_ref, status, order_date, expected_delivery_date, received_date, subtotal, tax_amount, shipping_cost, total_cost, notes, created_at, supplier:suppliers(id, name), created_by:profiles!purchase_orders_created_by_fkey(first_name, last_name)')
@@ -39,7 +39,7 @@ export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent)
 /**
  * POST /api/purchase-orders — create a PO header.
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -62,7 +62,7 @@ export async function POST({ request, locals }: import('@sveltejs/kit').RequestE
   const shippingCost = Number(body.shipping_cost ?? 0);
   const totalCost    = subtotal + taxAmount + shippingCost;
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('purchase_orders')
     .insert({

@@ -55,3 +55,28 @@ export function userClient(event: RequestEvent): SupabaseClient<Database> {
     }
   );
 }
+
+/**
+ * User-scoped client for `+server.ts` API routes that don't have a full
+ * RequestEvent in scope (e.g. when the handler destructures only some fields).
+ * Pass `{ cookies, locals }` (or any object with a `cookies.getAll()`).
+ */
+export function userClientFromCtx(
+  ctx: { cookies: { getAll(): { name: string; value: string }[]; set?(name: string, value: string, opts?: any): void } }
+): SupabaseClient<Database> {
+  return createServerClient<Database>(
+    PUBLIC_SUPABASE_URL,
+    PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll: () => ctx.cookies.getAll(),
+        setAll: (cookies) => {
+          if (typeof ctx.cookies.set !== 'function') return;
+          for (const { name, value, options } of cookies) {
+            ctx.cookies.set!(name, value, { path: '/', ...options });
+          }
+        },
+      },
+    }
+  );
+}

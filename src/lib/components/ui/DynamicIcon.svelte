@@ -15,9 +15,10 @@
 
   // Import lucide icons
   import * as icons from 'lucide-svelte';
-  
+  type IconCtor = typeof icons.Package;
+
   // Resolve to actual component each render with fallback
-  const IconComponent = (icons as Record<string, unknown>)[name];
+  const IconComponent = $derived((icons as Record<string, unknown>)[name] as IconCtor | undefined);
 </script>
 
 {#if IconComponent}

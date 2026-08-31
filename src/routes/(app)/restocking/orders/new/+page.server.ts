@@ -1,11 +1,11 @@
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * New purchase order page — load suppliers, products, categories.
  */
-export async function load({ locals }: import('@sveltejs/kit').RequestEvent) {
+export async function load({ cookies,  locals  }: import('@sveltejs/kit').RequestEvent) {
   const shopId = locals.currentShop!.id;
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const [
     { data: suppliers = [] },

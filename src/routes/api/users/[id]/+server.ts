@@ -5,9 +5,9 @@
  * DELETE: soft-delete via status='suspended'. Owner only.
  */
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
-export async function PATCH({ params, request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function PATCH({ cookies, params, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   if (!locals.currentShop)
     return json({ error: 'No shop' }, { status: 401 });
@@ -22,7 +22,7 @@ export async function PATCH({ params, request, locals }: import('@sveltejs/kit')
     if (ALLOWED.includes(k)) safe[k] = v;
   }
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('shop_members')
     .update(safe as any)
@@ -34,7 +34,7 @@ export async function PATCH({ params, request, locals }: import('@sveltejs/kit')
   return json(data);
 }
 
-export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function DELETE({ cookies, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   if (!locals.currentShop)
     return json({ error: 'No shop' }, { status: 401 });
@@ -42,7 +42,7 @@ export async function DELETE({ params, locals }: import('@sveltejs/kit').Request
     return json({ error: 'Only owners can remove team members' }, { status: 403 });
 
   // Soft delete — set status to 'suspended'
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('shop_members')
     .update({ status: 'suspended' })

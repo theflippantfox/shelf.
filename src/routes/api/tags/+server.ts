@@ -1,12 +1,12 @@
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * GET /api/tags — list tags for the current shop.
  */
-export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json([]);
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('tags')
     .select('*')
@@ -20,10 +20,10 @@ export async function GET({ locals }: import('@sveltejs/kit').RequestEvent) {
 /**
  * POST /api/tags — create a tag.
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('tags')
     .insert({ ...body, shop_id: locals.currentShop.id })

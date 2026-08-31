@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * GET /api/products — list products for the current shop.
@@ -7,14 +7,14 @@ import { userClient } from '$lib/server/supabase';
  *
  * Uses userClient (RLS-correct) instead of adminClient.
  */
-export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json([]);
   const shopId = locals.currentShop.id;
   const search = url.searchParams.get('search') ?? '';
   const cat    = url.searchParams.get('category') ?? '';
   const alert  = url.searchParams.get('alert');
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   let q = supabase
     .from('products')
     .select('id, name, sku, description, price, cost_price, qty, low_stock_threshold, barcode, image_url, archived_at, category_id, category:categories(id, name, color, icon)')
@@ -42,10 +42,10 @@ export async function GET({ locals, url }: import('@sveltejs/kit').RequestEvent)
 /**
  * POST /api/products — create a product.
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   // Auto-generate SKU if not provided
   let sku = body.sku?.trim();

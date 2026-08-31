@@ -1,4 +1,4 @@
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 import {
   buildKpis,
   buildTrend,
@@ -72,7 +72,7 @@ function buildGrossProfit(items: any[], compareItems: any[]) {
 
 // ─── Load ────────────────────────────────────────────────────────────────────
 
-export async function load({ locals, url, setHeaders }: any) {
+export async function load({ cookies, locals, url, setHeaders }: any) {
   setHeaders?.({ 'cache-control': 'private, max-age=60' });
 
   const shop = locals.currentShop;
@@ -83,7 +83,7 @@ export async function load({ locals, url, setHeaders }: any) {
   const currency = shop.currency_symbol ?? '$';
   const period: Period = parsePeriod(url, shopTz);
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const monthlyFrom = dayjs().tz(shopTz).subtract(11, 'month').startOf('month').toISOString();
   const monthlyTo = dayjs().tz(shopTz).endOf('month').toISOString();
@@ -123,8 +123,8 @@ export async function load({ locals, url, setHeaders }: any) {
       .is('archived_at', null),
   ]);
 
-  const currentIds = (currentSales as any[]).map((s) => s.id).filter(Boolean);
-  const compareIds = (compareSales as any[]).map((s) => s.id).filter(Boolean);
+  const currentIds = ((currentSales as any[]) ?? []).map((s) => s.id).filter(Boolean);
+  const compareIds = ((compareSales as any[]) ?? []).map((s) => s.id).filter(Boolean);
 
   const [
     { data: allCurrentItems = [] },
@@ -142,8 +142,8 @@ export async function load({ locals, url, setHeaders }: any) {
       : { data: [] },
   ]);
 
-  const saleItems = allCurrentItems as any[];
-  const compareSaleItems = allCompareItems as any[];
+  const saleItems = (allCurrentItems as any[]) ?? [];
+  const compareSaleItems = (allCompareItems as any[]) ?? [];
 
   const kpis: KpiSet = buildKpis(
     currentSales as any[], compareSales as any[], saleItems, compareSaleItems, shopTz

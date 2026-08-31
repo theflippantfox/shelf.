@@ -1,13 +1,13 @@
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 const PAGE_SIZE = 25;
 
 /**
  * Sale history page — paginated, with search, method, status, and date-range filters.
  */
-export async function load({ locals, url }: import('@sveltejs/kit').RequestEvent) {
+export async function load({ cookies,  locals, url  }: import('@sveltejs/kit').RequestEvent) {
   const shopId = locals.currentShop!.id;
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const page  = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
   const q     = (url.searchParams.get('q') ?? '').trim();

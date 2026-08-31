@@ -4,9 +4,9 @@
  * PATCH: update shop settings. Owner only. Whitelisted fields.
  */
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
-export async function PATCH({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function PATCH({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop)
     return json({ error: 'No shop' }, { status: 401 });
   if (locals.shopMember?.role !== 'owner')
@@ -24,7 +24,7 @@ export async function PATCH({ request, locals }: import('@sveltejs/kit').Request
     if (ALLOWED.includes(k)) safe[k] = v;
   }
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const { data, error } = await supabase
     .from('shops')
     .update(safe as any)

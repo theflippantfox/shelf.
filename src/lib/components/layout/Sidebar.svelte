@@ -15,7 +15,14 @@
     navItems.filter((i) => !i.permission || auth.can(i.permission as any)),
   );
 
-  const grouped = $derived(() => {
+  /**
+   * FIX: was `$derived(() => { ... })` — same bug as inventory/history/sale.
+   * The arrow body never executed during derivation, so `grouped` was a
+   * static reference to a function and `.each Object.entries(grouped())`
+   * iterated over an empty result. Use `$derived.by` so the body actually
+   * runs reactively when `visibleItems` changes.
+   */
+  const grouped = $derived.by(() => {
     const g: Record<string, typeof navItems> = {};
     for (const item of visibleItems) {
       const s = item.section ?? "Other";
@@ -49,7 +56,7 @@
   </div>
 
   <nav class="flex-1 overflow-y-auto py-2">
-    {#each Object.entries(grouped()) as [section, items]}
+    {#each Object.entries(grouped) as [section, items]}
       <p class="sidebar-section-lbl">{section}</p>
       {#each items as item}
         <a

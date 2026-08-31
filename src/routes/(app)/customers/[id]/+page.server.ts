@@ -1,11 +1,11 @@
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * Single customer page — customer + their sales history.
  */
-export async function load({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function load({ cookies,  params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return { customer: null, sales: [] };
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const [
     { data: customer },

@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { userClient, adminClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx, adminClient } from '$lib/server/supabase';
 
 /**
  * POST /api/stock — adjust stock for a product.
@@ -10,7 +10,7 @@ import { userClient, adminClient } from '$lib/server/supabase';
  * if not yet present). For now uses two queries; safe enough since both are
  * shop-scoped and validated.
  */
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'No shop' }, { status: 401 });
 
@@ -18,7 +18,7 @@ export async function POST({ request, locals }: import('@sveltejs/kit').RequestE
   if (!product_id || !delta || !reason)
     return json({ error: 'product_id, delta, reason required' }, { status: 400 });
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   // Read current qty
   const { data: product, error: readErr } = await supabase

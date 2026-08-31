@@ -8,14 +8,14 @@
  * a known issue and will be addressed in Stage 6a by moving to a Postgres function.
  */
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * GET /api/sales/[id]
  */
-export async function GET({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({ cookies, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const [
     { data: sale, error: saleErr },
@@ -38,12 +38,12 @@ export async function GET({ params, locals }: import('@sveltejs/kit').RequestEve
 /**
  * PATCH /api/sales/[id]
  */
-export async function PATCH({ params, request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function PATCH({ cookies, params, request, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   if (!locals.user) return json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   // ── Void path ──────────────────────────────────────────────────────────────
   if (body.void_reason !== undefined) {

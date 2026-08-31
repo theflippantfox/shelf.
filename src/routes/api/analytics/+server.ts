@@ -3,7 +3,7 @@
  * Pure data-fetch + transformation; analytics utils handle all aggregation.
  */
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 import {
   buildKpis, buildTrend, buildPaymentMethods, buildHourly, buildWeekday,
   buildProducts, buildCategories, buildCustomerInsights, buildHeatmap,
@@ -68,7 +68,7 @@ function buildGrossProfit(items: any[], compareItems: any[]) {
   };
 }
 
-export const GET = async ({ locals, url, setHeaders }: import('@sveltejs/kit').RequestEvent) => {
+export const GET = async ({ cookies, locals, url, setHeaders  }: import('@sveltejs/kit').RequestEvent) => {
   const shop = locals.currentShop;
   if (!shop) return json({});
 
@@ -77,7 +77,7 @@ export const GET = async ({ locals, url, setHeaders }: import('@sveltejs/kit').R
   const currency = shop.currency_symbol ?? '$';
   const period: Period = parsePeriod(url, shopTz);
 
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const monthlyFrom = dayjs().tz(shopTz).subtract(11, 'month').startOf('month').toISOString();
   const monthlyTo = dayjs().tz(shopTz).endOf('month').toISOString();

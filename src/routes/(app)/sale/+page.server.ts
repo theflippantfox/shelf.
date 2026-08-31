@@ -1,12 +1,12 @@
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * Sale / POS page — products (in stock), categories, customers.
  * In edit mode: load the sale + items to prefill the cart.
  */
-export async function load({ locals, url }: import('@sveltejs/kit').RequestEvent) {
+export async function load({ cookies,  locals, url  }: import('@sveltejs/kit').RequestEvent) {
   const shopId = locals.currentShop!.id;
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const mode    = url.searchParams.get('mode');
   const editId  = url.searchParams.get('id');
 

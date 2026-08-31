@@ -7,9 +7,9 @@
  * built-in invite (recovery link).
  */
 import { json } from '@sveltejs/kit';
-import { adminClient, userClient } from '$lib/server/supabase';
+import { adminClient, userClient, userClientFromCtx } from '$lib/server/supabase';
 
-export async function POST({ request, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'No shop context' }, { status: 401 });
 
@@ -18,7 +18,7 @@ export async function POST({ request, locals }: import('@sveltejs/kit').RequestE
   };
 
   const admin = adminClient();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
   const failures: string[] = [];
 
   for (const invite of invites ?? []) {

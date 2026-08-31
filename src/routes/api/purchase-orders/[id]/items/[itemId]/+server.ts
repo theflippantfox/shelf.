@@ -1,14 +1,14 @@
 import { json } from '@sveltejs/kit';
-import { userClient } from '$lib/server/supabase';
+import { userClient, userClientFromCtx } from '$lib/server/supabase';
 
 /**
  * POST /api/purchase-orders/[id]/items/[itemId] — duplicate endpoint from the items route.
  * Kept for parity with the previous URL shape.
  */
-export async function POST({ request, params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({ cookies, request, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.id) return json({ error: 'Missing id' }, { status: 400 });
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const { data, error } = await supabase
     .from('purchase_order_items')
@@ -23,10 +23,10 @@ export async function POST({ request, params, locals }: import('@sveltejs/kit').
 /**
  * PATCH /api/purchase-orders/[id]/items/[itemId] — update a line item.
  */
-export async function PATCH({ request, params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function PATCH({ cookies, request, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.itemId) return json({ error: 'Missing itemId' }, { status: 400 });
   const body = await request.json();
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const { data, error } = await supabase
     .from('purchase_order_items')
@@ -42,9 +42,9 @@ export async function PATCH({ request, params, locals }: import('@sveltejs/kit')
 /**
  * DELETE /api/purchase-orders/[id]/items/[itemId] — remove a line item.
  */
-export async function DELETE({ params, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function DELETE({ cookies, params, locals  }: import('@sveltejs/kit').RequestEvent) {
   if (!params.itemId) return json({ error: 'Missing itemId' }, { status: 400 });
-  const supabase = userClient({ locals } as any);
+  const supabase = userClientFromCtx({ cookies } as any);
 
   const { error } = await supabase
     .from('purchase_order_items')

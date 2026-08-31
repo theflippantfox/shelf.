@@ -2,10 +2,11 @@
   import { auth }        from '$lib/stores/auth.svelte';
   import { currentShop } from '$lib/stores/shop.svelte';
   import { theme }       from '$lib/stores/theme.svelte';
-  import Sidebar   from '$lib/components/layout/Sidebar.svelte';
-  import BottomNav from '$lib/components/layout/BottomNav.svelte';
-  import Header    from '$lib/components/layout/Header.svelte';
-  import Toast     from '$lib/components/ui/Toast.svelte';
+  import Sidebar           from '$lib/components/layout/Sidebar.svelte';
+  import BottomNav         from '$lib/components/layout/BottomNav.svelte';
+  import Header            from '$lib/components/layout/Header.svelte';
+  import Toast             from '$lib/components/ui/Toast.svelte';
+  import OfflineIndicator  from '$lib/components/ui/OfflineIndicator.svelte';
 
   let { data, children } = $props();
 
@@ -31,3 +32,4 @@
   {@render children()}
 </div>
 <Toast />
+<OfflineIndicator />
