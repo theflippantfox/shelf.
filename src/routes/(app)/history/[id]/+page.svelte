@@ -39,7 +39,16 @@
   }
 </script>
 
-<svelte:head><title>Sale {s.sale_ref} · Shëlf</title></svelte:head>
+<svelte:head><title>Sale {s?.sale_ref ?? 'Unknown'} · Shëlf</title></svelte:head>
+
+{#if !s}
+  <PageShell>
+    <div class="card p-8 text-center">
+      <p class="text-sm text-[var(--text-3)]">Sale not found.</p>
+      <button class="btn btn-ghost btn-sm mt-3" onclick={() => goto('/history')}>Back to history</button>
+    </div>
+  </PageShell>
+{:else}
 
 <PageShell>
   <div class="flex items-center gap-3 mb-5">
@@ -48,7 +57,7 @@
     </button>
     <div class="flex-1">
       <p class="font-semibold text-sm">{s.sale_ref}</p>
-      <p class="text-xs text-[var(--text-3)]">{formatDateTime(s.date_created)}</p>
+      <p class="text-xs text-[var(--text-3)]">{formatDateTime(s.created_at)}</p>
     </div>
     {#if !s.voided_at}
       <Button variant="secondary" size="sm" onclick={startEdit}>
@@ -114,6 +123,8 @@
     {/if}
   </div>
 </PageShell>
+
+{/if}
 
 <Modal bind:open={showVoid} title="Void sale" maxWidth="max-w-sm">
   <p class="text-sm text-[var(--text-2)] mb-3">Stock will be restored. This cannot be undone.</p>

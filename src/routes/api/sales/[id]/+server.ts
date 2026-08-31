@@ -22,7 +22,7 @@ export async function GET({ cookies, params, locals  }: import('@sveltejs/kit').
     { data: items, error: itemsErr },
   ] = await Promise.all([
     supabase.from('sales')
-      .select('*, customer:customers(*), served_by:profiles!sales_served_by_fkey(first_name, last_name, email)')
+      .select('*, customer:customers(*), served_by:profiles!sales_served_by_fkey(first_name, last_name, avatar_url)')
       .eq('id', params.id)
       .single(),
     supabase.from('sale_items')
@@ -222,7 +222,7 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
 
   const { data: updated } = await supabase
     .from('sales')
-    .select('*, customer:customers(*), served_by:profiles!sales_served_by_fkey(first_name, last_name, email)')
+    .select('*, customer:customers(*), served_by:profiles!sales_served_by_fkey(first_name, last_name, avatar_url)')
     .eq('id', params.id)
     .single();
   return json(updated);
