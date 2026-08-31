@@ -54,13 +54,25 @@ export async function POST({ cookies, request, locals  }: import('@sveltejs/kit'
     sku = await generateSku(locals.currentShop.id, body.name ?? 'PROD');
   }
 
+  // Whitelist allowed fields. Map `category` (page) → `category_id` (DB).
+  // Empty strings are coerced to null so uuid/text columns don't choke.
+  const clean = (v: any) => (v === '' || v === undefined ? null : v);
+  const allowed: any = {
+    name:                body.name,
+    sku,
+    shop_id:             locals.currentShop.id,
+    price:               body.price ?? 0,
+    cost_price:          body.cost_price ?? 0,
+    qty:                 body.qty ?? 0,
+    unit:                body.unit ?? 'pcs',
+    category_id:         clean(body.category_id ?? body.category),
+    description:         clean(body.description),
+    low_stock_threshold: body.low_stock_threshold === '' ? 5 : (body.low_stock_threshold ?? 5),
+    barcode:             clean(body.barcode),
+  };
   const { data, error } = await supabase
     .from('products')
-    .insert({
-      ...body,
-      sku,
-      shop_id: locals.currentShop.id,
-    })
+    .insert(allowed)
     .select()
     .single();
 
