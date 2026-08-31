@@ -1,8 +1,14 @@
 # Shëlf — Production Deployment Guide
 
-**Stack:** SvelteKit app · Directus 11 · PostgreSQL 16 · Nginx · Let's Encrypt SSL  
-**Domain:** `theflippantfoxpos.duckdns.org`  
+**Stack:** SvelteKit app · Supabase (managed cloud) · Nginx · Let's Encrypt SSL  \
+**Domain:** `theflippantfoxpos.duckdns.org`  \
 **Host OS:** Ubuntu 22.04 LTS (recommended)
+
+> **⚠️ This guide is partially outdated.** It was written for the legacy
+> Directus-on-the-same-VPS architecture. Sections 12, 13, and parts of 8, 9
+> still reference Directus / Docker Postgres. The current architecture
+> uses **managed Supabase** instead. See [MIGRATION_NOTES.md](./MIGRATION_NOTES.md)
+> for the new flow.
 
 ---
 

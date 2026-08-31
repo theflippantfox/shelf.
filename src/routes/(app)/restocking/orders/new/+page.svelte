@@ -14,7 +14,7 @@
   let { data } = $props();
 
   // ── Option lists for selects ──────────────────────────────────────────────
-  // Convert raw Directus records → { value, label } that our Select expects
+  // Convert raw Supabase rows → { value, label } that our Select expects
   const supplierOptions = $derived(
     (data.suppliers as any[]).map((s) => ({ value: s.id, label: s.name })),
   );
