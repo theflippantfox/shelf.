@@ -158,15 +158,15 @@ function last7Buckets(sales: any[], shopTz: string): number[] {
   const buckets = Array(7).fill(0);
   if (!sales.length) return buckets;
   const sorted = [...sales].sort((a, b) =>
-    new Date(a.date_created).getTime() - new Date(b.date_created).getTime()
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
-  const oldest = dayjs(sorted[0].date_created).tz(shopTz);
-  const newest = dayjs(sorted[sorted.length - 1].date_created).tz(shopTz);
+  const oldest = dayjs(sorted[0].created_at).tz(shopTz);
+  const newest = dayjs(sorted[sorted.length - 1].created_at).tz(shopTz);
   const span   = Math.max(newest.diff(oldest, 'day') + 1, 7);
   const step   = Math.max(Math.floor(span / 7), 1);
 
   for (const sale of sorted) {
-    const d = dayjs(sale.date_created).tz(shopTz);
+    const d = dayjs(sale.created_at).tz(shopTz);
     const idx = Math.min(Math.floor(d.diff(oldest, 'day') / step), 6);
     buckets[idx] += sale.total;
   }
@@ -199,12 +199,12 @@ export function buildTrend(
       current:  0, previous: 0, txns: 0, avgOrder: 0,
     }));
     for (const s of sales) {
-      const h = dayjs(s.date_created).tz(shopTz).hour();
+      const h = dayjs(s.created_at).tz(shopTz).hour();
       slots[h].current  += s.total;
       slots[h].txns     += 1;
     }
     for (const s of cSales) {
-      const h = dayjs(s.date_created).tz(shopTz).hour();
+      const h = dayjs(s.created_at).tz(shopTz).hour();
       slots[h].previous += s.total;
     }
     for (const sl of slots) {
@@ -221,7 +221,7 @@ export function buildTrend(
   }
 
   for (const s of sales) {
-    const idx = dayjs(s.date_created).tz(shopTz).startOf('day').diff(fromD, 'day');
+    const idx = dayjs(s.created_at).tz(shopTz).startOf('day').diff(fromD, 'day');
     if (idx >= 0 && idx < slots.length) {
       slots[idx].current += s.total;
       slots[idx].txns    += 1;
@@ -230,7 +230,7 @@ export function buildTrend(
 
   const cFromD = dayjs(cFrom).tz(shopTz).startOf('day');
   for (const s of cSales) {
-    const idx = dayjs(s.date_created).tz(shopTz).startOf('day').diff(cFromD, 'day');
+    const idx = dayjs(s.created_at).tz(shopTz).startOf('day').diff(cFromD, 'day');
     if (idx >= 0 && idx < slots.length) {
       slots[idx].previous += s.total;
     }
@@ -285,7 +285,7 @@ export function buildHourly(sales: any[], shopTz: string): TimeSlot[] {
     revenue: 0, count: 0,
   }));
   for (const s of sales) {
-    const h = dayjs(s.date_created).tz(shopTz).hour();
+    const h = dayjs(s.created_at).tz(shopTz).hour();
     slots[h].revenue += s.total;
     slots[h].count   += 1;
   }
@@ -296,7 +296,7 @@ export function buildWeekday(sales: any[], shopTz: string): TimeSlot[] {
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const slots: TimeSlot[] = DAYS.map(label => ({ label, revenue: 0, count: 0 }));
   for (const s of sales) {
-    const dow = dayjs(s.date_created).tz(shopTz).day();
+    const dow = dayjs(s.created_at).tz(shopTz).day();
     slots[dow].revenue += s.total;
     slots[dow].count   += 1;
   }
@@ -321,9 +321,11 @@ export function buildProducts(items: any[]): { byRevenue: ProductRow[]; byUnits:
   const map: Record<string, ProductRow> = {};
 
   for (const item of items) {
-    const key = item.product_sku || item.product_name;
+    const name = item.product_name ?? item.product?.name ?? 'Unknown';
+    const sku  = item.product_sku  ?? item.product?.sku  ?? '';
+    const key  = sku || name || item.product_id;
     if (!map[key]) {
-      map[key] = { name: item.product_name, sku: item.product_sku, revenue: 0, units: 0, margin: null };
+      map[key] = { name, sku, revenue: 0, units: 0, margin: null };
     }
     map[key].revenue += item.line_total ?? 0;
     map[key].units   += item.qty        ?? 0;
@@ -441,7 +443,7 @@ export function buildHeatmap(sales: any[], shopTz: string): number[][] {
     Array.from({ length: 24 }, () => ({ total: 0, count: 0 }))
   );
   for (const s of sales) {
-    const dt  = dayjs(s.date_created).tz(shopTz);
+    const dt  = dayjs(s.created_at).tz(shopTz);
     const dow = (dt.day() + 6) % 7; // 0=Mon
     const h   = dt.hour();
     accum[dow][h].total += s.total;
@@ -485,7 +487,7 @@ export function buildMargin(
   // Group by day
   const dayMap: Record<string, { revenue: number; cogs: number }> = {};
   for (const s of sales) {
-    const key  = dayjs(s.date_created).tz(shopTz).format('YYYY-MM-DD');
+    const key  = dayjs(s.created_at).tz(shopTz).format('YYYY-MM-DD');
     const data = salesMap[s.id];
     if (!dayMap[key]) dayMap[key] = { revenue: 0, cogs: 0 };
     dayMap[key].revenue += data?.rev  ?? s.total;

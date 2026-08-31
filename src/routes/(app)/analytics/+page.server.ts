@@ -132,7 +132,7 @@ export async function load({ cookies, locals, url, setHeaders }: any) {
   ] = await Promise.all([
     currentIds.length
       ? supabase.from('sale_items')
-          .select('id, sale_id, product_id, qty, unit_price, cost_at_sale, line_total, product:products(id, name, price, cost_price, category:categories(id, name, color))')
+          .select('id, sale_id, product_id, product_name, product_sku, qty, unit_price, cost_at_sale, line_total, product:products(id, name, sku, price, cost_price, category:categories(id, name, color))')
           .in('sale_id', currentIds)
       : { data: [] },
     compareIds.length
