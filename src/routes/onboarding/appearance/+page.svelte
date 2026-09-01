@@ -13,8 +13,8 @@
 
   function choosePalette(p: Palette) {
     selectedPalette = p;
-    const tokens = themeMode === 'dark' ? p.dark : p.light;
-    themeStore.applyShopPalette(tokens.primary, tokens.sidebarBg);
+    // Live preview — the whole app updates immediately
+    themeStore.applyShopPalette(p.id);
   }
 
   // The actual hex values being sent depend on the active theme mode

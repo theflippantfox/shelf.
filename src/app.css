@@ -97,6 +97,18 @@ html.dark {
 html { font-family: var(--font-sans); color: var(--text); background: var(--bg); }
 html:not(.theme-loaded) { visibility: hidden; }
 
+/* Smooth palette transition — animates the color-affected properties
+ * over 240ms when the palette/theme changes. Bounded scope so it
+ * doesn't fight with hover/focus transitions on individual elements. */
+html.palette-transitioning,
+html.palette-transitioning *,
+html.palette-transitioning *::before,
+html.palette-transitioning *::after {
+  transition: background-color 240ms ease, color 240ms ease,
+              border-color 240ms ease, box-shadow 240ms ease,
+              fill 240ms ease, stroke 240ms ease !important;
+}
+
 body { margin: 0; min-height: 100vh; background: var(--bg); }
 
 /* ─── Typography ────────────────────────────────────── */
