@@ -125,8 +125,7 @@
   <!-- Header -->
   <div class="flex items-end justify-between gap-3 mb-5">
     <div class="flex-1 min-w-0">
-      <p class="eyebrow">{period?.label ?? "All time"}{kpis ? ` · ${formatCurrencyCompact(kpis.revenue.current)} revenue` : ""}</p>
-      <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
         Analytics
       </h1>
     </div>

@@ -174,8 +174,7 @@
   <!-- Header row: title + customer + clear -->
   <div class="flex items-end justify-between gap-3 mb-4">
     <div class="min-w-0">
-      <p class="eyebrow">{isEdit ? 'Editing' : 'In progress'}</p>
-      <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
         {isEdit ? 'Edit sale' : 'New sale'}
       </h1>
       <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">

@@ -30,8 +30,7 @@
 <PageShell title="Price Comparison">
   <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
-    <p class="eyebrow">Restocking</p>
-    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Price Comparison</h1>
+<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Price Comparison</h1>
     <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">Compare latest unit costs across your suppliers</p>
   </div>
   <Button href="/restocking/orders/new" size="sm">

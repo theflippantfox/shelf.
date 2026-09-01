@@ -21,8 +21,7 @@
 
 <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
-    <p class="eyebrow">Configure</p>
-    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
       Settings
     </h1>
   </div>

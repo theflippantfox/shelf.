@@ -128,8 +128,7 @@
 <!-- Header -->
   <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
-    <p class="eyebrow">Activity</p>
-    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Sales History</h1>
+<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Sales History</h1>
     <p class="text-xs text-[var(--text-3)]">
         {(data as any).totalMatching.toLocaleString()} matching sale{(data as any).totalMatching === 1 ? '' : 's'}
         {#if (data as any).totalMatching > (data as any).sales.length} · page {(data as any).page}{/if}

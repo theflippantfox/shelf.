@@ -291,8 +291,7 @@
 <!-- Header -->
   <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
-    <p class="eyebrow">Restocking</p>
-    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">New Purchase Order</h1>
+<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">New Purchase Order</h1>
     <p class="text-xs text-[var(--text-3)]">
           Record incoming stock from a supplier
         </p>

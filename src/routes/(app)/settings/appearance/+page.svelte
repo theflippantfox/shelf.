@@ -46,8 +46,7 @@
 <!-- Inner header for the settings page (no sticky top bar) -->
 <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
-    <p class="eyebrow">Settings</p>
-    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
       Appearance
     </h1>
     <p class="text-[12.5px] text-[var(--text-3)] mt-0.5">

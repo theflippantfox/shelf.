@@ -152,8 +152,7 @@
 <!-- ─── Page content ─────────────────────────────────────────────────────── -->
 <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
-    <p class="eyebrow">Restocking</p>
-    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Suppliers</h1>
+<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Suppliers</h1>
     <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">
         Manage your product sources and payment terms
       </p>
