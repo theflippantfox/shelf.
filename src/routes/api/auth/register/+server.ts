@@ -6,6 +6,7 @@
 import { json } from '@sveltejs/kit';
 import { signUp } from '$lib/server/auth';
 import { createServerClient } from '@supabase/ssr';
+import { env } from '$env/dynamic/private';
 import {
   PUBLIC_SUPABASE_URL,
   PUBLIC_SUPABASE_ANON_KEY,
@@ -51,8 +52,13 @@ export async function POST({ request, cookies }: import('@sveltejs/kit').Request
 
     return json({ ok: true, userId }, { status: 201 });
   } catch (err: any) {
-    console.error('[auth register]', err);
+    // Log full error so we can diagnose 500s in Vercel runtime logs.
+    // In production, Vercel captures console.error in the function logs.
+    console.error('[auth register] full error:', err);
     const msg = err?.message?.includes('already') ? 'An account with that email already exists' : 'Registration failed — please try again';
-    return json({ error: msg }, { status: err?.message?.includes('already') ? 409 : 500 });
+    return json({
+      error: msg,
+      ...(env.VERCEL_ENV ? { debug: String(err?.message ?? err) } : {}),
+    }, { status: err?.message?.includes('already') ? 409 : 500 });
   }
 }

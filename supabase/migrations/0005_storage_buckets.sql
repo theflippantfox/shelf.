@@ -27,6 +27,7 @@ on conflict (id) do update set
 -- The server validates the user's shop membership before signing a URL.
 
 -- Members can upload to their shop's prefix
+drop policy if exists "members_upload_product_images" on storage.objects;
 create policy "members_upload_product_images"
 on storage.objects for insert to authenticated
 with check (
@@ -38,6 +39,7 @@ with check (
   )
 );
 
+drop policy if exists "members_upload_avatars" on storage.objects;
 create policy "members_upload_avatars"
 on storage.objects for insert to authenticated
 with check (
@@ -45,6 +47,7 @@ with check (
   -- avatars are user-scoped, no shop prefix
 );
 
+drop policy if exists "members_upload_bills" on storage.objects;
 create policy "members_upload_bills"
 on storage.objects for insert to authenticated
 with check (
