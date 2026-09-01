@@ -50,7 +50,7 @@ echo "$STOCK" | python3 -c "import sys, json; [print(f'    {p[\"name\"]}: qty={p
 
 curl -sS -b /tmp/c.jar -X POST http://127.0.0.1:5180/api/onboarding/locale \
   -H "Content-Type: application/json" \
-  -d '{"country_code":"NG","currency_code":"NGN","timezone":"Africa/Lagos","currency_symbol":"₦","currency_locale":"en-NG","date_format":"YYYY-MM-DD","time_format":"24h","tax_rate":0,"tax_inclusive":false,"tax_name":"VAT"}' > /dev/null
+  -d '{"country_code":"IN","currency_code":"INR","timezone":"Asia/Kolkata","currency_symbol":"₹","currency_locale":"en-IN","date_format":"YYYY-MM-DD","time_format":"24h","tax_rate":0,"tax_inclusive":false,"tax_name":"GST"}' > /dev/null
 curl -sS -b /tmp/c.jar -X POST http://127.0.0.1:5180/api/onboarding/appearance \
   -H "Content-Type: application/json" \
   -d '{"theme":"system","primary_color":"#7B4F8A","sidebar_bg":"#150F1C"}' > /dev/null
