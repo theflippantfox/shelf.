@@ -12,7 +12,10 @@
     Settings,
     LogOut,
     ChevronDown,
+    Search,
   } from "lucide-svelte";
+
+  let { onOpenCommandBar }: { onOpenCommandBar?: () => void } = $props();
 
   const alertCount = $derived(inventory.alertCount);
 
@@ -62,6 +65,20 @@
   <h1 class="page-title flex-1 text-sm font-semibold">{pageTitle()}</h1>
 
   <div class="flex items-center gap-1">
+    <!-- Search / Command bar trigger -->
+    <button
+      class="btn btn-ghost btn-sm gap-2 px-2.5 text-[var(--text-3)] hover:text-[var(--text)] group"
+      onclick={() => onOpenCommandBar?.()}
+      aria-label="Open command bar"
+      title="Search (⌘K)"
+    >
+      <Search size={15} strokeWidth={1.75} />
+      <span class="hidden md:inline text-[12px]">Search</span>
+      <kbd class="hidden md:inline-flex items-center gap-0.5 text-[9.5px] font-mono px-1.5 py-0.5 rounded border border-[var(--border)] bg-[var(--surface2)] text-[var(--text-3)] group-hover:text-[var(--text-2)]">
+        ⌘K
+      </kbd>
+    </button>
+
     <!-- Theme toggle -->
     <button
       class="btn btn-ghost btn-icon btn-sm"
