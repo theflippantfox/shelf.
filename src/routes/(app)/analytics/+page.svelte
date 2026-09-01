@@ -10,7 +10,7 @@
   import Heatmap from "$lib/components/charts/Heatmap.svelte";
   import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
   import {
-    TrendingUp, Users, ShoppingBag, BarChart3, PieChart,
+    TrendingUp, Users, ShoppingBag, BarChart3, PieChart, ShoppingCart,
     Calendar, Clock, Package, Banknote, ArrowUp, ArrowDown,
     Minus, Trophy, Activity,
   } from "lucide-svelte";
@@ -124,12 +124,12 @@
 
 <PageShell>
   <!-- Header -->
-  <div class="page-header">
+  <div class="flex items-end justify-between gap-3 mb-5">
     <div class="flex-1 min-w-0">
-      <p class="text-base font-semibold">Business Analytics</p>
-      <p class="text-xs text-[var(--text-3)]">
-        {period?.label ?? "All time"}{kpis ? ` · ${formatCurrencyCompact(kpis.revenue.current)} revenue` : ""}
-      </p>
+      <p class="eyebrow">{period?.label ?? "All time"}{kpis ? ` · ${formatCurrencyCompact(kpis.revenue.current)} revenue` : ""}</p>
+      <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+        Analytics
+      </h1>
     </div>
   </div>
 
@@ -151,17 +151,36 @@
   </div>
 
   {#if !analytics}
-    <div class="flex items-center justify-center h-64 text-[var(--text-3)]">
-      Loading analytics…
+    <div class="surface-card flex flex-col items-center justify-center h-64 text-[var(--text-3)] anim-in">
+      <div class="w-8 h-8 rounded-full border-2 border-[var(--border)] border-t-[var(--primary)] animate-spin mb-3" aria-hidden="true"></div>
+      <p class="text-[13px] font-semibold text-[var(--text)]">Crunching your numbers</p>
+      <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">This usually takes a second.</p>
     </div>
   {:else}
     {@const hasData = (kpis?.transactions?.current ?? 0) > 0 || (kpis?.revenue?.current ?? 0) > 0}
 
-    <div class="space-y-6">
+    <div class="space-y-6 anim-stagger">
+
+      {#if !hasData}
+        <div class="surface-card flex flex-col items-center justify-center text-center py-14 px-5 anim-in">
+          <div class="w-14 h-14 rounded-full flex items-center justify-center mb-3"
+               style="background: color-mix(in srgb, var(--primary) 14%, transparent);">
+            <BarChart3 size={24} strokeWidth={1.5} style="color:var(--primary)" />
+          </div>
+          <p class="text-[15px] font-semibold text-[var(--text)]">No data for this period</p>
+          <p class="text-[12.5px] text-[var(--text-3)] mt-1 max-w-sm leading-relaxed">
+            Once you start ringing up sales, your revenue, profit, and trends will show up here.
+          </p>
+          <a href="/sale" class="btn btn-primary mt-4">
+            <ShoppingCart size={14} strokeWidth={2} />
+            Make your first sale
+          </a>
+        </div>
+      {/if}
 
       <!-- ── 1-line period summary chips ─────────────────────────────────── -->
       {#if hasData}
-        <div class="card-flat p-3 flex flex-wrap gap-x-4 gap-y-2 items-center text-xs">
+        <div class="surface-card-flat p-3 flex flex-wrap gap-x-4 gap-y-2 items-center text-xs">
           <span class="inline-flex items-center gap-1.5">
             <Activity size={12} strokeWidth={2} class="text-[var(--text-3)]" />
             <span class="text-[var(--text-3)]">Activity</span>
@@ -242,7 +261,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         {#if grossProfit}
           {@const profitArrow = trendArrow(grossProfit.delta?.direction ?? 'flat')}
-          <div class="card p-4 space-y-3">
+          <div class="surface-card p-4 md:p-5 space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -265,7 +284,7 @@
         {/if}
 
         {#if stockValue}
-          <div class="card p-4 space-y-3">
+          <div class="surface-card p-4 md:p-5 space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -300,14 +319,14 @@
       </div>
 
       <!-- ── §C Performance Trend ───────────────────────────────────────── -->
-      <div class="card p-4 space-y-4">
+      <div class="surface-card p-4 md:p-5 space-y-4">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--primary) 14%, transparent)">
               <TrendingUp size={14} strokeWidth={2} style="color:var(--primary)" />
             </div>
-            <h3 class="font-semibold text-sm">
+            <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">
               {activeMetric === 'revenue' ? 'Revenue Trend'
                 : activeMetric === 'transactions' ? 'Transaction Volume'
                 : 'Average Order Value'}
@@ -349,7 +368,7 @@
                 <BarChart3 size={14} strokeWidth={2} style="color:var(--cobalt)" />
               </div>
               <div>
-                <h3 class="font-semibold text-sm">12-Month Trend</h3>
+                <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">12-Month Trend</h3>
                 <p class="text-[10px] text-[var(--text-3)]">Rolling yearly revenue</p>
               </div>
             </div>
@@ -370,13 +389,13 @@
         </div>
 
         <!-- Payment Methods (1/3) -->
-        <div class="card p-4 space-y-4">
+        <div class="surface-card p-4 md:p-5 space-y-4">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--primary) 14%, transparent)">
               <PieChart size={14} strokeWidth={2} style="color:var(--primary)" />
             </div>
-            <h3 class="font-semibold text-sm">Payment Methods</h3>
+            <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Payment Methods</h3>
           </div>
           {#if paymentRows.length === 0}
             <p class="text-xs text-[var(--text-3)] py-8 text-center">No payments in this period.</p>
@@ -408,14 +427,14 @@
 
       <!-- ── §E Time Distribution ───────────────────────────────────────── -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="card p-4 space-y-4">
+        <div class="surface-card p-4 md:p-5 space-y-4">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--teal) 14%, transparent)">
               <Clock size={14} strokeWidth={2} style="color:var(--teal)" />
             </div>
             <div>
-              <h3 class="font-semibold text-sm">Sales by Hour</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Sales by Hour</h3>
               <p class="text-[10px] text-[var(--text-3)]">0–23</p>
             </div>
           </div>
@@ -431,14 +450,14 @@
           </div>
         </div>
 
-        <div class="card p-4 space-y-4">
+        <div class="surface-card p-4 md:p-5 space-y-4">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--gold) 14%, transparent)">
               <Calendar size={14} strokeWidth={2} style="color:var(--gold)" />
             </div>
             <div>
-              <h3 class="font-semibold text-sm">Sales by Day</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Sales by Day</h3>
               <p class="text-[10px] text-[var(--text-3)]">Mon–Sun</p>
             </div>
           </div>
@@ -455,7 +474,7 @@
       </div>
 
       <!-- ── §F Product Performance ─────────────────────────────────────── -->
-      <div class="card p-4 space-y-4">
+      <div class="surface-card p-4 md:p-5 space-y-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -463,7 +482,7 @@
               <Package size={14} strokeWidth={2} style="color:var(--primary)" />
             </div>
             <div>
-              <h3 class="font-semibold text-sm">Top Products</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Top Products</h3>
               <p class="text-[10px] text-[var(--text-3)]">By revenue this period</p>
             </div>
           </div>
@@ -511,7 +530,7 @@
 
       <!-- ── §G Categories ──────────────────────────────────────────────── -->
       {#if (analytics.categories ?? []).length > 0}
-        <div class="card p-4 space-y-4">
+        <div class="surface-card p-4 md:p-5 space-y-4">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -519,7 +538,7 @@
                 <BarChart3 size={14} strokeWidth={2} style="color:var(--cobalt)" />
               </div>
               <div>
-                <h3 class="font-semibold text-sm">Categories</h3>
+                <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Categories</h3>
                 <p class="text-[10px] text-[var(--text-3)]">Revenue, units, and margin by category</p>
               </div>
             </div>
@@ -564,14 +583,14 @@
 
       <!-- ── §H Customers ───────────────────────────────────────────────── -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="card p-4 space-y-4">
+        <div class="surface-card p-4 md:p-5 space-y-4">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--primary) 14%, transparent)">
               <Users size={14} strokeWidth={2} style="color:var(--primary)" />
             </div>
             <div>
-              <h3 class="font-semibold text-sm">Customers</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Customers</h3>
               <p class="text-[10px] text-[var(--text-3)]">{uniqueBuyers} unique buyers</p>
             </div>
           </div>
@@ -595,14 +614,14 @@
           <p class="text-[10px] text-[var(--text-3)] text-center">Tiers based on lifetime spend</p>
         </div>
 
-        <div class="card p-4 md:col-span-2 space-y-4">
+        <div class="surface-card p-4 md:p-5 md:col-span-2 space-y-4">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--gold) 14%, transparent)">
               <Trophy size={14} strokeWidth={2} style="color:var(--gold)" />
             </div>
             <div>
-              <h3 class="font-semibold text-sm">Top Customers</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Top Customers</h3>
               <p class="text-[10px] text-[var(--text-3)]">By spend this period</p>
             </div>
           </div>
@@ -638,7 +657,7 @@
       </div>
 
       <!-- ── §I Heatmap ─────────────────────────────────────────────────── -->
-      <div class="card p-4 space-y-4">
+      <div class="surface-card p-4 md:p-5 space-y-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -646,7 +665,7 @@
               <Activity size={14} strokeWidth={2} style="color:var(--primary)" />
             </div>
             <div>
-              <h3 class="font-semibold text-sm">Busiest Times</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Busiest Times</h3>
               <p class="text-[10px] text-[var(--text-3)]">Average revenue by hour-of-day and day-of-week</p>
             </div>
           </div>
