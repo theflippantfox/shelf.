@@ -47,9 +47,9 @@
   /* ── chart data ────────────────────────────────────────────────────────── */
   const trendLabels = $derived(trend.map((t: any) => t.label));
 
-  // New AreaChart treats `currency` yFormat as data-in-cents (divides by 100).
-  // The trend values are already in major units (page-side already divided
-  // by 100), so we pass them through as 'number' for currency display.
+  // Trend values are in minor units (cents/paise), straight from sales.total.
+  // The AreaChart with yFormat="currency" + currencyMode default (false)
+  // divides by 100 once for display, which is what we want.
   const trendDatasets = $derived(
     activeMetric === 'revenue'
       ? [{
@@ -64,23 +64,26 @@
   );
 
   const hourlyLabels = $derived(analytics?.hourly?.map((h: any) => h.label) ?? []);
-  const hourlyData   = $derived(analytics?.hourly?.map((h: any) => (h.revenue ?? 0) / 100) ?? []);
+  const hourlyData   = $derived(analytics?.hourly?.map((h: any) => h.revenue ?? 0) ?? []);
   const weekdayLabels = $derived(analytics?.weekday?.map((w: any) => w.label) ?? []);
-  const weekdayData   = $derived(analytics?.weekday?.map((w: any) => (w.revenue ?? 0) / 100) ?? []);
+  const weekdayData   = $derived(analytics?.weekday?.map((w: any) => w.revenue ?? 0) ?? []);
   const paymentRows = $derived(analytics?.paymentMethods ?? []);
   const customerTiers = $derived(analytics?.customers?.tiers);
   const leaderboard = $derived(analytics?.customers?.leaderboard ?? []);
 
+  // Heatmap values are raw minor units (cents/paise). The Heatmap chart
+  // divides by 100 itself when its currencyMode prop is true; we use the
+  // default (false) so no division happens here.
   const heatmapValues = $derived(
     (analytics?.heatmap ?? []).map((row: any[]) =>
-      row.map((v: number) => (v ?? 0) / 100),
+      row.map((v: number) => v ?? 0),
     ),
   );
 
   /* ── monthly chart: last 12 months (rolling) ───────────────────────────── */
   const monthlyWithData = $derived(monthlyTrend.filter((m: any) => (m.revenue ?? 0) > 0));
   const monthlyLabels   = $derived(monthlyWithData.map((m: any) => m.label));
-  const monthlyRevData  = $derived(monthlyWithData.map((m: any) => (m.revenue ?? 0) / 100));
+  const monthlyRevData  = $derived(monthlyWithData.map((m: any) => m.revenue ?? 0));
 
   /* ── derived summary chips ─────────────────────────────────────────────── */
   const topProduct   = $derived(analytics?.products?.byRevenue?.[0] ?? null);
@@ -677,7 +680,7 @@
             <span>More</span>
           </div>
         </div>
-        <Heatmap values={heatmapValues} />
+        <Heatmap values={heatmapValues} currencyMode />
       </div>
 
     </div>
