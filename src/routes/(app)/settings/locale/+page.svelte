@@ -11,7 +11,7 @@
   const shop = data.shop as any;
 
   let timezone    = $state(shop.timezone      ?? 'UTC');
-  let currency    = $state(shop.currency_code ?? 'USD');
+  let currency    = $state(shop.currency_code ?? 'INR');
   let date_format = $state(shop.date_format   ?? 'D MMM YYYY');
   let time_format = $state(shop.time_format   ?? '12h');
   let saving      = $state(false);

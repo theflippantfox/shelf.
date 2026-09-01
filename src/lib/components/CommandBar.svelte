@@ -4,6 +4,7 @@
   import { fly, fade } from 'svelte/transition';
   import { Search, Plus, BarChart3, Package, Users, Truck, History, Settings, Home, LogOut, Sun, Moon, ArrowRight } from 'lucide-svelte';
   import DynamicIcon from './ui/DynamicIcon.svelte';
+  import { formatCurrency } from '$lib/utils/format';
 
   type CmdAction = {
     id:        string;
@@ -54,7 +55,7 @@
       .map((p: any) => ({
         id:        'p-' + p.id,
         label:     p.name,
-        hint:      `₦${((p.price ?? 0) / 100).toLocaleString('en-NG', { maximumFractionDigits: 2 })} · ${p.qty ?? 0} in stock`,
+        hint:      `${formatCurrency(p.price ?? 0)} · ${p.qty ?? 0} in stock`,
         group:     'Products',
         icon:      p.category?.icon ?? 'Package',
         kind:      'search-product',

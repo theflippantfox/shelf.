@@ -2,6 +2,7 @@
   import type { Snippet } from 'svelte';
   import DynamicIcon from './DynamicIcon.svelte';
   import NumberFlow from './NumberFlow.svelte';
+  import { getCurrencySymbol } from '$lib/utils/format';
 
   let {
     label,
@@ -12,7 +13,9 @@
     iconColor = 'var(--primary)',
     /** When true, value is divided by 100 and prefixed with currency symbol. */
     isCurrency = false,
-    currencySymbol = '₦',
+    /** Currency symbol used when isCurrency is true. Defaults to the active
+     *  shop's currency symbol (read from the format utility). */
+    currencySymbol,
     /** Pre-formatted value overrides the number animation. */
     display,
     trend,
@@ -52,12 +55,14 @@
     '–'
   );
 
+  const symbol = $derived(currencySymbol ?? getCurrencySymbol());
+
   const fmt = $derived(
     display
       ? display
       : (isCurrency && value != null)
-        ? (n: number) => `${currencySymbol}${Math.round(n / 100).toLocaleString('en-US')}`
-        : (n: number) => Math.round(n).toLocaleString('en-US')
+        ? (n: number) => `${symbol}${Math.round(n / 100).toLocaleString()}`
+        : (n: number) => Math.round(n).toLocaleString()
   );
 </script>
 

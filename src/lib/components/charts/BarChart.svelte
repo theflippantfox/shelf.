@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { Chart as ChartType, ChartConfiguration, TooltipItem } from 'chart.js';
+  import { formatCurrency, formatCurrencyMajor } from '$lib/utils/format';
 
   /**
    * BarChart — premium bar chart with custom HTML tooltip.
@@ -56,8 +57,10 @@
   }
   function fmt(n: number): string {
     if (yFormat === 'currency') {
-      const major = n / 100;
-      return '₦' + major.toLocaleString('en-US', { maximumFractionDigits: 1 });
+      // Chart data is already in major units when currencyMode is set;
+      // otherwise we expect minor units (cents) and divide by 100.
+      const major = currencyMode ? n : n / 100;
+      return formatCurrencyMajor(major, { decimals: 1 });
     }
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
     if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
@@ -65,10 +68,10 @@
   }
   function tooltipFmt(n: number): string {
     if (yFormat === 'currency') {
-      const major = n / 100;
-      return '₦' + major.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      const major = currencyMode ? n : n / 100;
+      return formatCurrency(major);
     }
-    return n.toLocaleString('en-US');
+    return n.toLocaleString();
   }
 
   // Custom HTML tooltip — styled to match the rest of the app.

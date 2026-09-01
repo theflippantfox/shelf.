@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { Chart as ChartType, ChartConfiguration } from 'chart.js';
+  import { formatCurrency, formatCurrencyMajor } from '$lib/utils/format';
 
   /**
    * HBarChart — horizontal bar chart for product/category leaderboards.
@@ -42,10 +43,12 @@
 
   function fmt(n: number): string {
     if (yFormat === 'currency') {
-      const major = n / 100;
-      if (Math.abs(major) >= 1_000_000) return '₦' + (major / 1_000_000).toFixed(1) + 'M';
-      if (Math.abs(major) >= 1_000)     return '₦' + (major / 1_000).toFixed(1) + 'k';
-      return '₦' + major.toLocaleString('en-US', { maximumFractionDigits: 0 });
+      const major = currencyMode ? n : n / 100;
+      const abs = Math.abs(major);
+      const sign = major < 0 ? '-' : '';
+      if (abs >= 1_000_000) return sign + formatCurrencyMajor(abs / 1_000_000, { decimals: 1 }) + 'M';
+      if (abs >= 1_000)     return sign + formatCurrencyMajor(abs / 1_000,     { decimals: 1 }) + 'k';
+      return sign + formatCurrencyMajor(abs, { decimals: 0 });
     }
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
     if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
@@ -53,9 +56,10 @@
   }
   function tooltipFmt(n: number): string {
     if (yFormat === 'currency') {
-      return '₦' + (n / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+      const major = currencyMode ? n : n / 100;
+      return formatCurrency(major);
     }
-    return n.toLocaleString('en-US');
+    return n.toLocaleString();
   }
 
   function externalTooltip(context: any) {

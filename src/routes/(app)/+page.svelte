@@ -127,38 +127,38 @@
     />
   </div>
 
-  <!-- ── Quick Actions (mobile nav) + Today's Sales ───────────────────── -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-
-    <!-- Quick actions card: primary nav for mobile (sidebar is desktop-only,
-         bottom-nav is fixed to 5 items). On desktop it's a redundant cluster
-         of links so we hide it. -->
-    <div class="surface-card p-4 md:p-5 md:hidden">
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-          <span class="w-1.5 h-1.5 rounded-full" style="background:var(--primary)"></span>
-          <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Quick actions</h3>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-2">
-        {#each actions as a}
-          <a
-            href={a.href}
-            class="surface-card interactive p-3.5 no-glow group"
-          >
-            <div class="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110"
-                 style="background: var(--surface2); color: var(--text-2)">
-              <DynamicIcon name={a.icon} size={16} />
-            </div>
-            <p class="text-[12.5px] font-semibold leading-tight text-[var(--text)]">{a.label}</p>
-          </a>
-        {/each}
+  <!-- Quick actions card: mobile nav. Hidden on desktop (md:hidden) so it
+       contributes 0 width to the layout. Sits as its own surface between
+       the stats area and Today's Sales. -->
+  <div class="surface-card p-4 md:p-5 mb-3 md:hidden">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:var(--primary)"></span>
+        <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Quick actions</h3>
       </div>
     </div>
 
-    <!-- Today's Sales -->
-    <div class="surface-card p-4 md:p-5 md:col-span-2">
+    <div class="grid grid-cols-2 gap-2">
+      {#each actions as a}
+        <a
+          href={a.href}
+          class="surface-card interactive p-3.5 no-glow group"
+        >
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110"
+               style="background: var(--surface2); color: var(--text-2)">
+            <DynamicIcon name={a.icon} size={16} />
+          </div>
+          <p class="text-[12.5px] font-semibold leading-tight text-[var(--text)]">{a.label}</p>
+        </a>
+      {/each}
+    </div>
+  </div>
+
+  <!-- Today's Sales: full-width on desktop (where Quick Actions is hidden),
+       and stacked above the rest. On mobile, the Quick Actions card sits
+       directly above this card as a separate surface. -->
+  <div class="mb-6">
+    <div class="surface-card p-4 md:p-5">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
           <ShoppingBag size={15} style="color:var(--primary)" />

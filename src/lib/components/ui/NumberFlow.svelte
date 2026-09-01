@@ -13,7 +13,7 @@
   let {
     value,
     duration = 700,
-    format = (n: number) => Math.round(n).toLocaleString('en-US'),
+    format = (n: number) => Math.round(n).toLocaleString(),
   }: {
     value: number;
     duration?: number;

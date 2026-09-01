@@ -7,10 +7,12 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 
-// These are set by the shop store at runtime
+// These are set by the shop store at runtime. Defaults below are used only
+// before a shop is loaded (e.g. during SSR for unauthenticated pages) and
+// are INR — change here to update the universal fallback.
 let _timezone  = 'UTC';
-let _currency  = 'USD';
-let _locale    = 'en-US';
+let _currency  = 'INR';
+let _locale    = 'en-IN';
 let _dateFormat = 'D MMM YYYY';
 let _timeFormat = '12h';
 
@@ -122,12 +124,32 @@ function trimZeros(s: string): string {
  *  Falls back to a manual prefix when the locale doesn't expose a symbol.
  */
 export function formatCurrencyCompact(minorUnits: number): string {
-  let symbol = _currency;
+  return `${getCurrencySymbol()}${formatCompact(minorUnits / 100)}`;
+}
+
+/** Return the active shop's currency symbol (e.g. "₹", "$", "€").
+ *  Used by chart components and the command bar where the shop's full
+ *  formatter isn't available. Reads the live Intl formatter when possible;
+ *  falls back to the active currency code if the locale doesn't expose a
+ *  dedicated symbol. */
+export function getCurrencySymbol(): string {
   try {
     const parts = new Intl.NumberFormat(_locale, { style: 'currency', currency: _currency })
       .formatToParts(0);
     const sym = parts.find(p => p.type === 'currency')?.value;
-    if (sym) symbol = sym;
+    if (sym) return sym;
   } catch { /* keep _currency as text fallback */ }
-  return `${symbol}${formatCompact(minorUnits / 100)}`;
+  return _currency;
+}
+
+/** Format a major-units currency value (already in the shop's major unit,
+ *  NOT minor) using the active shop's currency symbol. 1234.5 → "₹1,234.50".
+ *  Used by chart axes and tooltips where the chart data is already in major
+ *  units to avoid the divide-by-100 that Intl currency formatting applies. */
+export function formatCurrencyMajor(major: number, opts: { decimals?: number } = {}): string {
+  const decimals = opts.decimals ?? 0;
+  return `${getCurrencySymbol()}${major.toLocaleString(_locale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
 }

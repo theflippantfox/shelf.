@@ -7,10 +7,16 @@
   import Modal from "$lib/components/ui/Modal.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import { toasts } from "$lib/stores/toast.svelte";
-  import { formatCurrency } from "$lib/utils/format";
+  import { currentShop } from "$lib/stores/shop.svelte";
+  import { formatCurrency, getCurrencySymbol } from "$lib/utils/format";
   import { Trash2, Plus, Search, PackagePlus, ArrowLeft } from "lucide-svelte";
 
   let { data } = $props();
+
+  // Currency symbol for input labels (e.g. "Unit cost (₹)"). Reads from
+  // the active shop store; falls back to the format utility's symbol which
+  // is set by setFormatLocale at app init.
+  const sym = $derived(currentShop.currencySymbol || getCurrencySymbol());
 
   // ── Option lists for selects ──────────────────────────────────────────────
   // Convert raw Supabase rows → { value, label } that our Select expects
@@ -38,14 +44,14 @@
   let notes = $state("");
 
   // ── Line items ────────────────────────────────────────────────────────────
-  // ALL monetary values in state are DISPLAY units (e.g. 4500 = ₦4,500).
+  // ALL monetary values in state are DISPLAY units (e.g. 4500 = ₹4,500).
   // We multiply × 100 → minor units only when posting to the API.
   interface LineItem {
     productId: string;
     productName: string;
     productSku: string;
     qtyOrdered: number;
-    unitCostDisp: number; // ₦ display value the user types/sees
+    unitCostDisp: number; // {shop currency} display value the user types/sees
     lineTotalDisp: number; // qtyOrdered × unitCostDisp
     isNew: boolean;
   }
@@ -53,7 +59,7 @@
   let items = $state<LineItem[]>([]);
 
   // ── Totals (all display units) ────────────────────────────────────────────
-  let taxDisp = $state(0); // user types ₦ display value
+  let taxDisp = $state(0); // user types {shop currency} display value
   let shippingDisp = $state(0);
   const subtotalDisp = $derived(items.reduce((s, i) => s + i.lineTotalDisp, 0));
   const totalDisp = $derived(
@@ -443,7 +449,7 @@
               <tr>
                 <th>Product</th>
                 <th class="text-center w-24">Qty ordered</th>
-                <th class="text-center w-36">Unit cost (₦)</th>
+                <th class="text-center w-36">Unit cost ({sym})</th>
                 <th class="text-right w-32">Line total</th>
                 <th class="w-10"></th>
               </tr>
@@ -473,7 +479,7 @@
                     />
                   </td>
                   <td class="text-center">
-                    <!-- User types ₦ display amount, e.g. 4500 for ₦4,500 -->
+                    <!-- User types {shop currency} display amount, e.g. 4500 for ₹4,500 -->
                     <input
                       type="number"
                       value={item.unitCostDisp}
@@ -534,7 +540,7 @@
                   />
                 </div>
                 <div class="input-group">
-                  <label class="input-label">Unit cost (₦)</label>
+                  <label class="input-label">Unit cost ({sym})</label>
                   <input
                     type="number"
                     value={item.unitCostDisp}
@@ -570,7 +576,7 @@
         </div>
 
         <div class="flex items-center justify-between gap-3 text-xs">
-          <span class="text-[var(--text-3)] flex-shrink-0">Tax (₦)</span>
+          <span class="text-[var(--text-3)] flex-shrink-0">Tax ({sym})</span>
           <input
             type="number"
             bind:value={taxDisp}
@@ -582,7 +588,7 @@
         </div>
 
         <div class="flex items-center justify-between gap-3 text-xs">
-          <span class="text-[var(--text-3)] flex-shrink-0">Shipping (₦)</span>
+          <span class="text-[var(--text-3)] flex-shrink-0">Shipping ({sym})</span>
           <input
             type="number"
             bind:value={shippingDisp}
@@ -643,13 +649,13 @@
     />
     <div class="grid grid-cols-2 gap-3">
       <Input
-        label="Selling price (₦)"
+        label="Selling price ({sym})"
         type="number"
         bind:value={newProd.price}
         placeholder="0.00"
       />
       <Input
-        label="Unit cost (₦)"
+        label="Unit cost ({sym})"
         type="number"
         bind:value={newProd.cost_price}
         placeholder="0.00"

@@ -6,9 +6,9 @@
   import Select from '$lib/components/ui/Select.svelte';
   import Button from '$lib/components/ui/Button.svelte';
 
-  let country  = $state('NG');
-  let timezone = $state('Africa/Lagos');
-  let currency = $state('NGN');
+  let country  = $state('IN');
+  let timezone = $state('Asia/Kolkata');
+  let currency = $state('INR');
   let loading  = $state(false);
 
   // Auto-fill from country selection
@@ -27,7 +27,7 @@
         timezone,
         currency_code:   currency,
         currency_symbol: cur?.symbol ?? currency,
-        currency_locale: cur?.locale ?? 'en-US',
+        currency_locale: cur?.locale ?? 'en-IN',
       }),
     });
     goto('/onboarding/appearance');

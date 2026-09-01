@@ -57,12 +57,12 @@
     {#if taxInclusive}
       <p class="text-xs text-[var(--text-3)] bg-[var(--surface2)] rounded-lg p-3">
         Tax will be extracted from the sale total rather than added on top.
-        e.g. ₦1,000 at 7.5% → tax = ₦69.77, net = ₦930.23.
+        e.g. ₹1,000 at 7.5% → tax = ₹69.77, net = ₹930.23.
       </p>
     {:else}
       <p class="text-xs text-[var(--text-3)] bg-[var(--surface2)] rounded-lg p-3">
         Tax will be added on top of the sale total at checkout.
-        e.g. ₦1,000 + 7.5% tax = ₦1,075.00.
+        e.g. ₹1,000 + 7.5% tax = ₹1,075.00.
       </p>
     {/if}
     <div class="flex justify-end">

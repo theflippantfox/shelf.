@@ -6,12 +6,12 @@ class ShopStore {
 
   get data() { return this.#data; }
 
-  get currency()    { return this.#data?.currency_code    ?? 'USD'; }
-  get currencySymbol() { return this.#data?.currency_symbol ?? '$'; }
+  get currency()    { return this.#data?.currency_code    ?? 'INR'; }
+  get currencySymbol() { return this.#data?.currency_symbol ?? '₹'; }
   get timezone()    { return this.#data?.timezone         ?? 'UTC'; }
   get theme()       { return this.#data?.theme            ?? 'system'; }
-  get primaryColor(){ return this.#data?.primary_color    ?? '#7B4F8A'; }
-  get sidebarBg()   { return this.#data?.sidebar_bg       ?? '#150F1C'; }
+  get primaryColor(){ return this.#data?.primary_color    ?? '#0B0B0F'; }
+  get sidebarBg()   { return this.#data?.sidebar_bg       ?? '#0B0B0F'; }
   get taxRate()     { return this.#data?.tax_rate         ?? 0; }
   get taxInclusive(){ return this.#data?.tax_inclusive     ?? false; }
   get taxName()     { return this.#data?.tax_name          ?? 'Tax'; }
@@ -21,8 +21,8 @@ class ShopStore {
     if (shop) {
       setFormatLocale({
         timezone:   shop.timezone   ?? 'UTC',
-        currency:   shop.currency_code   ?? 'USD',
-        locale:     shop.currency_locale ?? 'en-US',
+        currency:   shop.currency_code   ?? 'INR',
+        locale:     shop.currency_locale ?? 'en-IN',
         dateFormat: shop.date_format ?? 'D MMM YYYY',
         timeFormat: shop.time_format ?? '12h',
       });

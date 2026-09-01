@@ -348,7 +348,7 @@
         label="Currency code"
         bind:value={form.currency_code}
         placeholder="USD"
-        hint="e.g. USD, NGN, GBP"
+        hint="e.g. USD, INR, GBP"
       />
     </div>
     <div class="grid grid-cols-2 gap-3">
@@ -367,7 +367,7 @@
         bind:value={form.notes}
         class="input"
         rows="2"
-        placeholder="e.g. Minimum order ₦50,000"
+        placeholder="e.g. Minimum order ₹50,000"
       ></textarea>
     </div>
   </form>

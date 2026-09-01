@@ -1,4 +1,5 @@
 import { redirect } from '@sveltejs/kit';
+import { setFormatLocale } from '$lib/utils/format';
 
 const ONBOARDING_STEPS: Record<string, string> = {
   account:    '/onboarding/account',
@@ -26,6 +27,20 @@ export async function load({ locals, url }) {
     const step    = shop.onboarding_step ?? 'shop';
     const stepUrl = ONBOARDING_STEPS[step] ?? '/onboarding/shop';
     if (!url.pathname.startsWith('/onboarding')) throw redirect(302, stepUrl);
+  }
+
+  // Initialise the format utility on the server so the first paint of every
+  // (app) page uses the shop's actual currency/locale instead of the default.
+  // The client-side currentShop.init() call in +layout.svelte's $effect.pre
+  // would only re-render after hydration, leaving the SSR HTML mismatched.
+  if (shop) {
+    setFormatLocale({
+      timezone:   (shop as any).timezone        ?? 'UTC',
+      currency:   (shop as any).currency_code   ?? 'INR',
+      locale:     (shop as any).currency_locale ?? 'en-IN',
+      dateFormat: (shop as any).date_format     ?? 'D MMM YYYY',
+      timeFormat: (shop as any).time_format     ?? '12h',
+    });
   }
 
   return {

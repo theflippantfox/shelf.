@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatCurrency } from '$lib/utils/format';
   /**
    * Heatmap — 7x24 grid showing revenue by day-of-week × hour.
    *
@@ -33,9 +34,9 @@
 
   function tooltip(value: number, day: string, hour: string): string {
     if (currencyMode) {
-      return `${day} ${hour}: ₦${(value / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+      return `${day} ${hour}: ${formatCurrency(value)}`;
     }
-    return `${day} ${hour}: ${value.toLocaleString('en-US')}`;
+    return `${day} ${hour}: ${value.toLocaleString()}`;
   }
 
   // Show hour labels at 0, 6, 12, 18

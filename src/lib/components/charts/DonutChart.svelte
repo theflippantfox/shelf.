@@ -77,7 +77,7 @@
                 const v = ctx.parsed ?? 0;
                 const total = (ctx.dataset.data as number[]).reduce((s, x) => s + (x ?? 0), 0);
                 const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
-                return ` ${ctx.label}: ${v.toLocaleString('en-US')} (${pct}%)`;
+                return ` ${ctx.label}: ${v.toLocaleString()} (${pct}%)`;
               },
             },
           },
