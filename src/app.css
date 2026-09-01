@@ -407,13 +407,23 @@ textarea.input { resize: vertical; min-height: 80px; }
 
 /* ─── Bottom Nav ────────────────────────────────────── */
 .bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0;
+  position: fixed;
+  /* `bottom: 0` is anchored to the *layout* viewport on mobile
+   * browsers, which leaves the nav hovering above the URL bar /
+   * iOS bottom bar / soft keyboard. We track the visual viewport
+   * in JS (see BottomNav.svelte) and write the difference to
+   * --vv-bottom, which lifts the nav to the true visible bottom. */
+  bottom: var(--vv-bottom, 0px);
+  left: 0; right: 0;
   background: var(--surface); border-top: 1px solid var(--border);
   z-index: 40;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   padding-top: 8px; box-shadow: 0 -2px 12px 0 rgb(0 0 0 / 0.08);
   backdrop-filter: blur(12px);
   background: color-mix(in srgb, var(--surface) 95%, transparent);
+  /* No transition on `bottom` — the JS handler updates the
+   * --vv-bottom variable on every visualViewport event, so the
+   * nav tracks the visible bottom in real time without lag. */
 }
 @media (max-width: 767px) {
   .bottom-nav { display: flex; align-items: flex-end; }
