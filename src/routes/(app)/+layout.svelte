@@ -42,9 +42,11 @@
 <svelte:head><title>Shëlf</title></svelte:head>
 <Sidebar />
 <BottomNav />
-<div class="app-main min-h-screen">
+<div class="app-main min-h-screen flex flex-col">
   <Header onOpenCommandBar={() => (cmdOpen = true)} />
-  {@render children()}
+  <main class="page-shell flex-1">
+    {@render children()}
+  </main>
 </div>
 <Toast />
 <OfflineIndicator />

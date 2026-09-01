@@ -237,7 +237,7 @@
 
 <svelte:head><title>Inventory · Shëlf</title></svelte:head>
 
-<PageShell>
+<div class="fade-up">
   <!-- Header -->
   <div class="flex items-end justify-between gap-3 mb-4">
     <div class="flex-1 min-w-0">
@@ -431,7 +431,7 @@
       {/each}
     </div>
   {/if}
-</PageShell>
+</div>
 
 <Modal bind:open={showAdd} title={editTarget ? 'Edit product' : 'Add product'} maxWidth="max-w-lg">
   <form onsubmit={(e) => { e.preventDefault(); saveProduct(); }} class="flex flex-col gap-3">

@@ -56,8 +56,6 @@
   </div>
 </header>
 
-<div class="page-shell">
-
 <div class="grid grid-cols-1 lg:grid-cols-[1fr,280px] gap-5 items-start">
 
   <!-- LEFT: palette grid -->
@@ -194,5 +192,4 @@
       Live preview is applied immediately.<br/> Save to make it stick for everyone.
     </p>
   </aside>
-</div>
 </div>

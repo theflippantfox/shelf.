@@ -19,22 +19,36 @@
 
   const alertCount = $derived(inventory.alertCount);
 
-  const PAGE_TITLES: Record<string, string> = {
-    "/": "Dashboard",
-    "/sale": "Point of Sale",
-    "/inventory": "Inventory",
-    "/customers": "Customers",
-    "/history": "Sales History",
-    "/analytics": "Analytics",
-    "/settings": "Settings",
+  // (label, href) per top-level section — used to build the breadcrumb
+  // on the second-level pages (e.g. /settings/shop → "Settings / Shop details").
+  const SECTION_TITLES: Record<string, [string, string]> = {
+    "/":            ["Dashboard", "/"],
+    "/sale":        ["Point of Sale", "/sale"],
+    "/inventory":   ["Inventory", "/inventory"],
+    "/customers":   ["Customers", "/customers"],
+    "/history":     ["History", "/history"],
+    "/analytics":   ["Analytics", "/analytics"],
+    "/settings":    ["Settings", "/settings"],
+    "/restocking":  ["Restocking", "/restocking"],
   };
 
-  const pageTitle = $derived(() => {
+  // Derive a [parentLabel?, parentHref?, currentLabel] triple from
+  // the current pathname.
+  const crumbs = $derived.by(() => {
     const path = $page.url.pathname;
-    for (const [route, label] of Object.entries(PAGE_TITLES)) {
-      if (route === "/" ? path === "/" : path.startsWith(route)) return label;
-    }
-    return "Shëlf";
+    // Walk from longest matching section to shortest
+    const matches = Object.entries(SECTION_TITLES)
+      .filter(([route]) => route === "/" ? path === "/" : path.startsWith(route))
+      .sort((a, b) => b[0].length - a[0].length);
+
+    if (matches.length === 0) return null;
+    const [route, [label, href]] = matches[0];
+    // Are we on a child of this section?
+    if (path === route) return { parent: null, current: label };
+    // Build the child name from the last path segment
+    const child = path.split("/").filter(Boolean).pop() ?? "";
+    const pretty = child.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+    return { parent: { label, href }, current: pretty };
   });
 
   let dropdownOpen = $state(false);
@@ -60,9 +74,23 @@
 <svelte:window onclick={handleClickOutside} />
 
 <header
-  class="sticky top-0 z-30 bg-[var(--bg)] border-b border-[var(--border)] px-4 md:px-6 h-14 flex items-center gap-3"
+  class="sticky top-0 z-30 bg-[var(--bg)]/85 backdrop-blur-md border-b border-[var(--border)] px-4 md:px-6 h-12 flex items-center gap-3"
 >
-  <h1 class="page-title flex-1 text-sm font-semibold">{pageTitle()}</h1>
+  {#if crumbs}
+    <nav class="flex-1 flex items-center gap-1.5 min-w-0 text-[12.5px] font-medium" aria-label="Breadcrumb">
+      {#if crumbs.parent}
+        <a href={crumbs.parent.href} class="text-[var(--text-3)] hover:text-[var(--text)] transition-colors truncate">
+          {crumbs.parent.label}
+        </a>
+        <span class="text-[var(--text-3)] opacity-50" aria-hidden="true">/</span>
+        <span class="text-[var(--text)] font-semibold truncate">{crumbs.current}</span>
+      {:else}
+        <span class="text-[var(--text)] font-semibold truncate">{crumbs.current}</span>
+      {/if}
+    </nav>
+  {:else}
+    <span class="flex-1"></span>
+  {/if}
 
   <div class="flex items-center gap-1">
     <!-- Search / Command bar trigger -->

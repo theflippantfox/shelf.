@@ -8,7 +8,6 @@
   } from "$lib/stores/cart.svelte";
   import { toasts } from "$lib/stores/toast.svelte";
   import { formatCurrency, formatCurrencyCompact } from "$lib/utils/format";
-  import PageShell from "$lib/components/layout/PageShell.svelte";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Modal from "$lib/components/ui/Modal.svelte";
@@ -171,7 +170,7 @@
 
 <svelte:head><title>{isEdit ? 'Edit Sale' : 'New Sale'} · Shëlf</title></svelte:head>
 
-<PageShell>
+<div class="fade-up">
   <!-- Header row: title + customer + clear -->
   <div class="flex items-end justify-between gap-3 mb-4">
     <div class="min-w-0">
@@ -338,7 +337,7 @@
   {#if !cart.isEmpty}
     <div class="md:hidden" style="height: calc(6rem + env(safe-area-inset-bottom))"></div>
   {/if}
-</PageShell>
+</div>
 
 <!-- ─────────────────────────────────────────────────────────────────────────
   CART DRAWER (desktop: right-side panel, mobile: bottom-sheet)

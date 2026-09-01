@@ -1,5 +1,4 @@
 <script lang="ts">
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import KpiCard from '$lib/components/ui/KpiCard.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
@@ -46,7 +45,7 @@
   ] as const;
 </script>
 
-<PageShell>
+<div class="fade-up">
   <!-- Header -->
   <div class="flex items-end justify-between gap-3 mb-5">
     <div class="flex-1 min-w-0">
@@ -433,4 +432,4 @@
       {/if}
     </div>
   </div>
-</PageShell>
+</div>

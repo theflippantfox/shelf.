@@ -28,12 +28,9 @@
 
   <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
-    <p class="eyebrow">Settings</p>
     <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Shop details</h1>
   </div>
 </header>
-
-<div class="page-shell">
   <div class="surface-card p-4 md:p-5 flex flex-col gap-4 max-w-lg">
     <Input label="Shop name" bind:value={name} required />
     <Input label="Handle / slug" bind:value={slug}
@@ -42,4 +39,3 @@
       <Button onclick={save} loading={saving}>Save changes</Button>
     </div>
   </div>
-</div>

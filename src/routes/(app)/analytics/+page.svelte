@@ -1,5 +1,4 @@
 <script lang="ts">
-  import PageShell from "$lib/components/layout/PageShell.svelte";
   import { formatCurrency, formatCurrencyCompact } from "$lib/utils/format";
   import { goto } from "$app/navigation";
   import KpiCard from "$lib/components/ui/KpiCard.svelte";
@@ -122,7 +121,7 @@
 
 <svelte:head><title>Analytics · Shëlf</title></svelte:head>
 
-<PageShell>
+<div class="fade-up">
   <!-- Header -->
   <div class="flex items-end justify-between gap-3 mb-5">
     <div class="flex-1 min-w-0">
@@ -685,4 +684,4 @@
 
     </div>
   {/if}
-</PageShell>
+</div>
