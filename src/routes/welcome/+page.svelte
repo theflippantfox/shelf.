@@ -18,13 +18,10 @@
   </div>
 
   <div class="relative w-full max-w-md anim-in">
-    <!-- Brand mark -->
-    <div class="flex items-center justify-center gap-2 mb-8">
-      <div class="w-10 h-10 rounded-xl flex items-center justify-center"
-           style="background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, black)); box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--primary) 50%, transparent);">
-        <span class="font-serif text-white text-[20px] leading-none">S</span>
-      </div>
-      <span class="font-serif text-[26px] text-[var(--text)] tracking-tight">Shëlf<span class="text-[var(--primary)]">.</span></span>
+    <!-- Brand mark — matches the sidebar's exact structure -->
+    <div class="sidebar-brand" style="border-bottom: none; padding: 0 0 32px; justify-content: center; gap: 10px;">
+      <span class="sidebar-brand-mark">S</span>
+      <span class="sidebar-brand-text" style="color: var(--text);">Shëlf<span class="sidebar-brand-dot">.</span></span>
     </div>
 
     <div class="mb-6 text-center">

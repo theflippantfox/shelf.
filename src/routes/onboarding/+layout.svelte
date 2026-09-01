@@ -19,7 +19,11 @@
 
 <div class="min-h-screen bg-[var(--bg)] flex flex-col items-center justify-center p-4">
   <div class="w-full max-w-md">
-    <a href="/welcome" class="block text-center mb-6 font-serif text-2xl" style="color:var(--primary)">Shëlf.</a>
+    <!-- Brand mark — matches the sidebar's exact structure -->
+    <div class="sidebar-brand" style="border-bottom: none; padding: 0 0 24px; justify-content: center; gap: 10px;">
+      <span class="sidebar-brand-mark">S</span>
+      <span class="sidebar-brand-text" style="color: var(--text);">Shëlf<span class="sidebar-brand-dot">.</span></span>
+    </div>
 
     <div class="mb-2">
       <Stepper steps={STEPS} current={currentSlug} />
