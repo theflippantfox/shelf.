@@ -68,43 +68,71 @@
 <section class="mb-6">
   <div class="flex items-baseline justify-between mb-3">
     <h2 class="text-[13px] font-semibold text-[var(--text-2)] uppercase tracking-wide">Palette</h2>
-    <p class="text-[11px] text-[var(--text-3)]">{PALETTES.length} presets</p>
+    <p class="text-[11px] text-[var(--text-3)]">{PALETTES.length} presets · click to preview</p>
   </div>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
     {#each PALETTES as p (p.id)}
       {@const active = p.id === paletteId}
       {@const light  = p.light}
       <button
         type="button"
-        class="group relative text-left rounded-[14px] overflow-hidden border-2 transition-all {active ? 'shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_22%,transparent)]' : 'hover:-translate-y-0.5'}"
+        class="group relative text-left rounded-[12px] overflow-hidden border transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 {active ? 'shadow-[0_0_0_2px_var(--primary)]' : 'border-[var(--border)]'}"
         style="border-color:{active ? 'var(--primary)' : 'var(--border)'};"
         onclick={() => previewPalette(p.id)}
         aria-pressed={active}
       >
-        <!-- Mini-preview: 3 swatches + 2 mock surfaces -->
-        <div class="flex h-20">
-          <div class="flex-1 flex items-end p-2.5 gap-1.5" style="background:{light.surface};">
-            <div class="w-7 h-7 rounded-md" style="background:{light.primary};"></div>
-            <div class="w-7 h-7 rounded-md border" style="background:{light.surface2}; border-color:{light.border}"></div>
-            <div class="w-7 h-7 rounded-md" style="background:{p.accent};"></div>
+        <!-- Accent stripe — the palette's signature color, one row at the top -->
+        <div class="h-1.5" style="background:{p.accent};"></div>
+
+        <!-- Composition preview: primary button + text samples, on the surface -->
+        <div class="relative px-3.5 pt-4 pb-3" style="background:{light.surface};">
+          {#if active}
+            <span
+              class="absolute top-2 right-2 inline-flex items-center justify-center w-5 h-5 rounded-full"
+              style="background:var(--primary);color:var(--primary-fg);"
+              aria-hidden="true"
+            >
+              <Check size={11} strokeWidth={3.5} />
+            </span>
+          {/if}
+
+          <!-- Header line: text + secondary text, mimics a card heading -->
+          <div class="mb-2.5 space-y-1">
+            <div class="h-2 rounded-sm" style="background:{light.text}; width:72%; opacity:0.85;"></div>
+            <div class="h-1.5 rounded-sm" style="background:{light.text2}; width:48%; opacity:0.55;"></div>
           </div>
-          <div class="w-1/3 p-2.5 flex flex-col justify-end" style="background:{light.sidebarBg};">
-            <div class="h-1.5 rounded-sm mb-1" style="background:{p.accent}; width:60%"></div>
-            <div class="h-1 rounded-sm mb-1" style="background:{light.sidebarMuted}; width:80%; opacity:0.5"></div>
-            <div class="h-1 rounded-sm"        style="background:{light.sidebarMuted}; width:50%; opacity:0.5"></div>
+
+          <!-- Primary chip + neutral chips side by side -->
+          <div class="flex items-center gap-1.5">
+            <div
+              class="h-6 px-2 inline-flex items-center rounded-md text-[9px] font-bold uppercase tracking-wider"
+              style="background:{light.primary};color:{light.primaryFg};"
+            >Primary</div>
+            <div
+              class="h-6 px-2 inline-flex items-center rounded-md text-[9px] font-semibold"
+              style="background:{light.surface2};color:{light.text2};border:1px solid {light.border};"
+            >Chip</div>
+            <div
+              class="h-6 px-2 inline-flex items-center rounded-md text-[9px] font-semibold"
+              style="background:transparent;color:{light.text3};border:1px dashed {light.border};"
+            >Ghost</div>
           </div>
         </div>
 
+        <!-- Swatch strip — six key tokens, single horizontal row -->
+        <div class="flex h-6" aria-hidden="true">
+          <div class="flex-1" style="background:{light.bg};" title="bg"></div>
+          <div class="flex-1" style="background:{light.surface};" title="surface"></div>
+          <div class="flex-1" style="background:{light.surface2};" title="surface2"></div>
+          <div class="flex-1" style="background:{light.primary};" title="primary"></div>
+          <div class="flex-1" style="background:{p.accent};" title="accent"></div>
+          <div class="flex-1" style="background:{light.sidebarBg};" title="sidebar"></div>
+        </div>
+
         <!-- Meta -->
-        <div class="p-3" style="background:var(--surface);">
-          <div class="flex items-center gap-2">
-            <p class="text-[13px] font-semibold text-[var(--text)] flex-1 min-w-0 truncate">{p.name}</p>
-            {#if active}
-              <span class="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--primary-fg)] px-1.5 py-0.5 rounded" style="background:var(--primary);">
-                <Check size={10} strokeWidth={3} /> active
-              </span>
-            {/if}
-          </div>
+        <div class="px-3.5 py-2.5 flex items-baseline gap-1.5" style="background:var(--surface);">
+          <p class="text-[13px] font-semibold text-[var(--text)] truncate">{p.name}</p>
+          <p class="text-[10.5px] text-[var(--text-3)] truncate">· {p.tagline}</p>
         </div>
       </button>
     {/each}
