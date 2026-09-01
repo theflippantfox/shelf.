@@ -4,12 +4,14 @@
  * Profile row is auto-created by the on_auth_user_created DB trigger.
  */
 import { json } from '@sveltejs/kit';
-import { signUp, getCurrentUser } from '$lib/server/auth';
+import { signUp } from '$lib/server/auth';
 import { createServerClient } from '@supabase/ssr';
 import {
   PUBLIC_SUPABASE_URL,
   PUBLIC_SUPABASE_ANON_KEY,
 } from '$env/static/public';
+import { registerApiSchema } from '$lib/validators/schemas';
+import { parseBody } from '$lib/validators/parseBody';
 
 const COOKIE_OPTS = {
   path: '/',
@@ -20,14 +22,9 @@ const COOKIE_OPTS = {
 };
 
 export async function POST({ request, cookies }: import('@sveltejs/kit').RequestEvent) {
-  const { first_name, last_name, email, password } = await request.json();
-
-  if (!first_name?.trim())
-    return json({ error: 'First name is required' }, { status: 400 });
-  if (!email?.trim())
-    return json({ error: 'Email is required' }, { status: 400 });
-  if (!password || password.length < 8)
-    return json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  const parsed = await parseBody(request, registerApiSchema);
+  if (!parsed.ok) return parsed.response;
+  const { first_name, last_name, email, password } = parsed.data;
 
   try {
     const userId = await signUp(email, password, first_name.trim(), (last_name ?? '').trim());

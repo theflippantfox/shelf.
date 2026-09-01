@@ -9,6 +9,11 @@ import {
   PUBLIC_SUPABASE_URL,
   PUBLIC_SUPABASE_ANON_KEY,
 } from '$env/static/public';
+import { z } from 'zod';
+
+const body = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters').max(72),
+});
 
 const COOKIE_OPTS = {
   path: '/',
@@ -19,9 +24,16 @@ const COOKIE_OPTS = {
 };
 
 export async function POST({ request, cookies }: import('@sveltejs/kit').RequestEvent) {
-  const { password } = await request.json();
-  if (!password || password.length < 8) {
-    return json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  let password: string;
+  try {
+    const r = body.safeParse(await request.json());
+    if (!r.success) {
+      const msg = r.error.issues[0]?.message ?? 'Invalid input';
+      return json({ error: msg }, { status: 400 });
+    }
+    password = r.data.password;
+  } catch {
+    return json({ error: 'Invalid request body' }, { status: 400 });
   }
 
   try {

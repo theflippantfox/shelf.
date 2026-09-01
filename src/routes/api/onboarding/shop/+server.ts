@@ -1,5 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { adminClient } from '$lib/server/supabase';
+import { shopSchema } from '$lib/validators/schemas';
+import { parseBody } from '$lib/validators/parseBody';
 
 const SHOP_COOKIE = 'shelf-current-shop';
 
@@ -10,8 +12,9 @@ const SHOP_COOKIE = 'shelf-current-shop';
 export async function POST({ request, locals, cookies }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.user) return json({ error: 'Not authenticated' }, { status: 401 });
 
-  const { name, slug } = await request.json();
-  if (!name) return json({ error: 'Shop name required' }, { status: 400 });
+  const parsed = await parseBody(request, shopSchema);
+  if (!parsed.ok) return parsed.response;
+  const { name, slug } = parsed.data;
 
   // Slug — unique, lowercase, hyphens only
   const finalSlug = (slug || name)

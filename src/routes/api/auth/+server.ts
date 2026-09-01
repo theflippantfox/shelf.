@@ -12,6 +12,8 @@ import {
   PUBLIC_SUPABASE_URL,
   PUBLIC_SUPABASE_ANON_KEY,
 } from '$env/static/public';
+import { loginSchema } from '$lib/validators/schemas';
+import { parseBody } from '$lib/validators/parseBody';
 
 const COOKIE_OPTS = {
   path: '/',
@@ -35,10 +37,9 @@ function makeAuthClient(cookies: import('@sveltejs/kit').Cookies) {
 }
 
 export async function POST({ request, cookies }) {
-  const { email, password } = await request.json();
-  if (!email || !password) {
-    return json({ error: 'Email and password are required' }, { status: 400 });
-  }
+  const parsed = await parseBody(request, loginSchema);
+  if (!parsed.ok) return parsed.response;
+  const { email, password } = parsed.data;
 
   try {
     const supabase = makeAuthClient(cookies);

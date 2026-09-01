@@ -7,15 +7,17 @@
  * built-in invite (recovery link).
  */
 import { json } from '@sveltejs/kit';
-import { adminClient, userClient, userClientFromCtx } from '$lib/server/supabase';
+import { adminClient, userClientFromCtx } from '$lib/server/supabase';
+import { teamSchema } from '$lib/validators/schemas';
+import { parseBody } from '$lib/validators/parseBody';
 
 export async function POST({ cookies, request, locals }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop || !locals.user)
     return json({ error: 'No shop context' }, { status: 401 });
 
-  const { invites } = (await request.json()) as {
-    invites: { first_name: string; email: string; password: string; role: string }[];
-  };
+  const parsed = await parseBody(request, teamSchema);
+  if (!parsed.ok) return parsed.response;
+  const { invites } = parsed.data;
 
   const admin = adminClient();
   const supabase = userClientFromCtx({ cookies } as any);

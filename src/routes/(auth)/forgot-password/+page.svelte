@@ -1,22 +1,36 @@
 <script lang="ts">
   import Input  from '$lib/components/ui/Input.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import { forgotPasswordSchema, type FieldErrors } from '$lib/validators';
 
   let email   = $state('');
+  let fieldErrors: FieldErrors<{ email: string }> = $state({});
   let sent    = $state(false);
   let loading = $state(false);
-  let error   = $state('');
 
   async function submit() {
-    loading = true; error = '';
+    fieldErrors = {};
+    const parsed = forgotPasswordSchema.safeParse({ email });
+    if (!parsed.success) {
+      const flat: any = {};
+      for (const i of parsed.error.issues) {
+        const k = i.path[0]; if (typeof k === 'string' && !flat[k]) flat[k] = i.message;
+      }
+      fieldErrors = flat;
+      return;
+    }
+    loading = true;
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      // Always returns 200 (server doesn't leak account existence)
+      await fetch('/api/auth/forgot-password', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(parsed.data),
       });
-      if (res.ok) sent = true;
-      else { const d = await res.json(); error = d.error ?? 'Something went wrong'; }
-    } catch { error = 'Network error'; }
+      sent = true;
+    } catch {
+      // Even on error, show the sent state — don't leak which side failed
+      sent = true;
+    }
     loading = false;
   }
 </script>
@@ -36,21 +50,18 @@
       <p class="text-[12.5px] text-[var(--text-3)] mt-1.5 leading-relaxed">
         We sent a reset link to <strong class="text-[var(--text-2)] font-semibold">{email}</strong>
       </p>
+      <p class="text-[11px] text-[var(--text-3)] mt-3">
+        Didn't get it? Check spam, or <button class="text-[var(--primary)] hover:underline font-semibold" onclick={() => sent = false}>try again</button>.
+      </p>
     </div>
   {:else}
     <div class="mb-5">
       <h2 class="text-[18px] font-semibold text-[var(--text)] tracking-tight">Reset your password</h2>
       <p class="text-[12.5px] text-[var(--text-3)] mt-1">We'll send a reset link to your email.</p>
     </div>
-    {#if error}
-      <div class="bg-[var(--crimson-dim)] text-[var(--crimson-fg)] text-[12px] rounded-[10px] p-3 mb-4 flex items-start gap-2"
-           role="alert">
-        <span class="w-1 self-stretch rounded-full bg-[var(--crimson)] shrink-0"></span>
-        <span>{error}</span>
-      </div>
-    {/if}
-    <form onsubmit={(e) => { e.preventDefault(); submit(); }} class="flex flex-col gap-4">
-      <Input label="Email" type="email" bind:value={email} required autocomplete="email" />
+    <form onsubmit={(e) => { e.preventDefault(); submit(); }} class="flex flex-col gap-4" novalidate>
+      <Input label="Email" type="email" bind:value={email} required autocomplete="email"
+             error={fieldErrors.email} />
       <Button type="submit" {loading} class="w-full justify-center btn-lg">Send reset link</Button>
     </form>
   {/if}
