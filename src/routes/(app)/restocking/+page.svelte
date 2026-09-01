@@ -30,9 +30,14 @@
       </div>
       <div>
         <p class="font-semibold">Purchase Orders</p>
-        <p class="text-xs text-text-3 mb-4">Track and receive stock</p>
+        <p class="text-xs text-text-3 mb-4">Track and receive stock from suppliers</p>
       </div>
-      <Button onclick={() => window.location.href = '/restocking/orders/new'} class="w-full">Create PO</Button>
+      <div class="flex gap-2 w-full">
+        <Button onclick={() => window.location.href = '/restocking/orders'} class="flex-1">View Orders</Button>
+        {#if auth.can('inventory.manage')}
+          <Button onclick={() => window.location.href = '/restocking/orders/new'} variant="secondary" class="flex-1">New</Button>
+        {/if}
+      </div>
     </div>
 
     <div class="surface-card p-5 md:p-6 flex flex-col items-center text-center space-y-3">
