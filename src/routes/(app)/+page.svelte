@@ -1,5 +1,6 @@
 <script lang="ts">
   import KpiCard from '$lib/components/ui/KpiCard.svelte';
+  import StatTile from '$lib/components/ui/StatTile.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
@@ -60,8 +61,8 @@
     </Button>
   </div>
 
-  <!-- ── KPI strip ─────────────────────────────────────────────────────────── -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 anim-stagger">
+  <!-- ── Stats area: 4 primary KPIs + 3 secondary stats, all in one block ── -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 anim-stagger">
     <KpiCard
       label="Today's Revenue"
       value={formatCurrencyCompact(data.todayRevenue)}
@@ -105,6 +106,30 @@
       sub={totalAlerts > 0
         ? `${data.outOfStock.length} out · ${data.lowStock.length} low`
         : 'All stocked up'}
+    />
+  </div>
+
+  <div class="grid grid-cols-3 gap-3 mb-6 anim-stagger" style="animation-delay: 200ms">
+    <StatTile
+      label="Avg basket"
+      value={String(data.avgBasket || '—')}
+      sub="items per sale"
+      icon={ShoppingCart}
+      tone="cobalt"
+    />
+    <StatTile
+      label="Customers"
+      value={String(data.distinctCustomers)}
+      sub="distinct today"
+      icon={Users}
+      tone="primary"
+    />
+    <StatTile
+      label="Stock value"
+      value={formatCurrencyCompact(data.stockValueRetail)}
+      sub={`cost ${formatCurrencyCompact(data.stockValueCost)}`}
+      icon={Package}
+      tone="teal"
     />
   </div>
 
@@ -296,41 +321,7 @@
         </div>
       </div>
 
-      <!-- Quick stat tiles (basket, customers, stock value) -->
-      <div class="grid grid-cols-3 gap-3">
-        <div class="surface-card-flat p-3.5">
-          <div class="flex items-center gap-2 mb-1.5">
-            <div class="w-6 h-6 rounded-md flex items-center justify-center"
-                 style="background:color-mix(in srgb, var(--cobalt) 14%, transparent)">
-              <ShoppingCart size={12} strokeWidth={2} style="color:var(--cobalt)" />
-            </div>
-            <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Avg basket</p>
-          </div>
-          <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{data.avgBasket || '—'}</p>
-        </div>
-
-        <div class="surface-card-flat p-3.5">
-          <div class="flex items-center gap-2 mb-1.5">
-            <div class="w-6 h-6 rounded-md flex items-center justify-center"
-                 style="background:color-mix(in srgb, var(--primary) 14%, transparent)">
-              <Users size={12} strokeWidth={2} style="color:var(--primary)" />
-            </div>
-            <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Customers</p>
-          </div>
-          <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{data.distinctCustomers}</p>
-        </div>
-
-        <div class="surface-card-flat p-3.5">
-          <div class="flex items-center gap-2 mb-1.5">
-            <div class="w-6 h-6 rounded-md flex items-center justify-center"
-                 style="background:color-mix(in srgb, var(--teal) 14%, transparent)">
-              <Package size={12} strokeWidth={2} style="color:var(--teal)" />
-            </div>
-            <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Stock value</p>
-          </div>
-          <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{formatCurrencyCompact(data.stockValueRetail)}</p>
-        </div>
-      </div>
+      <!-- Quick stat tiles (basket, customers, stock value) moved into the unified stats area at the top of the page -->
     </div>
 
     <!-- Right: combined stock alerts -->
