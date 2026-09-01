@@ -42,10 +42,10 @@
   // "New Sale" is intentionally NOT here — it's already in the bottom-nav FAB
   // and the sidebar's "Point of Sale" entry.
   const actions = [
-    { href: '/inventory',               label: 'Inventory',         icon: 'Package',     tone: 'neutral' },
-    { href: '/restocking/orders/new',   label: 'Restock',           icon: 'Plus',        tone: 'neutral' },
-    { href: '/analytics',               label: 'Analytics',         icon: 'BarChart3',   tone: 'neutral' },
-    { href: '/restocking/suppliers',    label: 'Suppliers',         icon: 'Truck',       tone: 'neutral' },
+    { href: '/inventory',               label: 'Inventory',         icon: 'Package',     tone: 'cobalt'  },
+    { href: '/restocking/orders/new',   label: 'Restock',           icon: 'Plus',        tone: 'teal'    },
+    { href: '/analytics',               label: 'Analytics',         icon: 'BarChart3',   tone: 'violet'  },
+    { href: '/restocking/suppliers',    label: 'Suppliers',         icon: 'Truck',       tone: 'gold'    },
   ] as const;
 </script>
 
@@ -144,8 +144,7 @@
           href={a.href}
           class="surface-card interactive p-3.5 no-glow group"
         >
-          <div class="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110"
-               style="background: var(--surface2); color: var(--text-2)">
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110 icon-tint-{a.tone}">
             <DynamicIcon name={a.icon} size={16} />
           </div>
           <p class="text-[12.5px] font-semibold leading-tight text-[var(--text)]">{a.label}</p>

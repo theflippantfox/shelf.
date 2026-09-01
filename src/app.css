@@ -19,25 +19,36 @@
   --inset:    #ECECEE;
   --border:   #E4E4E7;
 
-  --text:   #0B0B0F;
-  --text-2: #3F3F46;
+  /* Charcoal black for fonts on white, warm offwhite on dark. */
+  --text:   #0A0A0B;
+  --text-2: #27272A;
   --text-3: #71717A;
 
-  --gold:        #D69E0B;
-  --gold-dim:    #fef7e0;
+  /* Vibrant accent palette — bumped saturation so coloured text and
+   * icons actually pop against the offwhite background. */
+  --gold:        #E8A317;
+  --gold-dim:    #fff3d6;
   --gold-fg:     #6b4c00;
 
-  --cobalt:      #2563D4;
-  --cobalt-dim:  #e0eafd;
-  --cobalt-fg:   #0a2966;
+  --cobalt:      #2D6BFF;
+  --cobalt-dim:  #e1ebff;
+  --cobalt-fg:   #002b99;
 
-  --crimson:     #D42F5F;
-  --crimson-dim: #ffe5ef;
+  --crimson:     #E53572;
+  --crimson-dim: #ffe1ec;
   --crimson-fg:  #8a0a2e;
 
-  --teal:        #0D8B7D;
-  --teal-dim:    #d6f5f1;
+  --teal:        #00B894;
+  --teal-dim:    #d3f7ee;
   --teal-fg:     #05443d;
+
+  --violet:      #7C4DFF;
+  --violet-dim:  #ece4ff;
+  --violet-fg:   #3a1aaa;
+
+  --lime:        #84CC16;
+  --lime-dim:    #ecfccb;
+  --lime-fg:     #3a5a08;
 
   --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-serif: 'DM Serif Display', Georgia, serif;
@@ -76,14 +87,32 @@ html.dark {
   --inset:    #0E0E10;
   --border:   #27272A;
 
-  --text:   #FAFAFA;
-  --text-2: #A1A1AA;
+  /* Warm offwhite text on dark — gentler than #FFFFFF. */
+  --text:   #F5F4EF;
+  --text-2: #D4D4D8;
   --text-3: #71717A;
+
+  /* Vibrant accents — same hues, slightly lifted for dark bg. */
+  --gold:        #F5B73A;
+  --cobalt:      #5B8CFF;
+  --crimson:     #FF5A8C;
+  --teal:        #2DD4BF;
+  --violet:      #9F7BFF;
+  --lime:        #A3E635;
+
+  --gold-fg:     #fce6a8;
+  --cobalt-fg:   #bcd2ff;
+  --crimson-fg:  #ffc4d6;
+  --teal-fg:     #aaf2e5;
+  --violet-fg:   #d4c2ff;
+  --lime-fg:     #d8f0a3;
 
   --gold-dim:    #2d2410;
   --cobalt-dim:  #0d1633;
   --crimson-dim: #2d0d18;
   --teal-dim:    #0a2522;
+  --violet-dim:  #1a0d33;
+  --lime-dim:    #1a2208;
 
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4);
   --shadow:    0 4px 14px 0 rgb(0 0 0 / 0.45);
@@ -608,7 +637,7 @@ textarea.input { resize: vertical; min-height: 80px; }
 .display-lg  { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.035em; line-height: 1.05; }
 .display-md  { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
 .display-sm  { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
-.eyebrow     { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
+.eyebrow     { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2); }
 .tabular     { font-variant-numeric: tabular-nums; }
 .tnum        { font-variant-numeric: tabular-nums; }
 .numeric     { font-variant-numeric: tabular-nums; font-feature-settings: "ss01", "cv11"; }
@@ -783,6 +812,36 @@ html.dark .chart-tooltip {
 .bg-pos { background: var(--teal-dim); color: var(--teal-fg); }
 .bg-neg { background: var(--crimson-dim); color: var(--crimson-fg); }
 .bg-warn { background: var(--gold-dim); color: var(--gold-fg); }
+
+/* ─── Vibrant icon tints ──────────────────────────────
+ * Drop a 32px square behind any lucide icon to make it pop.
+ *   <div class="icon-tint icon-tint-cobalt"><Icon size={14} /></div>
+ * On light bg the icon sits on a tinted square; on dark, the same
+ * hue family stays readable because the *-dim variable is also
+ * defined for dark mode. */
+.icon-tint {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.icon-tint-sm { width: 22px; height: 22px; border-radius: 6px; }
+.icon-tint-lg { width: 36px; height: 36px; border-radius: 10px; }
+.icon-tint-cobalt  { background: var(--cobalt-dim);  color: var(--cobalt); }
+.icon-tint-teal    { background: var(--teal-dim);    color: var(--teal); }
+.icon-tint-gold    { background: var(--gold-dim);    color: var(--gold); }
+.icon-tint-crimson { background: var(--crimson-dim); color: var(--crimson); }
+.icon-tint-violet  { background: var(--violet-dim);  color: var(--violet); }
+.icon-tint-lime    { background: var(--lime-dim);    color: var(--lime); }
+.icon-tint-primary { background: var(--primary-dim); color: var(--text); }
+
+/* ─── Vibrant text colors (use sparingly for emphasis) ─ */
+.t-cobalt  { color: var(--cobalt); }
+.t-teal    { color: var(--teal); }
+.t-gold    { color: var(--gold); }
+.t-crimson { color: var(--crimson); }
+.t-violet  { color: var(--violet); }
+.t-lime    { color: var(--lime); }
 
 /* ─── Mobile-friendly container sizes ────────────────── */
 @media (max-width: 640px) {
