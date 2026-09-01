@@ -152,7 +152,6 @@
     <div class="surface-card flex flex-col items-center justify-center h-64 text-[var(--text-3)] anim-in">
       <div class="w-8 h-8 rounded-full border-2 border-[var(--border)] border-t-[var(--primary)] animate-spin mb-3" aria-hidden="true"></div>
       <p class="text-[13px] font-semibold text-[var(--text)]">Crunching your numbers</p>
-      <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">This usually takes a second.</p>
     </div>
   {:else}
     {@const hasData = (kpis?.transactions?.current ?? 0) > 0 || (kpis?.revenue?.current ?? 0) > 0}

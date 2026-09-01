@@ -10,7 +10,6 @@
 <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
 <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Restocking Hub</h1>
-    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">Manage purchase orders and suppliers</p>
   </div>
   {#if auth.can('inventory.manage')}
     <div class="flex gap-2">

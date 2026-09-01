@@ -31,7 +31,6 @@
   <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
 <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Price Comparison</h1>
-    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">Compare latest unit costs across your suppliers</p>
   </div>
   <Button href="/restocking/orders/new" size="sm">
       <span class="flex items-center gap-1">

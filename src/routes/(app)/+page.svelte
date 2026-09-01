@@ -231,7 +231,6 @@
                 <Package size={18} strokeWidth={1.75} class="text-[var(--text-3)]" />
               </div>
               <p class="text-[12.5px] font-semibold text-[var(--text-2)]">No products sold yet</p>
-              <p class="text-[11px] text-[var(--text-3)] mt-0.5">Make a sale to see top sellers.</p>
             </div>
           {:else}
             <div class="space-y-2.5">
@@ -289,7 +288,6 @@
                       <p class="text-[12.5px] font-semibold text-[var(--text)] truncate">{c.name}</p>
                       <p class="text-[11px] font-semibold tabular-nums whitespace-nowrap text-[var(--text-2)]">{pct}%</p>
                     </div>
-                    <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">{c.qty} items · {formatCurrency(c.revenue)}</p>
                   </div>
                 </div>
               {/each}
@@ -309,7 +307,6 @@
             <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Avg basket</p>
           </div>
           <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{data.avgBasket || '—'}</p>
-          <p class="text-[10px] text-[var(--text-3)] mt-0.5">items per sale</p>
         </div>
 
         <div class="surface-card-flat p-3.5">
@@ -321,7 +318,6 @@
             <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Customers</p>
           </div>
           <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{data.distinctCustomers}</p>
-          <p class="text-[10px] text-[var(--text-3)] mt-0.5">distinct today</p>
         </div>
 
         <div class="surface-card-flat p-3.5">
@@ -333,7 +329,6 @@
             <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Stock value</p>
           </div>
           <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{formatCurrencyCompact(data.stockValueRetail)}</p>
-          <p class="text-[10px] text-[var(--text-3)] mt-0.5">cost {formatCurrencyCompact(data.stockValueCost)}</p>
         </div>
       </div>
     </div>
@@ -365,7 +360,6 @@
             <Package size={20} strokeWidth={2} style="color:var(--teal)" />
           </div>
           <p class="text-[13px] font-semibold text-[var(--text)]">All stocked up</p>
-          <p class="text-[11px] text-[var(--text-3)] mt-0.5">No items need attention.</p>
         </div>
       {:else}
         <!-- Out-of-stock section -->

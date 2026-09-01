@@ -49,9 +49,6 @@
     <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
       Appearance
     </h1>
-    <p class="text-[12.5px] text-[var(--text-3)] mt-0.5">
-      Pick a palette. The preview is live — click save to apply it to your shop.
-    </p>
   </div>
 </header>
 
@@ -100,7 +97,6 @@
                   </span>
                 {/if}
               </div>
-              <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">{p.tagline}</p>
             </div>
           </button>
         {/each}

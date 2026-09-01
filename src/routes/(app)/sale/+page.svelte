@@ -177,13 +177,6 @@
 <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
         {isEdit ? 'Edit sale' : 'New sale'}
       </h1>
-      <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">
-        {#if cart.isEmpty}
-          Tap a product to start
-        {:else}
-          {cart.count} item{cart.count === 1 ? '' : 's'} · {formatCurrencyCompact(grandTotal)}
-        {/if}
-      </p>
     </div>
     <div class="flex items-center gap-2 shrink-0">
       {#if cart.customerId}
@@ -262,7 +255,6 @@
         <Search size={22} strokeWidth={1.75} class="text-[var(--text-3)]" />
       </div>
       <p class="text-sm font-semibold">No products found</p>
-      <p class="text-xs text-[var(--text-3)] mt-1">Try a different search or category.</p>
     </div>
   {:else}
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 anim-stagger">

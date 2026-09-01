@@ -39,7 +39,6 @@
       </div>
       <div class="flex-1 min-w-0">
         <p class="text-[13.5px] font-semibold text-[var(--text)]">{s.label}</p>
-        <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">{s.desc}</p>
       </div>
       <ArrowRight size={15} class="text-[var(--text-3)] flex-shrink-0" strokeWidth={1.75} />
     </a>

@@ -70,7 +70,6 @@
 <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
 <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Customers</h1>
-    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">{(data.customers as any[]).length} total</p>
   </div>
   <Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add</Button>
 </header>

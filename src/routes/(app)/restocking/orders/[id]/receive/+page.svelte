@@ -71,7 +71,6 @@
   <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
 <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Receive Delivery</h1>
-    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">Verify and record delivered stock</p>
   </div>
   <Button variant="ghost" href="/restocking/orders/{$page.params.id}" size="sm">Cancel</Button>
 </header>
