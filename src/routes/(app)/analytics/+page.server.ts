@@ -59,14 +59,12 @@ function buildStockValue(products: any[]) {
 }
 
 function buildGrossProfit(items: any[], compareItems: any[]) {
-  const profit = items.reduce(
-    (acc, it) => acc + ((it.line_total ?? 0) - (it.cost_price ?? 0) * (it.qty ?? 0)),
-    0
-  );
-  const cprofit = compareItems.reduce(
-    (acc, it) => acc + ((it.line_total ?? 0) - (it.cost_price ?? 0) * (it.qty ?? 0)),
-    0
-  );
+  // sale_items has no cost_price column — cost lives on the joined product.
+  // (Without this fallback, it.cost_price is always undefined and profit
+  // equals line_total, i.e. 100% margin.)
+  const cogs = (it: any) => (it.product?.cost_price ?? 0) * (it.qty ?? 0);
+  const profit      = items.reduce((acc, it) => acc + ((it.line_total ?? 0) - cogs(it)), 0);
+  const cprofit = compareItems.reduce((acc, it) => acc + ((it.line_total ?? 0) - cogs(it)), 0);
   return { profit, cprofit };
 }
 
