@@ -12,6 +12,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Modal from "$lib/components/ui/Modal.svelte";
   import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
+  import QtyInput from "$lib/components/ui/QtyInput.svelte";
   import {
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, CreditCard, ArrowLeftRight, X,
@@ -387,7 +388,11 @@
             <button class="btn btn-ghost btn-icon btn-sm"
                     onclick={() => cart.setQty(item.productId, item.qty - 1)}
                     aria-label="Decrease"><Minus size={12} strokeWidth={2.5} /></button>
-            <span class="text-xs font-bold w-6 text-center tabular-nums">{item.qty}</span>
+            <QtyInput
+              value={item.qty}
+              max={item.maxQty}
+              onChange={(q) => cart.setQty(item.productId, q)}
+            />
             <button class="btn btn-ghost btn-icon btn-sm disabled:opacity-40"
                     onclick={() => cart.setQty(item.productId, item.qty + 1)}
                     disabled={item.qty >= item.maxQty}
