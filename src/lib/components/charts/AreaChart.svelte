@@ -1,148 +1,192 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { formatCompact } from '$lib/utils/format';
-  import type { Chart as ChartType, ChartConfiguration, ChartDataset } from 'chart.js';
+  import type { Chart as ChartType, ChartConfiguration } from 'chart.js';
 
+  /**
+   * AreaChart — premium area chart with smooth tension, brand-tinted
+   * gradient fill, and custom HTML tooltip.
+   *
+   * Supports multiple datasets (e.g. current vs previous period).
+   */
   let {
-    labels,
-    datasets,
-    height       = 220,
-    fill         = true,
+    datasets = [],
+    labels   = [],
+    height   = 280,
     currencyMode = false,
-    yFormat      = 'number',   // 'number' | 'currency' | 'count'
+    yFormat  = 'number',
   }: {
-    labels:           string[];
-    datasets:         ChartDataset<'line', number[]>[];
-    height?:          number;
-    fill?:            boolean;
-    currencyMode?:    boolean;
-    yFormat?:         'number' | 'currency' | 'count';
+    datasets?: Array<{
+      label: string;
+      data: number[];
+      color?: string;
+      dashed?: boolean;
+    }>;
+    labels?:      string[];
+    height?:      number | string;
+    currencyMode?: boolean;
+    yFormat?:     'number' | 'currency' | 'count';
   } = $props();
 
   let canvas: HTMLCanvasElement;
   let chart:  ChartType | null = null;
   let observer: MutationObserver;
   let ChartCtor: typeof ChartType | null = null;
+  let containerEl: HTMLDivElement;
+  let tooltipEl: HTMLDivElement | null = null;
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
-
-  function resolve(color: string | undefined): string | undefined {
-    if (!color) return color;
-    const m = color.match(/^var\((--[^)]+)\)$/);
-    return m ? css(m[1]) : color;
+  function px(h: number | string): string {
+    return typeof h === 'number' ? `${h}px` : h;
   }
-
-  /** Number → short human label (Indian shorthand: k, L, Cr) */
   function fmt(n: number): string {
-    return formatCompact(n);
+    if (yFormat === 'currency') {
+      const major = n / 100;
+      if (Math.abs(major) >= 1_000_000) return '₦' + (major / 1_000_000).toFixed(1) + 'M';
+      if (Math.abs(major) >= 1_000)     return '₦' + (major / 1_000).toFixed(1) + 'k';
+      return '₦' + major.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    }
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
+    return String(n);
+  }
+  function tooltipFmt(n: number): string {
+    if (yFormat === 'currency') {
+      return '₦' + (n / 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    }
+    return n.toLocaleString('en-US');
   }
 
-  function tooltipFmt(n: number): string {
-    if (yFormat === 'currency') return '₹' + n.toLocaleString('en-IN');
-    if (yFormat === 'count')    return n.toLocaleString('en-IN');
-    return n.toLocaleString('en-IN');
+  function externalTooltip(context: any) {
+    const { tooltip } = context;
+    if (tooltipEl) { tooltipEl.remove(); tooltipEl = null; }
+    if (!tooltip || tooltip.opacity === 0) return;
+    if (!containerEl) return;
+
+    const idx = tooltip.dataPoints?.[0]?.dataIndex ?? 0;
+    const label = labels[idx] ?? '';
+    const dps = tooltip.dataPoints ?? [];
+
+    let body = '';
+    for (const dp of dps) {
+      const ds = dp.dataset;
+      const v  = dp.parsed.y ?? 0;
+      body += `
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 99px; background: ${ds.borderColor};"></span>
+          <span style="color: var(--text-3); font-size: 11.5px; flex: 1;">${ds.label}</span>
+          <span style="color: var(--text); font-weight: 600; font-size: 12.5px;">${tooltipFmt(v)}</span>
+        </div>`;
+    }
+
+    const div = document.createElement('div');
+    div.className = 'surface-elevated';
+    div.style.cssText = `
+      position: absolute;
+      left: ${tooltip.caretX}px;
+      top: ${tooltip.caretY - 8}px;
+      transform: translate(-50%, -100%);
+      pointer-events: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      z-index: 10;
+      min-width: 160px;
+      animation: tooltipIn 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    `;
+    div.innerHTML = `
+      <div style="color: var(--text-3); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px;">${label}</div>
+      ${body}
+    `;
+    containerEl.appendChild(div);
+    tooltipEl = div;
   }
 
   function buildConfig(): ChartConfiguration<'line'> {
-    const primary = css('--primary');
-    const primaryDim = css('--primary-dim');
-    const text3   = css('--text-3');
-    const border  = css('--border');
-    const surface = css('--surface');
-    const text    = css('--text');
-    const text2   = css('--text-2');
+    const text3  = css('--text-3');
+    const border = css('--border');
 
     return {
       type: 'line',
       data: {
         labels,
-        datasets: datasets.map((ds) => {
-          const bc     = resolve((ds as any).borderColor) ?? primary;
-          const dsFill = (ds as any).fill ?? fill;
+        datasets: datasets.map((ds, i) => {
+          const color = resolveColor(ds.color ?? (i === 0 ? 'var(--primary)' : 'var(--text-3)'));
+          // Build a vertical gradient that fades to transparent at the bottom
+          const ctx2d = canvas?.getContext('2d');
+          let bg: string | CanvasGradient = color + '22';
+          if (ctx2d) {
+            const grad = ctx2d.createLinearGradient(0, 0, 0, 220);
+            grad.addColorStop(0, color + '40');
+            grad.addColorStop(0.5, color + '18');
+            grad.addColorStop(1, color + '00');
+            bg = grad;
+          }
           return {
-            ...ds,
-            borderColor:     bc,
-            backgroundColor: dsFill
-              ? (ctx: any) => {
-                  const { chart: c } = ctx;
-                  const { ctx: cctx, chartArea } = c;
-                  if (!chartArea) return primaryDim;
-                  const g = cctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-                  g.addColorStop(0,    bc + '40');
-                  g.addColorStop(0.5,  bc + '20');
-                  g.addColorStop(1,    bc + '00');
-                  return g;
-                }
-              : 'transparent',
-            fill:            dsFill,
-            tension:         0.35,
-            pointRadius:     0,
+            label: ds.label,
+            data: ds.data,
+            borderColor: color,
+            backgroundColor: bg,
+            fill: i === 0 ? 'origin' : false,
+            tension: 0.38,
+            pointRadius: 0,
             pointHoverRadius: 5,
-            pointBackgroundColor: bc,
-            pointBorderColor: surface,
+            pointBackgroundColor: color,
+            pointBorderColor: '#fff',
             pointBorderWidth: 2,
-            borderWidth:     2.25,
+            borderWidth: 2.25,
+            borderDash: ds.dashed ? [4, 4] : undefined,
           };
         }),
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
         interaction: { mode: 'index', intersect: false },
-        animation: { duration: 600, easing: 'easeOutQuart' },
+        layout: { padding: { top: 16, right: 8, bottom: 4, left: 0 } },
         plugins: {
-          legend: {
-            display: datasets.length > 1,
-            labels: {
-              color:    text2,
-              boxWidth: 8,
-              boxHeight: 8,
-              usePointStyle: true,
-              pointStyle: 'circle',
-              padding:  16,
-              font:     { size: 11, weight: 500 },
-            },
-          },
+          legend: { display: false },
           tooltip: {
-            backgroundColor: surface,
-            borderColor:     border,
-            borderWidth:     1,
-            titleColor:      text,
-            bodyColor:       text2,
-            padding:         { top: 8, bottom: 8, left: 12, right: 12 },
-            cornerRadius:    8,
-            boxPadding:      6,
-            titleFont:       { size: 11, weight: 600 },
-            bodyFont:        { size: 11, weight: 500 },
-            displayColors:   true,
-            callbacks: {
-              label: (ctx) => `  ${ctx.dataset.label ?? ''}: ${tooltipFmt(ctx.parsed.y ?? 0)}`,
-            },
+            enabled: false,
+            external: externalTooltip as any,
+            mode: 'index',
+            intersect: false,
           },
         },
         scales: {
           y: {
+            display: true,
             beginAtZero: true,
-            grid:  { color: border + '80', lineWidth: 1 },
+            grid:  { color: border + '40', lineWidth: 1, drawTicks: false },
             border: { display: false },
             ticks: {
-              color:     text3,
-              font:      { size: 11, weight: 500 },
-              padding:   8,
-              maxTicksLimit: 6,
+              color:   text3,
+              font:    { size: 10.5, weight: 500 },
+              padding: 8,
+              maxTicksLimit: 5,
               callback: (v) => fmt(v as number),
             },
           },
           x: {
             grid:  { display: false },
-            border: { color: border, display: true },
-            ticks: { color: text3, font: { size: 11, weight: 500 }, padding: 8, maxRotation: 0, autoSkipPadding: 12 },
+            border: { display: false },
+            ticks: {
+              color: text3,
+              font:  { size: 10.5, weight: 500 },
+              padding: 4,
+              maxRotation: 0,
+              autoSkipPadding: 14,
+            },
           },
         },
       },
     };
+  }
+
+  function resolveColor(c: string): string {
+    const m = c.match(/^var\((--[^)]+)\)$/);
+    return m ? css(m[1]) : c;
   }
 
   function rebuild() {
@@ -152,66 +196,39 @@
   }
 
   onMount(async () => {
+    const style = document.createElement('style');
+    style.textContent = `@keyframes tooltipIn { from { opacity: 0; transform: translate(-50%, -100%) translateY(4px); } to { opacity: 1; transform: translate(-50%, -100%); } }`;
+    document.head.appendChild(style);
+
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
     ChartCtor = Chart;
     rebuild();
-
     observer = new MutationObserver(rebuild);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class'],
-    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
   });
 
   $effect(() => {
-    // ⚠️ Read reactive props BEFORE any early return.
-    const l = labels;
-    const d = datasets;
     if (!chart) return;
-
-    const primary = css('--primary');
-    const primaryDim = css('--primary-dim');
-    const text2 = css('--text-2');
-
-    chart.data.labels = l;
-    chart.data.datasets = d.map((ds: any) => {
-      const dsFill = ds.fill ?? fill;
-      const bc     = resolve(ds.borderColor) ?? primary;
-      return {
-        ...ds,
-        borderColor: bc,
-        backgroundColor: dsFill
-          ? (ctx: any) => {
-              const { chart: c } = ctx;
-              const { ctx: cctx, chartArea } = c;
-              if (!chartArea) return primaryDim;
-              const g = cctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-              g.addColorStop(0,   bc + '40');
-              g.addColorStop(0.5, bc + '20');
-              g.addColorStop(1,   bc + '00');
-              return g;
-            }
-          : 'transparent',
-        fill: dsFill,
-      };
-    }) as any;
-
-    (chart.options as any).plugins.legend.display      = d.length > 1;
-    (chart.options as any).plugins.legend.labels.color   = text2;
-    (chart.options as any).plugins.tooltip.callbacks    = {
-      label: (ctx: any) => `  ${ctx.dataset.label ?? ''}: ${tooltipFmt(ctx.parsed.y ?? 0)}`,
-    };
-
+    const _data   = datasets;
+    const _labels = labels;
+    chart.data.labels = _labels;
+    chart.data.datasets.forEach((d, i) => {
+      if (_data[i]) {
+        d.data = _data[i].data;
+        d.label = _data[i].label;
+      }
+    });
     chart.update('active');
   });
 
   onDestroy(() => {
+    tooltipEl?.remove();
     chart?.destroy();
     observer?.disconnect();
   });
 </script>
 
-<div style="height:{height}px; position:relative;">
+<div bind:this={containerEl} class="relative" style="height: {px(height)};">
   <canvas bind:this={canvas}></canvas>
 </div>

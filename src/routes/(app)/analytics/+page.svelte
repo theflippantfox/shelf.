@@ -48,19 +48,19 @@
   /* ── chart data ────────────────────────────────────────────────────────── */
   const trendLabels = $derived(trend.map((t: any) => t.label));
 
+  // New AreaChart treats `currency` yFormat as data-in-cents (divides by 100).
+  // The trend values are already in major units (page-side already divided
+  // by 100), so we pass them through as 'number' for currency display.
   const trendDatasets = $derived(
     activeMetric === 'revenue'
       ? [{
-          label: 'Revenue', data: trend.map((t: any) => (t.current ?? 0) / 100),
-          borderColor: 'var(--primary)', backgroundColor: 'var(--primary-dim)',
-          fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2,
+          label: 'Revenue',
+          data: trend.map((t: any) => t.current ?? 0),
         }]
       : [{
           label: activeMetric === 'transactions' ? 'Transactions' : 'Avg Order',
           data: trend.map((t: any) =>
-            activeMetric === 'transactions' ? (t.txns ?? 0) : (t.avgOrder ?? 0) / 100),
-          borderColor: 'var(--primary)', backgroundColor: 'var(--primary-dim)',
-          fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2,
+            activeMetric === 'transactions' ? (t.txns ?? 0) : (t.avgOrder ?? 0)),
         }]
   );
 
@@ -333,6 +333,7 @@
             labels={trendLabels}
             datasets={trendDatasets}
             yFormat={activeMetric === 'transactions' ? 'count' : 'currency'}
+            height={288}
           />
         </div>
       </div>
@@ -384,10 +385,9 @@
             <div class="h-44 w-full">
               <DonutChart
                 labels={paymentRows.map((pm: any) => pm.label)}
-                values={paymentRows.map((pm: any) => (pm.revenue ?? 0) / 100)}
-                centerLabel={formatCurrency(totalPaymentRev)}
-                centerSub="total"
-                yFormat="currency"
+                data={paymentRows.map((pm: any) => (pm.revenue ?? 0) / 100)}
+                centerValue={formatCurrency(totalPaymentRev)}
+                centerLabel="total"
               />
             </div>
             <div class="space-y-1.5 pt-2">
@@ -449,7 +449,6 @@
               color="var(--gold)"
               height={192}
               yFormat="currency"
-              highlightMax
             />
           </div>
         </div>

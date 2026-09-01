@@ -1,72 +1,80 @@
 <script lang="ts">
+  /**
+   * Heatmap — 7x24 grid showing revenue by day-of-week × hour.
+   *
+   * Pure CSS grid with brand-tinted cells (color-mix on --primary so it
+   * tracks theme and palette changes without JS).
+   */
   let {
     values      = [],
     hours       = Array.from({ length: 24 }, (_, i) => `${i}:00`),
     days        = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     showHours   = true,
+    currencyMode = false,
   }: {
-    values?:    number[][];
-    hours?:     string[];
-    days?:      string[];
-    showHours?: boolean;
+    values?:      number[][];
+    hours?:       string[];
+    days?:        string[];
+    showHours?:   boolean;
+    currencyMode?: boolean;
   } = $props();
 
-  const maxVal = $derived(
-    values.flat().reduce((m, v) => Math.max(m, v), 0) || 1,
-  );
+  const maxVal = $derived(values.flat().reduce((m, v) => Math.max(m, v), 0) || 1);
 
   function intensity(value: number): number {
-    if (maxVal === 0) return 0.07;
-    return Math.max(0.06, (value / maxVal) * 0.94 + 0.06);
+    if (maxVal === 0) return 0;
+    return Math.max(0.04, value / maxVal);
   }
 
-  /**
-   * Uses color-mix() with var(--primary) so the cells automatically track
-   * both theme changes (html.dark) and runtime palette overrides — no JS needed.
-   */
   function cellColor(value: number): string {
     const pct = Math.round(intensity(value) * 100);
-    return `color-mix(in srgb, var(--primary) ${pct}%, transparent)`;
+    return `color-mix(in srgb, var(--primary) ${Math.max(pct, 4)}%, transparent)`;
   }
 
-  /** Show hour labels at 0, 6, 12, 18 for orientation */
+  function tooltip(value: number, day: string, hour: string): string {
+    if (currencyMode) {
+      return `${day} ${hour}: ₦${(value / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+    }
+    return `${day} ${hour}: ${value.toLocaleString('en-US')}`;
+  }
+
+  // Show hour labels at 0, 6, 12, 18
   const hourTicks = $derived(
     hours.map((h, i) => ({ label: i % 6 === 0 ? h.replace(':00', '') : '', idx: i })),
   );
 </script>
 
-<div class="overflow-x-auto pb-2">
+<div class="overflow-x-auto">
   {#if values.length}
-    <div class="min-w-[640px]">
-      <!-- Hour axis (top) -->
+    <div class="min-w-[560px]">
       {#if showHours}
-        <div class="flex items-end gap-2 mb-1">
-          <span class="w-8 shrink-0"></span>
+        <div class="flex items-end gap-2 mb-1.5 pl-9">
           <div class="flex-1 relative" style="height:14px">
             {#each hourTicks as t}
-              <span
-                class="absolute text-[9px] font-semibold uppercase tracking-wide text-[var(--text-3)] -translate-x-1/2"
-                style="left:calc({t.idx + 0.5} * (100% / 24))"
-              >{t.label}</span>
+              {#if t.label}
+                <span
+                  class="absolute text-[9px] font-semibold uppercase tracking-wide text-[var(--text-3)] -translate-x-1/2 tabular"
+                  style="left:calc({t.idx + 0.5} * (100% / 24))"
+                >{t.label}</span>
+              {/if}
             {/each}
           </div>
         </div>
       {/if}
 
-      <!-- Day rows -->
-      <div class="grid gap-1">
+      <div class="grid gap-[3px]">
         {#each days as day, i}
           <div class="flex items-center gap-2">
-            <span class="w-8 text-[10px] uppercase font-bold text-[var(--text-3)] shrink-0">
+            <span class="w-7 text-[10px] uppercase font-bold text-[var(--text-3)] shrink-0 tracking-wider">
               {day}
             </span>
-            <div class="grid flex-1 gap-1" style="grid-template-columns:repeat(24,minmax(0,1fr))">
+            <div class="grid flex-1 gap-[3px]" style="grid-template-columns:repeat(24,minmax(0,1fr))">
               {#each values[i] ?? [] as cell, j}
                 <div
-                  class="h-5 rounded-[3px] transition-all duration-150 cursor-default
-                         hover:scale-[1.18] hover:shadow-[0_0_0_1.5px_var(--primary)] hover:z-10 hover:relative"
+                  class="h-[18px] rounded-[3px] transition-all duration-200 cursor-default
+                         hover:scale-[1.25] hover:z-10 hover:relative hover:shadow-[0_0_0_1.5px_var(--primary)]"
                   style="background-color: {cellColor(cell)};"
-                  title="{days[i]} {hours[j]}: {cell}"
+                  title={tooltip(cell, days[i], hours[j])}
                 ></div>
               {/each}
             </div>

@@ -2,58 +2,72 @@
   import { onMount, onDestroy } from 'svelte';
   import type { Chart as ChartType, ChartConfiguration } from 'chart.js';
 
+  /**
+   * Sparkline — minimal line chart for KPI cards and inline trend.
+   * No axes, no tooltip, just a clean curve with a soft gradient fill.
+   */
   let {
     data     = [],
     color    = 'var(--primary)',
-    width    = 80,
-    height   = 30,
-    showArea = true,
-    tension  = 0.4,
+    height   = 40,
+    fill     = true,
   }: {
-    data?:     number[];
-    color?:    string;
-    width?:    number;
-    height?:   number;
-    showArea?: boolean;
-    tension?:  number;
+    data?:   number[];
+    color?:  string;
+    height?: number | string;
+    fill?:   boolean;
   } = $props();
 
   let canvas: HTMLCanvasElement;
   let chart:  ChartType | null = null;
+  let observer: MutationObserver;
   let ChartCtor: typeof ChartType | null = null;
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
-
   function resolveColor(c: string): string {
     const m = c.match(/^var\((--[^)]+)\)$/);
     return m ? css(m[1]) : c;
   }
+  function px(h: number | string): string {
+    return typeof h === 'number' ? `${h}px` : h;
+  }
 
   function buildConfig(): ChartConfiguration<'line'> {
-    const bc  = resolveColor(color);
+    const c = resolveColor(color);
     return {
       type: 'line',
       data: {
-        labels: data.map((_, i) => i),
+        labels: data.map((_, i) => String(i)),
         datasets: [{
           data,
-          borderColor:     bc,
-          backgroundColor: showArea ? bc + '30' : 'transparent',
-          fill:            showArea,
-          tension,
-          pointRadius:     0,
-          pointHoverRadius: 0,
-          borderWidth:     1.75,
+          borderColor: c,
+          backgroundColor: (ctx: any) => {
+            const chart = ctx.chart;
+            const { ctx: c2d, chartArea } = chart;
+            if (!chartArea) return c + '20';
+            const grad = c2d.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            grad.addColorStop(0, c + '30');
+            grad.addColorStop(1, c + '00');
+            return grad;
+          },
+          fill,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 2,
         }],
       },
       options: {
-        responsive: false,
+        responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 700, easing: 'easeOutQuart' },
         plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales:  { x: { display: false }, y: { display: false } },
-        animation: false,
+        scales: {
+          x: { display: false },
+          y: { display: false, beginAtZero: false },
+        },
+        elements: { line: { borderJoinStyle: 'round' } },
       },
     };
   }
@@ -69,25 +83,23 @@
     Chart.register(...registerables);
     ChartCtor = Chart;
     rebuild();
+    observer = new MutationObserver(rebuild);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
   });
 
   $effect(() => {
-    const _data  = data;
-    const _color = color;
     if (!chart) return;
-    chart.data.labels                    = _data.map((_, i) => i);
-    chart.data.datasets[0].data          = _data;
-    chart.data.datasets[0].borderColor   = resolveColor(_color);
-    chart.data.datasets[0].backgroundColor = showArea ? resolveColor(_color) + '30' : 'transparent';
-    chart.update('none');
+    chart.data.labels = data.map((_, i) => String(i));
+    chart.data.datasets[0].data = data;
+    chart.update('active');
   });
 
-  onDestroy(() => chart?.destroy());
+  onDestroy(() => {
+    chart?.destroy();
+    observer?.disconnect();
+  });
 </script>
 
-<canvas
-  bind:this={canvas}
-  {width}
-  {height}
-  style="width: {width}px; height: {height}px;"
-></canvas>
+<div style="height: {px(height)}; width: 100%;">
+  <canvas bind:this={canvas}></canvas>
+</div>
