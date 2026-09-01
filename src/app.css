@@ -497,3 +497,183 @@ textarea.input { resize: vertical; min-height: 80px; }
 @media (min-width: 768px) {
   .app-main { margin-left: 220px; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   PREMIUM DESIGN LAYER — added in 2026-09 redesign pass.
+   Additive — every old class still works. New primitives:
+     .surface-card      — layered card with depth, replaces flat .card where
+                         you want it to feel like a piece of UI, not a wireframe
+     .surface-elevated  — same but higher elevation (modals, sheets)
+     .surface-inset     — sunken/pressed surface for inputs and tray areas
+     .hairline          — 1px subtle divider using gradient (no hard line)
+     .display-*         — large numeric display styles
+     .tabular           — tabular-nums for tables and amounts
+     .tnum              — same, inline
+     .gradient-*        — subtle brand-tinted gradients
+     .glass             — backdrop-blur translucent surface
+     .ring-focus        — accessible focus ring
+   New motion primitives:
+     .anim-in           — page/element enter
+     .anim-stagger > *  — staggered children
+     .anim-press        — touch/click feedback
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Type system refinements ─────────────────────────── */
+.display-xl  { font-size: 2.75rem; font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+.display-lg  { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.035em; line-height: 1.05; }
+.display-md  { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.display-sm  { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+.eyebrow     { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-3); }
+.tabular     { font-variant-numeric: tabular-nums; }
+.tnum        { font-variant-numeric: tabular-nums; }
+.numeric     { font-variant-numeric: tabular-nums; font-feature-settings: "ss01", "cv11"; }
+
+/* ─── Layered surface cards ──────────────────────────── */
+.surface-card {
+  position: relative;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, white 4%), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.6) inset,
+    0 1px 2px 0 rgb(0 0 0 / 0.04),
+    0 1px 3px 0 rgb(0 0 0 / 0.04);
+  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+}
+html.dark .surface-card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, white 2%), var(--surface));
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.04) inset,
+    0 1px 2px 0 rgb(0 0 0 / 0.3),
+    0 1px 3px 0 rgb(0 0 0 / 0.2);
+}
+.surface-card.interactive {
+  cursor: pointer;
+}
+.surface-card.interactive:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--border) 60%, var(--primary));
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.6) inset,
+    0 2px 4px 0 rgb(0 0 0 / 0.04),
+    0 8px 24px -8px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.surface-card.interactive:active { transform: translateY(0); }
+
+.surface-elevated {
+  position: relative;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, white 6%), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.7) inset,
+    0 4px 6px -1px rgb(0 0 0 / 0.06),
+    0 12px 28px -4px rgb(0 0 0 / 0.12);
+}
+html.dark .surface-elevated {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 100%, white 3%), var(--surface));
+  box-shadow:
+    0 1px 0 0 rgb(255 255 255 / 0.05) inset,
+    0 4px 6px -1px rgb(0 0 0 / 0.4),
+    0 12px 28px -4px rgb(0 0 0 / 0.4);
+}
+
+.surface-inset {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04) inset;
+}
+
+/* ─── Hairline divider (subtle gradient line) ────────── */
+.hairline {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent);
+  margin: 0;
+}
+.hairline-solid { height: 1px; border: 0; background: var(--border); margin: 0; }
+
+/* ─── Brand-tinted gradients (used sparingly) ────────── */
+.gradient-primary {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--primary) 12%, var(--surface)),
+    color-mix(in srgb, var(--primary) 4%, var(--surface)) 60%,
+    var(--surface)
+  );
+}
+.gradient-glow {
+  background: radial-gradient(120% 80% at 0% 0%,
+    color-mix(in srgb, var(--primary) 18%, transparent) 0%,
+    transparent 60%
+  );
+}
+
+/* ─── Glass / frosted ────────────────────────────────── */
+.glass {
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+/* ─── Accessible focus ring ──────────────────────────── */
+.ring-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--primary);
+  border-radius: var(--radius);
+}
+
+/* ─── New motion ─────────────────────────────────────── */
+.anim-in {
+  animation: animIn 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes animIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.anim-stagger > * {
+  animation: animIn 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.anim-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.anim-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.anim-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.anim-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.anim-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.anim-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.anim-stagger > *:nth-child(7) { animation-delay: 240ms; }
+.anim-stagger > *:nth-child(8) { animation-delay: 280ms; }
+.anim-stagger > *:nth-child(n+9) { animation-delay: 320ms; }
+
+.anim-press { transition: transform 80ms ease; }
+.anim-press:active { transform: scale(0.97); }
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes fadeScale {
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ─── Layout primitives ──────────────────────────────── */
+.stack { display: flex; flex-direction: column; }
+.row   { display: flex; align-items: center; }
+.gap-1 { gap: 4px; } .gap-2 { gap: 8px; } .gap-3 { gap: 12px; } .gap-4 { gap: 16px; } .gap-5 { gap: 20px; } .gap-6 { gap: 24px; } .gap-8 { gap: 32px; }
+
+/* ─── Number color tones (positive/negative/neutral) ─── */
+.text-pos { color: var(--teal-fg); }
+.text-neg { color: var(--crimson-fg); }
+.text-warn { color: var(--gold-fg); }
+.bg-pos { background: var(--teal-dim); color: var(--teal-fg); }
+.bg-neg { background: var(--crimson-dim); color: var(--crimson-fg); }
+.bg-warn { background: var(--gold-dim); color: var(--gold-fg); }
+
+/* ─── Mobile-friendly container sizes ────────────────── */
+@media (max-width: 640px) {
+  .display-xl { font-size: 2rem; }
+  .display-lg { font-size: 1.75rem; }
+  .display-md { font-size: 1.375rem; }
+}
