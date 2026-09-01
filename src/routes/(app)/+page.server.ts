@@ -45,13 +45,13 @@ export async function load({ cookies,  locals  }: RequestEvent) {
       .or('qty.eq.0,qty.lte.' + threshold)
       .limit(20),
     supabase.from('sale_items')
-      .select('unit_price, qty, line_total, product:products(id, name, cost_price, category:categories(id, name, color, icon))')
-      .eq('sale.shop_id', shopId) // joins through sale
+      .select('unit_price, qty, line_total, sale:sales!inner(shop_id, voided_at, created_at), product:products(id, name, cost_price, category:categories(id, name, color, icon))')
+      .eq('sale.shop_id', shopId)
       .is('sale.voided_at', null)
       .gte('sale.created_at', todayStart.toISOString())
       .limit(1000),
     supabase.from('sale_items')
-      .select('unit_price, qty, product:products(cost_price)')
+      .select('unit_price, qty, sale:sales!inner(shop_id, voided_at, created_at), product:products(cost_price)')
       .eq('sale.shop_id', shopId)
       .is('sale.voided_at', null)
       .gte('sale.created_at', yStart.toISOString())
