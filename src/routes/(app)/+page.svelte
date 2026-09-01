@@ -44,26 +44,26 @@
     { href: '/restocking/orders/new',   label: 'Restock',           icon: 'Plus',         tone: 'neutral' },
     { href: '/analytics',               label: 'Analytics',         icon: 'BarChart3',    tone: 'neutral' },
   ] as const;
-
-  const tileBase = 'card-flat flex flex-col items-start gap-2 p-4 text-left transition-all hover:border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] hover:shadow-[var(--shadow-sm)] hover:-translate-y-0.5 active:scale-[0.98]';
 </script>
 
 <PageShell>
   <!-- Header -->
-  <div class="page-header">
+  <div class="flex items-end justify-between gap-3 mb-5">
     <div class="flex-1 min-w-0">
-      <p class="text-base font-semibold">
+      <p class="eyebrow">{formatDate(new Date())}</p>
+      <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
         {data.greeting}{data.firstName ? `, ${data.firstName}` : ''}
-      </p>
-      <p class="text-xs text-[var(--text-3)]">{formatDate(new Date())}</p>
+      </h1>
     </div>
-    <Button onclick={() => window.location.href = '/sale'} size="sm">
-      <ShoppingCart size={14} strokeWidth={2} /> Start a Sale
+    <Button onclick={() => window.location.href = '/sale'} size="md" class="md:btn-lg">
+      <ShoppingCart size={15} strokeWidth={2} />
+      <span class="hidden sm:inline">New sale</span>
+      <span class="sm:hidden">Sale</span>
     </Button>
   </div>
 
   <!-- ── KPI strip ─────────────────────────────────────────────────────────── -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 stagger-fade">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 anim-stagger">
     <KpiCard
       label="Today's Revenue"
       value={formatCurrencyCompact(data.todayRevenue)}
@@ -114,45 +114,42 @@
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
     <!-- Quick actions -->
-    <div class="card p-4">
-      <div class="flex items-center justify-between mb-3">
+    <!-- Quick Actions -->
+    <div class="surface-card p-4 md:p-5">
+      <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
           <Receipt size={15} style="color:var(--primary)" />
-          <h3 class="font-semibold text-sm">Quick Actions</h3>
+          <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Quick actions</h3>
         </div>
-        <button
-          onclick={() => window.location.href = '/restocking/suppliers'}
-          class="text-[11px] font-semibold text-[var(--text-3)] hover:text-[var(--text)] inline-flex items-center gap-0.5"
+        <a
+          href="/restocking/suppliers"
+          class="text-[11px] font-semibold text-[var(--text-3)] hover:text-[var(--text)] inline-flex items-center gap-0.5 transition-colors"
         >
           Suppliers <ArrowRight size={11} strokeWidth={2} />
-        </button>
+        </a>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
         {#each actions as a}
           {@const isPrimary = a.tone === 'primary'}
-          <button
-            onclick={() => window.location.href = a.href}
-            class="{tileBase} {isPrimary
-              ? '!border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_8%,var(--surface))]'
-              : ''}"
+          <a
+            href={a.href}
+            class="surface-card interactive p-3.5 no-glow group {isPrimary ? 'gradient-primary' : ''}"
           >
-            <div class="w-9 h-9 rounded-lg flex items-center justify-center"
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110"
                  style="background:{isPrimary
                    ? 'color-mix(in srgb, var(--primary) 18%, transparent)'
                    : 'var(--surface2)'}; color:{isPrimary ? 'var(--primary)' : 'var(--text-2)'}">
               <DynamicIcon name={a.icon} size={16} />
             </div>
-            <div>
-              <p class="text-[13px] font-semibold leading-tight">{a.label}</p>
-            </div>
-          </button>
+            <p class="text-[12.5px] font-semibold leading-tight text-[var(--text)]">{a.label}</p>
+          </a>
         {/each}
       </div>
     </div>
 
     <!-- Today's Sales -->
-    <div class="card p-4 md:col-span-2">
+    <div class="surface-card p-4 md:p-5 md:col-span-2">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
           <ShoppingBag size={15} style="color:var(--primary)" />
@@ -218,11 +215,11 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         <!-- Top selling products today -->
-        <div class="card p-4">
-          <div class="flex items-center justify-between mb-3">
+        <div class="surface-card p-4 md:p-5">
+          <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-2">
               <TrendingUp size={15} style="color:var(--primary)" />
-              <h3 class="font-semibold text-sm">Top Sellers Today</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Top sellers today</h3>
             </div>
             {#if data.topProducts.length > 0}
               <span class="badge badge-neutral text-[10px]">{data.topProducts.length}</span>
@@ -230,7 +227,14 @@
           </div>
 
           {#if data.topProducts.length === 0}
-            <p class="text-xs text-[var(--text-3)] py-4 text-center">No products sold yet.</p>
+            <div class="text-center py-6">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2"
+                   style="background:color-mix(in srgb, var(--text-3) 10%, transparent)">
+                <Package size={18} strokeWidth={1.75} class="text-[var(--text-3)]" />
+              </div>
+              <p class="text-[12.5px] font-semibold text-[var(--text-2)]">No products sold yet</p>
+              <p class="text-[11px] text-[var(--text-3)] mt-0.5">Make a sale to see top sellers.</p>
+            </div>
           {:else}
             <div class="space-y-2.5">
               {#each data.topProducts as p, i}
@@ -238,15 +242,15 @@
                 <div>
                   <div class="flex items-center justify-between gap-2 mb-1">
                     <div class="flex items-center gap-2 min-w-0 flex-1">
-                      <span class="text-[10px] font-mono font-bold text-[var(--text-3)] w-4 shrink-0">#{i + 1}</span>
-                      <p class="text-[12.5px] font-medium truncate">{p.name}</p>
+                      <span class="text-[10px] font-mono font-bold text-[var(--text-3)] w-4 shrink-0 tabular">#{i + 1}</span>
+                      <p class="text-[12.5px] font-semibold text-[var(--text)] truncate">{p.name}</p>
                     </div>
-                    <p class="text-[12px] font-semibold tabular-nums whitespace-nowrap">
+                    <p class="text-[12px] font-semibold tabular-nums whitespace-nowrap text-[var(--text-2)]">
                       {p.qty} <span class="text-[var(--text-3)] font-normal">sold</span>
                     </p>
                   </div>
                   <div class="h-1 rounded-full overflow-hidden" style="background:var(--surface2); margin-left:24px">
-                    <div class="h-full rounded-full"
+                    <div class="h-full rounded-full transition-all duration-700"
                          style="width:{(p.qty / maxQty) * 100}%; background:var(--primary)"></div>
                   </div>
                 </div>
@@ -256,18 +260,24 @@
         </div>
 
         <!-- Top categories today -->
-        <div class="card p-4">
-          <div class="flex items-center justify-between mb-3">
+        <div class="surface-card p-4 md:p-5">
+          <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-2">
               <BarChart3 size={15} style="color:var(--primary)" />
-              <h3 class="font-semibold text-sm">By Category</h3>
+              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">By category</h3>
             </div>
           </div>
 
           {#if data.topCategories.length === 0}
-            <p class="text-xs text-[var(--text-3)] py-4 text-center">No category sales yet.</p>
+            <div class="text-center py-6">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2"
+                   style="background:color-mix(in srgb, var(--text-3) 10%, transparent)">
+                <BarChart3 size={18} strokeWidth={1.75} class="text-[var(--text-3)]" />
+              </div>
+              <p class="text-[12.5px] font-semibold text-[var(--text-2)]">No category sales yet</p>
+            </div>
           {:else}
-            <div class="space-y-2">
+            <div class="space-y-2.5">
               {#each data.topCategories as c}
                 {@const totalCatRev = data.topCategories.reduce((s: number, x: any) => s + x.revenue, 0)}
                 {@const pct = totalCatRev > 0 ? Math.round((c.revenue / totalCatRev) * 100) : 0}
@@ -278,10 +288,10 @@
                   </div>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-baseline justify-between gap-2">
-                      <p class="text-[12.5px] font-medium truncate">{c.name}</p>
-                      <p class="text-[11px] font-semibold tabular-nums whitespace-nowrap">{pct}%</p>
+                      <p class="text-[12.5px] font-semibold text-[var(--text)] truncate">{c.name}</p>
+                      <p class="text-[11px] font-semibold tabular-nums whitespace-nowrap text-[var(--text-2)]">{pct}%</p>
                     </div>
-                    <p class="text-[10px] text-[var(--text-3)]">{c.qty} items · {formatCurrency(c.revenue)}</p>
+                    <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">{c.qty} items · {formatCurrency(c.revenue)}</p>
                   </div>
                 </div>
               {/each}
@@ -292,7 +302,7 @@
 
       <!-- Quick stat tiles (basket, customers, stock value) -->
       <div class="grid grid-cols-3 gap-3">
-        <div class="card-flat p-3.5">
+        <div class="surface-card-flat p-3.5">
           <div class="flex items-center gap-2 mb-1.5">
             <div class="w-6 h-6 rounded-md flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--cobalt) 14%, transparent)">
@@ -300,11 +310,11 @@
             </div>
             <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Avg basket</p>
           </div>
-          <p class="text-lg font-semibold tabular-nums">{data.avgBasket || '—'}</p>
+          <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{data.avgBasket || '—'}</p>
           <p class="text-[10px] text-[var(--text-3)] mt-0.5">items per sale</p>
         </div>
 
-        <div class="card-flat p-3.5">
+        <div class="surface-card-flat p-3.5">
           <div class="flex items-center gap-2 mb-1.5">
             <div class="w-6 h-6 rounded-md flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--primary) 14%, transparent)">
@@ -312,11 +322,11 @@
             </div>
             <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Customers</p>
           </div>
-          <p class="text-lg font-semibold tabular-nums">{data.distinctCustomers}</p>
+          <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{data.distinctCustomers}</p>
           <p class="text-[10px] text-[var(--text-3)] mt-0.5">distinct today</p>
         </div>
 
-        <div class="card-flat p-3.5">
+        <div class="surface-card-flat p-3.5">
           <div class="flex items-center gap-2 mb-1.5">
             <div class="w-6 h-6 rounded-md flex items-center justify-center"
                  style="background:color-mix(in srgb, var(--teal) 14%, transparent)">
@@ -324,29 +334,29 @@
             </div>
             <p class="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Stock value</p>
           </div>
-          <p class="text-lg font-semibold tabular-nums">{formatCurrencyCompact(data.stockValueRetail)}</p>
+          <p class="text-lg font-semibold tabular-nums text-[var(--text)]">{formatCurrencyCompact(data.stockValueRetail)}</p>
           <p class="text-[10px] text-[var(--text-3)] mt-0.5">cost {formatCurrencyCompact(data.stockValueCost)}</p>
         </div>
       </div>
     </div>
 
     <!-- Right: combined stock alerts -->
-    <div class="card p-4 md:col-span-1">
-      <div class="flex items-center justify-between mb-3">
+    <div class="surface-card p-4 md:p-5 md:col-span-1">
+      <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
           <AlertTriangle size={15} style="color:var(--crimson)" />
-          <h3 class="font-semibold text-sm">Stock Alerts</h3>
+          <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Stock alerts</h3>
           {#if totalAlerts > 0}
             <span class="badge badge-crimson text-[10px]">{totalAlerts}</span>
           {/if}
         </div>
         {#if totalAlerts > 0}
-          <button
-            onclick={() => window.location.href = '/restocking/orders/new'}
-            class="text-[11px] font-semibold text-[var(--primary)] hover:underline inline-flex items-center gap-0.5"
+          <a
+            href="/restocking/orders/new"
+            class="text-[11px] font-semibold text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 transition-colors"
           >
             Restock <ArrowRight size={11} strokeWidth={2} />
-          </button>
+          </a>
         {/if}
       </div>
 
@@ -356,13 +366,13 @@
                style="background:color-mix(in srgb, var(--teal) 14%, transparent)">
             <Package size={20} strokeWidth={2} style="color:var(--teal)" />
           </div>
-          <p class="text-[13px] font-semibold">All stocked up</p>
+          <p class="text-[13px] font-semibold text-[var(--text)]">All stocked up</p>
           <p class="text-[11px] text-[var(--text-3)] mt-0.5">No items need attention.</p>
         </div>
       {:else}
         <!-- Out-of-stock section -->
         {#if data.outOfStock.length > 0}
-          <div class="mb-3">
+          <div class="mb-4">
             <div class="flex items-center gap-1.5 mb-2">
               <span class="w-1.5 h-1.5 rounded-full" style="background:var(--crimson)"></span>
               <p class="text-[10px] font-bold uppercase tracking-wide" style="color:var(--crimson-fg)">
@@ -374,7 +384,7 @@
               {#each data.outOfStock.slice(0, 4) as product}
                 <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-md"
                      style="background:color-mix(in srgb, var(--crimson) 6%, transparent)">
-                  <p class="text-[12.5px] font-medium truncate min-w-0 flex-1">{product.name}</p>
+                  <p class="text-[12.5px] font-medium text-[var(--text)] truncate min-w-0 flex-1">{product.name}</p>
                   <span class="text-[10px] font-bold tabular-nums whitespace-nowrap" style="color:var(--crimson-fg)">0</span>
                 </div>
               {/each}
@@ -402,14 +412,14 @@
                 <div class="py-1 px-2 rounded-md"
                      style="background:color-mix(in srgb, var(--gold) 6%, transparent)">
                   <div class="flex items-center justify-between gap-2">
-                    <p class="text-[12.5px] font-medium truncate min-w-0 flex-1">{product.name}</p>
+                    <p class="text-[12.5px] font-medium text-[var(--text)] truncate min-w-0 flex-1">{product.name}</p>
                     <p class="text-[11px] tabular-nums whitespace-nowrap">
                       <span style="color:var(--gold-fg); font-weight:600">{product.qty}</span>
                       <span class="text-[var(--text-3)]"> / {threshold}</span>
                     </p>
                   </div>
                   <div class="h-1 rounded-full mt-1 overflow-hidden" style="background:var(--gold-dim)">
-                    <div class="h-full rounded-full"
+                    <div class="h-full rounded-full transition-all duration-700"
                          style="width:{pct}%; background:var(--gold)"></div>
                   </div>
                 </div>
