@@ -39,6 +39,26 @@
         if (c) document.documentElement.style.setProperty('--primary', c);
         if (s) document.documentElement.style.setProperty('--sidebar-bg', s);
       } catch(e) {}
+
+      // Browser-specific perf hint.
+      // Firefox is much slower than Chromium at filter:blur() and
+      // backdrop-filter — both of which are present on the auth and
+      // welcome pages, and on the bottom nav. Adding a class to <html>
+      // lets the CSS drop these effects on Firefox, restoring
+      // smoothness on the same hardware.
+      try {
+        const ua = navigator.userAgent;
+        if (/Firefox\/\d+/.test(ua) && !/Seamonkey/.test(ua)) {
+          document.documentElement.classList.add('is-firefox');
+        } else if (/Edg\//.test(ua)) {
+          document.documentElement.classList.add('is-edge');
+        }
+        // Honour the OS reduced-motion preference.
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+          document.documentElement.classList.add('reduce-motion');
+        }
+      } catch(e) {}
+
       document.documentElement.classList.add('theme-loaded');
     </script>
     <div style="display: contents">%sveltekit.body%</div>

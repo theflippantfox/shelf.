@@ -853,6 +853,26 @@ html.dark .chart-tooltip {
 .t-violet  { color: var(--violet); }
 .t-lime    { color: var(--lime); }
 
+/* ─── Browser-specific perf ─────────────────────────────
+ * Firefox is much slower than Chromium at filter:blur() and
+ * backdrop-filter (no GPU-accelerated path on most platforms).
+ * We detect Firefox at boot via UA and add .is-firefox to <html>;
+ * the rules below then drop the most expensive decorations so
+ * the same hardware feels smooth. */
+.is-firefox .bottom-nav { backdrop-filter: none; background: var(--surface); }
+.is-firefox .auth-glow   { filter: none; opacity: 0.4; }
+.is-firefox .kpi-glow    { display: none; }
+.is-firefox header       { backdrop-filter: none; }
+
+/* Reduced motion: drop stagger animations and hover transforms. */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
 /* ─── Mobile-friendly container sizes ────────────────── */
 @media (max-width: 640px) {
   .display-xl { font-size: 2rem; }

@@ -29,7 +29,7 @@
 
 <div class="surface-card relative p-3 overflow-hidden">
   <!-- soft radial glow tinted to the tone -->
-  <div class="absolute -top-10 -left-10 w-32 h-32 rounded-full pointer-events-none opacity-50"
+  <div class="kpi-glow absolute -top-10 -left-10 w-32 h-32 rounded-full pointer-events-none opacity-50"
        style="background: radial-gradient(circle, color-mix(in srgb, {color} 16%, transparent) 0%, transparent 70%);"></div>
 
   <div class="relative flex items-center gap-1.5 mb-1 min-w-0">

@@ -69,7 +69,7 @@
 <div class="surface-card relative p-3.5 md:p-5 overflow-hidden {cls}">
   <!-- Soft brand glow in top-left corner -->
   {#if !cls.includes('no-glow')}
-    <div class="absolute -top-12 -left-12 w-40 h-40 rounded-full pointer-events-none opacity-60"
+    <div class="kpi-glow absolute -top-12 -left-12 w-40 h-40 rounded-full pointer-events-none opacity-60"
          style="background: radial-gradient(circle, color-mix(in srgb, {iconColor} 18%, transparent) 0%, transparent 70%);">
     </div>
   {/if}

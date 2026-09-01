@@ -5,9 +5,9 @@
 <div class="min-h-screen flex items-center justify-center relative overflow-hidden p-4">
   <!-- Brand ambient background: subtle primary glow + dotted texture -->
   <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
-    <div class="absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full"
+    <div class="auth-glow absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full"
          style="background: radial-gradient(circle, color-mix(in srgb, var(--primary) 22%, transparent) 0%, transparent 60%); filter: blur(20px);"></div>
-    <div class="absolute -bottom-32 -right-32 w-[34rem] h-[34rem] rounded-full"
+    <div class="auth-glow absolute -bottom-32 -right-32 w-[34rem] h-[34rem] rounded-full"
          style="background: radial-gradient(circle, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 60%); filter: blur(20px);"></div>
     <!-- Subtle dot pattern -->
     <div class="absolute inset-0 opacity-[0.35]"
