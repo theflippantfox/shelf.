@@ -8,60 +8,67 @@
 
 <svelte:head><title>Welcome · Shëlf</title></svelte:head>
 
-<div class="min-h-screen bg-[var(--bg)] flex flex-col items-center justify-center p-5">
-  <div class="w-full max-w-md fade-up">
+<div class="min-h-screen flex flex-col items-center justify-center relative overflow-hidden p-5">
+  <!-- Brand ambient background, matches the auth layout -->
+  <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
+    <div class="absolute -top-40 -left-40 w-[40rem] h-[40rem] rounded-full"
+         style="background: radial-gradient(circle, color-mix(in srgb, var(--primary) 22%, transparent) 0%, transparent 60%); filter: blur(20px);"></div>
+    <div class="absolute -bottom-32 -right-32 w-[34rem] h-[34rem] rounded-full"
+         style="background: radial-gradient(circle, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 60%); filter: blur(20px);"></div>
+  </div>
 
-    <!-- Brand -->
-    <div class="text-center mb-8">
-      <span class="font-serif text-3xl" style="color:var(--primary)">Shëlf.</span>
+  <div class="relative w-full max-w-md anim-in">
+    <!-- Brand mark -->
+    <div class="flex items-center justify-center gap-2 mb-8">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center"
+           style="background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 70%, black)); box-shadow: 0 6px 20px -6px color-mix(in srgb, var(--primary) 50%, transparent);">
+        <span class="font-serif text-white text-[20px] leading-none">S</span>
+      </div>
+      <span class="font-serif text-[26px] text-[var(--text)] tracking-tight">Shëlf<span class="text-[var(--primary)]">.</span></span>
     </div>
 
-    <!-- Greeting -->
     <div class="mb-6 text-center">
-      <h1 class="text-xl font-semibold mb-1">Welcome, {firstName}! 👋</h1>
-      <p class="text-sm text-[var(--text-3)]">Your account is ready. What would you like to do?</p>
+      <h1 class="text-[22px] font-semibold text-[var(--text)] tracking-tight">Welcome, {firstName} <span aria-hidden="true">👋</span></h1>
+      <p class="text-[13px] text-[var(--text-3)] mt-1.5">Your account is ready. What would you like to do?</p>
     </div>
 
-    <!-- Options -->
-    <div class="flex flex-col gap-3">
-
+    <div class="flex flex-col gap-3 anim-stagger">
       <!-- Create a shop -->
-      <a
-        href="/onboarding/shop"
-        class="card p-5 flex items-start gap-4 hover:border-[var(--primary)] transition-colors group cursor-pointer"
-        style="border-width:1.5px"
-      >
-        <div class="w-10 h-10 rounded-xl bg-[var(--primary-dim)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--primary)] transition-colors">
-          <Store size={18} style="color:var(--primary)" class="group-hover:text-white transition-colors" />
+      <a href="/onboarding/shop" class="surface-card interactive p-5 flex items-start gap-4 group no-glow">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+             style="background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary);">
+          <Store size={20} strokeWidth={1.75} />
         </div>
         <div class="flex-1 min-w-0">
-          <p class="font-semibold text-sm">Create my shop</p>
-          <p class="text-xs text-[var(--text-3)] mt-0.5">
+          <p class="font-semibold text-[14px] text-[var(--text)]">Create my shop</p>
+          <p class="text-[12.5px] text-[var(--text-3)] mt-0.5 leading-relaxed">
             Set up your own POS — add products, manage inventory, and track sales.
           </p>
         </div>
-        <ArrowRight size={16} class="text-[var(--text-3)] mt-1 flex-shrink-0 group-hover:text-[var(--primary)] transition-colors" strokeWidth={1.75} />
+        <ArrowRight size={16} class="text-[var(--text-3)] mt-1 flex-shrink-0 group-hover:text-[var(--primary)] group-hover:translate-x-0.5 transition-all" strokeWidth={1.75} />
       </a>
 
       <!-- Join a shop -->
-      <div class="card p-5 flex items-start gap-4" style="border-width:1.5px">
-        <div class="w-10 h-10 rounded-xl bg-[var(--surface2)] flex items-center justify-center flex-shrink-0">
-          <UserCheck size={18} class="text-[var(--text-3)]" strokeWidth={1.75} />
+      <div class="surface-card p-5 flex items-start gap-4 no-glow">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+             style="background: var(--surface2); color: var(--text-3);">
+          <UserCheck size={20} strokeWidth={1.75} />
         </div>
         <div class="flex-1 min-w-0">
-          <p class="font-semibold text-sm">Join a shop</p>
-          <p class="text-xs text-[var(--text-3)] mt-0.5">
-            If a shop owner has added you as staff, you'll have access once they send you a login.
-            No action needed here.
+          <p class="font-semibold text-[14px] text-[var(--text)]">Join a shop</p>
+          <p class="text-[12.5px] text-[var(--text-3)] mt-0.5 leading-relaxed">
+            If a shop owner has added you as staff, you'll have access once they send you a login. No action needed here.
           </p>
-          <p class="text-[10px] text-[var(--text-3)] mt-2 bg-[var(--surface2)] rounded-lg px-2 py-1.5 font-mono break-all">
-            Your email: {(data.user as any)?.email}
-          </p>
+          {#if (data.user as any)?.email}
+            <p class="text-[11px] text-[var(--text-2)] mt-2.5 surface-inset px-2.5 py-1.5 font-mono break-all">
+              {(data.user as any)?.email}
+            </p>
+          {/if}
         </div>
       </div>
     </div>
 
-    <p class="text-center text-[10px] text-[var(--text-3)] mt-6">
+    <p class="text-center text-[11px] text-[var(--text-3)] mt-6">
       You can always create or join a shop later from your account.
     </p>
   </div>

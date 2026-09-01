@@ -1,18 +1,21 @@
 <script lang="ts">
+  import type { HTMLInputAttributes } from 'svelte/elements';
+
   let {
     label,
-    value     = $bindable(''),
-    type      = 'text',
+    value       = $bindable(''),
+    type        = 'text',
     placeholder = '',
     hint,
     error,
-    disabled  = false,
-    required  = false,
-    class: cls = '',
+    disabled    = false,
+    required    = false,
+    class: cls  = '',
     id,
     oninput,
     onchange,
-  }: {
+    ...rest
+  }: HTMLInputAttributes & {
     label?:       string;
     value?:       string;
     type?:        string;
@@ -23,8 +26,6 @@
     required?:    boolean;
     class?:       string;
     id?:          string;
-    oninput?:     (e: Event) => void;
-    onchange?:    (e: Event) => void;
   } = $props();
 
   const inputId = $derived(id ?? `input-${Math.random().toString(36).slice(2)}`);
@@ -43,9 +44,10 @@
     {placeholder}
     {disabled}
     {required}
-    class="input {error ? 'input-error' : ''}"
+    class="input {error ? 'input-error' : ''} ring-focus"
     {oninput}
     {onchange}
+    {...rest}
   />
   {#if error}
     <p class="input-error-msg">{error}</p>
