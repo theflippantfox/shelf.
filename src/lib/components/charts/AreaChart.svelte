@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import type { Chart as ChartType, ChartConfiguration } from 'chart.js';
   import { formatCurrency, formatCurrencyMajor } from '$lib/utils/format';
+  import { mountChartTooltip, type ChartTooltipHandle } from '$lib/utils/chartTooltip';
 
   /**
    * AreaChart — premium area chart with smooth tension, brand-tinted
@@ -32,8 +33,7 @@
   let chart:  ChartType | null = null;
   let observer: MutationObserver;
   let ChartCtor: typeof ChartType | null = null;
-  let containerEl: HTMLDivElement;
-  let tooltipEl: HTMLDivElement | null = null;
+  let tooltip: ChartTooltipHandle | null = null;
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -63,14 +63,16 @@
   }
 
   function externalTooltip(context: any) {
-    const { tooltip } = context;
-    if (tooltipEl) { tooltipEl.remove(); tooltipEl = null; }
-    if (!tooltip || tooltip.opacity === 0) return;
-    if (!containerEl) return;
+    const { chart: c, tooltip: t } = context;
+    if (!t || t.opacity === 0 || !c || !canvas) {
+      tooltip?.destroy();
+      tooltip = null;
+      return;
+    }
 
-    const idx = tooltip.dataPoints?.[0]?.dataIndex ?? 0;
+    const idx = t.dataPoints?.[0]?.dataIndex ?? 0;
     const label = labels[idx] ?? '';
-    const dps = tooltip.dataPoints ?? [];
+    const dps = t.dataPoints ?? [];
 
     let body = '';
     for (const dp of dps) {
@@ -84,26 +86,22 @@
         </div>`;
     }
 
-    const div = document.createElement('div');
-    div.className = 'surface-elevated';
-    div.style.cssText = `
-      position: absolute;
-      left: ${tooltip.caretX}px;
-      top: ${tooltip.caretY - 8}px;
-      transform: translate(-50%, -100%);
-      pointer-events: none;
-      padding: 10px 12px;
-      border-radius: 10px;
-      z-index: 10;
-      min-width: 160px;
-      animation: tooltipIn 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    `;
-    div.innerHTML = `
+    const html = `
       <div style="color: var(--text-3); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px;">${label}</div>
       ${body}
     `;
-    containerEl.appendChild(div);
-    tooltipEl = div;
+
+    if (tooltip) {
+      tooltip.reposition({ canvas, caretX: t.caretX, caretY: t.caretY, placement: 'auto' });
+      tooltip.el.innerHTML = html;
+    } else {
+      tooltip = mountChartTooltip(html, {
+        canvas,
+        caretX: t.caretX,
+        caretY: t.caretY,
+        placement: 'auto',
+      });
+    }
   }
 
   function buildConfig(): ChartConfiguration<'line'> {
@@ -200,10 +198,6 @@
   }
 
   onMount(async () => {
-    const style = document.createElement('style');
-    style.textContent = `@keyframes tooltipIn { from { opacity: 0; transform: translate(-50%, -100%) translateY(4px); } to { opacity: 1; transform: translate(-50%, -100%); } }`;
-    document.head.appendChild(style);
-
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
     ChartCtor = Chart;
@@ -227,12 +221,13 @@
   });
 
   onDestroy(() => {
-    tooltipEl?.remove();
+    tooltip?.destroy();
+    tooltip = null;
     chart?.destroy();
     observer?.disconnect();
   });
 </script>
 
-<div bind:this={containerEl} class="relative" style="height: {px(height)};">
+<div class="relative" style="height: {px(height)};">
   <canvas bind:this={canvas}></canvas>
 </div>

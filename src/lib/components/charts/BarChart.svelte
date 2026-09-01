@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import type { Chart as ChartType, ChartConfiguration, TooltipItem } from 'chart.js';
   import { formatCurrency, formatCurrencyMajor } from '$lib/utils/format';
+  import { mountChartTooltip, type ChartTooltipHandle } from '$lib/utils/chartTooltip';
 
   /**
    * BarChart — premium bar chart with custom HTML tooltip.
@@ -42,8 +43,7 @@
   let chart:  ChartType | null = null;
   let observer: MutationObserver;
   let ChartCtor: typeof ChartType | null = null;
-  let containerEl: HTMLDivElement;
-  let tooltipEl: HTMLDivElement | null = null;
+  let tooltip: ChartTooltipHandle | null = null;
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -75,37 +75,37 @@
   }
 
   // Custom HTML tooltip — styled to match the rest of the app.
+  // Uses viewport-fixed positioning (via chartTooltip util) so it can
+  // never be clipped by an ancestor's overflow: hidden when the bar
+  // sits at the right edge of the chart.
   function externalTooltip(context: any) {
-    const { chart, tooltip } = context;
-    if (tooltipEl) {
-      tooltipEl.remove();
-      tooltipEl = null;
+    const { chart: c, tooltip: t } = context;
+    if (!t || t.opacity === 0 || !c || !canvas) {
+      tooltip?.destroy();
+      tooltip = null;
+      return;
     }
-    if (!tooltip || tooltip.opacity === 0) return;
-    if (!containerEl) return;
 
-    const idx = tooltip.dataPoints?.[0]?.dataIndex ?? 0;
+    const idx = t.dataPoints?.[0]?.dataIndex ?? 0;
     const value = data[idx] ?? 0;
     const label = labels[idx] ?? '';
 
-    const div = document.createElement('div');
-    div.className = 'surface-elevated px-3 py-2 text-[12px] pointer-events-none';
-    div.style.cssText = `
-      position: absolute;
-      left: ${tooltip.caretX}px;
-      top: ${tooltip.caretY - 8}px;
-      transform: translate(-50%, -100%);
-      font-variant-numeric: tabular-nums;
-      border-radius: 10px;
-      z-index: 10;
-      animation: tooltipIn 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
-    `;
-    div.innerHTML = `
+    const html = `
       <div style="color: var(--text-3); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">${label}</div>
       <div style="color: var(--text); font-weight: 600; font-size: 13px;">${tooltipFmt(value)}</div>
     `;
-    containerEl.appendChild(div);
-    tooltipEl = div;
+
+    if (tooltip) {
+      tooltip.reposition({ canvas, caretX: t.caretX, caretY: t.caretY, placement: 'auto' });
+      tooltip.el.innerHTML = html;
+    } else {
+      tooltip = mountChartTooltip(html, {
+        canvas,
+        caretX: t.caretX,
+        caretY: t.caretY,
+        placement: 'auto',
+      });
+    }
   }
 
   function buildConfig(): ChartConfiguration<'bar'> {
@@ -188,11 +188,6 @@
   }
 
   onMount(async () => {
-    // Inject tooltip animation
-    const style = document.createElement('style');
-    style.textContent = `@keyframes tooltipIn { from { opacity: 0; transform: translate(-50%, -100%) translateY(4px); } to { opacity: 1; transform: translate(-50%, -100%); } }`;
-    document.head.appendChild(style);
-
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
     ChartCtor = Chart;
@@ -221,12 +216,13 @@
   });
 
   onDestroy(() => {
-    tooltipEl?.remove();
+    tooltip?.destroy();
+    tooltip = null;
     chart?.destroy();
     observer?.disconnect();
   });
 </script>
 
-<div bind:this={containerEl} class="relative" style="height: {px(height)};">
+<div class="relative" style="height: {px(height)};">
   <canvas bind:this={canvas}></canvas>
 </div>

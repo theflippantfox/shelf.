@@ -599,7 +599,7 @@
             </div>
             <div class="rounded-lg p-3 text-center"
                  style="background:color-mix(in srgb, var(--primary) 10%, transparent)">
-              <p class="text-[10px] font-bold uppercase tracking-wide text-[var(--primary-fg)]">Regular</p>
+              <p class="text-[10px] font-bold uppercase tracking-wide">Regular</p>
               <p class="text-lg font-bold tabular-nums mt-1">{customerTiers?.regular ?? 0}</p>
             </div>
             <div class="rounded-lg p-3 text-center"
