@@ -31,6 +31,7 @@ declare
   v_sale public.sales;
   v_item jsonb;
   v_line_total numeric;
+  v_cost_at_sale numeric;
 begin
   -- Authorisation: caller must be an active member of this shop
   if not public.is_shop_member(p_shop_id) then
@@ -55,13 +56,17 @@ begin
   for v_item in select * from jsonb_array_elements(p_items)
   loop
     v_line_total := (v_item->>'unit_price')::numeric * (v_item->>'qty')::int;
+    v_cost_at_sale := coalesce(
+      (select cost_price from public.products where id = (v_item->>'product_id')::uuid),
+      0
+    );
 
     insert into public.sale_items
-      (sale_id, product_id, product_name, product_sku, unit_price, qty, line_total)
+      (sale_id, product_id, product_name, product_sku, unit_price, qty, line_total, cost_at_sale)
     values
       (v_sale.id, (v_item->>'product_id')::uuid,
        v_item->>'name', v_item->>'sku',
-       (v_item->>'unit_price')::numeric, (v_item->>'qty')::int, v_line_total);
+       (v_item->>'unit_price')::numeric, (v_item->>'qty')::int, v_line_total, v_cost_at_sale);
 
     update public.products
       set qty = greatest(0, qty - (v_item->>'qty')::int)

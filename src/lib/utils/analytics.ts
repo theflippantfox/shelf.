@@ -145,7 +145,8 @@ function calcMargin(items: any[]): { margin: number; coverage: number } {
   if (!items || !items.length) return { margin: 0, coverage: 0 };
   let revenue = 0, cogs = 0, withCost = 0;
   for (const item of items) {
-    const cost = item.product?.cost_price ?? 0;
+    // Prefer cost_at_sale snapshot; fall back to joined product.cost_price.
+    const cost = item.cost_at_sale ?? item.product?.cost_price ?? 0;
     revenue += item.line_total ?? 0;
     if (cost > 0) { cogs += (item.qty ?? 0) * cost; withCost++; }
   }
@@ -330,7 +331,7 @@ export function buildProducts(items: any[]): { byRevenue: ProductRow[]; byUnits:
     map[key].revenue += item.line_total ?? 0;
     map[key].units   += item.qty        ?? 0;
 
-    const cost = item.product?.cost_price;
+    const cost = item.cost_at_sale ?? item.product?.cost_price;
     if (cost > 0) {
       const itemRevenue  = item.line_total ?? 0;
       const itemCogs     = (item.qty ?? 0) * cost;
@@ -380,7 +381,7 @@ export function buildCategories(items: any[]): CategoryRow[] {
     }
     map[catId].revenue += item.line_total ?? 0;
     map[catId].units   += item.qty        ?? 0;
-    const cost = item.product?.cost_price ?? 0;
+    const cost = item.cost_at_sale ?? item.product?.cost_price ?? 0;
     if (cost > 0) map[catId].cogs += (item.qty ?? 0) * cost;
   }
 
@@ -480,7 +481,7 @@ export function buildMargin(
     if (!saleId) continue;
     if (!salesMap[saleId]) salesMap[saleId] = { rev: 0, cogs: 0 };
     salesMap[saleId].rev  += item.line_total ?? 0;
-    const cost = item.product?.cost_price ?? 0;
+    const cost = item.cost_at_sale ?? item.product?.cost_price ?? 0;
     if (cost > 0) salesMap[saleId].cogs += (item.qty ?? 0) * cost;
   }
 

@@ -53,7 +53,9 @@ function buildGrossProfit(items: any[], compareItems: any[]) {
   const calc = (arr: any[]) => {
     if (!arr || !Array.isArray(arr)) return 0;
     return arr.reduce((sum, item) => {
-      const cost = (item.product?.cost_price ?? 0) * (item.qty ?? 0);
+      // Prefer cost_at_sale snapshot; fall back to joined product.cost_price.
+      const unit = item.cost_at_sale ?? item.product?.cost_price ?? 0;
+      const cost = unit * (item.qty ?? 0);
       return sum + (item.line_total ?? 0) - cost;
     }, 0);
   };
@@ -126,12 +128,12 @@ export const GET = async ({ cookies, locals, url, setHeaders  }: import('@svelte
   ] = await Promise.all([
     currentIds.length
       ? supabase.from('sale_items')
-          .select('id, sale_id, product_id, product_name, product_sku, qty, unit_price, line_total, product:products(cost_price, category:categories(id, name, color))')
+          .select('id, sale_id, product_id, product_name, product_sku, qty, unit_price, line_total, cost_at_sale, product:products(cost_price, category:categories(id, name, color))')
           .in('sale_id', currentIds)
       : { data: [] },
     compareIds.length
       ? supabase.from('sale_items')
-          .select('id, sale_id, product_id, qty, line_total, product:products(cost_price)')
+          .select('id, sale_id, product_id, qty, line_total, cost_at_sale, product:products(cost_price)')
           .in('sale_id', compareIds)
       : { data: [] },
   ]);

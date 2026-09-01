@@ -45,13 +45,13 @@ export async function load({ cookies,  locals  }: RequestEvent) {
       .or('qty.eq.0,qty.lte.' + threshold)
       .limit(20),
     supabase.from('sale_items')
-      .select('unit_price, qty, line_total, sale:sales!inner(shop_id, voided_at, created_at), product:products(id, name, cost_price, category:categories(id, name, color, icon))')
+      .select('unit_price, qty, line_total, cost_at_sale, sale:sales!inner(shop_id, voided_at, created_at), product:products(id, name, cost_price, category:categories(id, name, color, icon))')
       .eq('sale.shop_id', shopId)
       .is('sale.voided_at', null)
       .gte('sale.created_at', todayStart.toISOString())
       .limit(1000),
     supabase.from('sale_items')
-      .select('unit_price, qty, sale:sales!inner(shop_id, voided_at, created_at), product:products(cost_price)')
+      .select('unit_price, qty, cost_at_sale, sale:sales!inner(shop_id, voided_at, created_at), product:products(cost_price)')
       .eq('sale.shop_id', shopId)
       .is('sale.voided_at', null)
       .gte('sale.created_at', yStart.toISOString())
@@ -69,7 +69,7 @@ export async function load({ cookies,  locals  }: RequestEvent) {
   const todayCount   = ((todaySales as any[]) ?? []).length;
 
   const todayCost = ((saleItemsToday as any[]) ?? []).reduce(
-    (s, item) => s + (item.product?.cost_price ?? 0) * item.qty, 0,
+    (s, item) => s + (item.cost_at_sale ?? item.product?.cost_price ?? 0) * item.qty, 0,
   );
   const todayProfit  = todayRevenue - todayCost;
   const profitMargin = todayRevenue > 0 ? Math.round((todayProfit / todayRevenue) * 100) : 0;
@@ -78,7 +78,7 @@ export async function load({ cookies,  locals  }: RequestEvent) {
   const yestRevenue = ((yestSales as any[]) ?? []).reduce((s, x) => s + x.total, 0);
   const yestCount   = ((yestSales as any[]) ?? []).length;
   const yestCost = ((saleItemsYest as any[]) ?? []).reduce(
-    (s, item) => s + (item.product?.cost_price ?? 0) * item.qty, 0,
+    (s, item) => s + (item.cost_at_sale ?? item.product?.cost_price ?? 0) * item.qty, 0,
   );
   const yestProfit  = yestRevenue - yestCost;
 

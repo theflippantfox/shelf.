@@ -59,11 +59,16 @@ function buildStockValue(products: any[]) {
 }
 
 function buildGrossProfit(items: any[], compareItems: any[]) {
-  // sale_items has no cost_price column — cost lives on the joined product.
-  // (Without this fallback, it.cost_price is always undefined and profit
-  // equals line_total, i.e. 100% margin.)
-  const cogs = (it: any) => (it.product?.cost_price ?? 0) * (it.qty ?? 0);
-  const profit      = items.reduce((acc, it) => acc + ((it.line_total ?? 0) - cogs(it)), 0);
+  // sale_items.cost_at_sale is the snapshot written by create_sale at the
+  // moment of sale. Fall back to the joined product.cost_price for any
+  // historic rows where the snapshot is missing (e.g. pre-snapshot sales).
+  // Either way, line_total - cogs = profit; 100% margin happens when both
+  // are undefined and cogs collapses to 0.
+  const cogs = (it: any) => {
+    const unit = it.cost_at_sale ?? it.product?.cost_price ?? 0;
+    return unit * (it.qty ?? 0);
+  };
+  const profit  = items.reduce((acc, it) => acc + ((it.line_total ?? 0) - cogs(it)), 0);
   const cprofit = compareItems.reduce((acc, it) => acc + ((it.line_total ?? 0) - cogs(it)), 0);
   return { profit, cprofit };
 }
