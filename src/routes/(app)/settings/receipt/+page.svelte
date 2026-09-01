@@ -1,9 +1,7 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
   import { toasts } from '$lib/stores/toast.svelte';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
-  import { ArrowLeft } from 'lucide-svelte';
 
   let { data } = $props();
   const shop = data.shop as any;
@@ -25,12 +23,16 @@
 </script>
 
 <svelte:head><title>Receipt · Shëlf</title></svelte:head>
-<PageShell>
-  <div class="flex items-center gap-3 mb-5">
-    <a href="/settings" class="btn btn-ghost btn-icon btn-sm"><ArrowLeft size={16} strokeWidth={1.75} /></a>
-    <p class="font-semibold text-sm">Receipt</p>
+
+  <header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Settings</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Receipt</h1>
   </div>
-  <div class="card p-5 flex flex-col gap-5 max-w-lg">
+</header>
+
+<div class="page-shell">
+  <div class="surface-card p-4 md:p-5 flex flex-col gap-5 max-w-lg">
     <div class="input-group">
       <label class="input-label">Receipt header</label>
       <textarea bind:value={header} class="input" rows="3"
@@ -55,4 +57,4 @@
       <Button onclick={save} loading={saving}>Save receipt</Button>
     </div>
   </div>
-</PageShell>
+</div>

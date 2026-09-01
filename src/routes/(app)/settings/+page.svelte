@@ -1,40 +1,48 @@
 <script lang="ts">
   import { auth } from '$lib/stores/auth.svelte';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
-  import { ChevronRight } from 'lucide-svelte';
+  import { page } from '$app/stores';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
+  import { Store, Palette, Globe, Percent, Receipt, Tag, Users, ArrowRight } from 'lucide-svelte';
 
+  // All settings entries — visible to every role. Restricted actions
+  // (saving, etc.) are still gated server-side.
   const sections = [
-    { href: '/settings/shop',       icon: 'Store',      label: 'Shop details',   desc: 'Name, slug, contact info',         perm: 'settings.manage' },
-    { href: '/settings/appearance', icon: 'Palette',    label: 'Appearance',     desc: 'Colours, theme, sidebar style',    perm: null },
-    { href: '/settings/locale',     icon: 'Globe',      label: 'Locale',         desc: 'Currency, timezone, date format',  perm: 'settings.manage' },
-    { href: '/settings/taxes',      icon: 'Percent',    label: 'Taxes',          desc: 'Tax rate, name, inclusive pricing',perm: 'settings.manage' },
-    { href: '/settings/receipt',    icon: 'Receipt',    label: 'Receipt',        desc: 'Header and footer text',           perm: 'settings.manage' },
-    { href: '/settings/categories', icon: 'Tag',        label: 'Categories',     desc: 'Manage product categories',        perm: 'settings.manage' },
-    { href: '/settings/team',       icon: 'Users',      label: 'Team',           desc: 'Manage staff and permissions',     perm: 'users.manage' },
-  ] as const;
+    { href: '/settings/shop',       icon: Store,   label: 'Shop',        desc: 'Name, slug, contact info' },
+    { href: '/settings/appearance', icon: Palette, label: 'Appearance',  desc: 'Palette, theme, sidebar style' },
+    { href: '/settings/locale',     icon: Globe,   label: 'Locale',      desc: 'Currency, timezone, date format' },
+    { href: '/settings/taxes',      icon: Percent, label: 'Taxes',       desc: 'Tax rate, name, inclusive pricing' },
+    { href: '/settings/receipt',    icon: Receipt, label: 'Receipt',     desc: 'Header and footer text' },
+    { href: '/settings/categories', icon: Tag,     label: 'Categories',  desc: 'Manage product categories' },
+    { href: '/settings/team',       icon: Users,   label: 'Team',        desc: 'Manage staff and permissions' },
+  ];
 </script>
 
 <svelte:head><title>Settings · Shëlf</title></svelte:head>
-<PageShell>
-  <p class="text-base font-semibold mb-4">Settings</p>
-  <div class="card overflow-hidden">
-    {#each sections as s}
-      {#if !s.perm || auth.can(s.perm as any)}
-        <a
-          href={s.href}
-          class="flex items-center gap-3 px-4 py-3 border-b last:border-0 border-[var(--border)] hover:bg-[var(--surface2)] transition-colors"
-        >
-          <div class="w-8 h-8 rounded-lg bg-[var(--primary-dim)] flex items-center justify-center flex-shrink-0">
-            <DynamicIcon name={s.icon} size={15} class="text-[var(--primary)]" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-xs font-semibold">{s.label}</p>
-            <p class="text-[10px] text-[var(--text-3)]">{s.desc}</p>
-          </div>
-          <ChevronRight size={15} class="text-[var(--text-3)]" />
-        </a>
-      {/if}
-    {/each}
+
+<header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Configure</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+      Settings
+    </h1>
   </div>
-</PageShell>
+</header>
+
+<div class="surface-card overflow-hidden">
+  {#each sections as s, i}
+    <a
+      href={s.href}
+      class="flex items-center gap-3.5 px-4 md:px-5 py-3.5 hover:bg-[var(--surface2)] transition-colors {i < sections.length - 1 ? 'border-b border-[var(--border)]' : ''}"
+    >
+      <div class="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0"
+           style="background: var(--primary-dim); color: var(--primary)">
+        <DynamicIcon name={s.icon as any} size={16} />
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-[13.5px] font-semibold text-[var(--text)]">{s.label}</p>
+        <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">{s.desc}</p>
+      </div>
+      <ArrowRight size={15} class="text-[var(--text-3)] flex-shrink-0" strokeWidth={1.75} />
+    </a>
+  {/each}
+</div>

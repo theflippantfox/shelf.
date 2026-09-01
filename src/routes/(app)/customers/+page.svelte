@@ -67,14 +67,14 @@
 
 <svelte:head><title>Customers · Shëlf</title></svelte:head>
 
-<PageShell>
-  <div class="page-header">
-    <div class="flex-1">
-      <p class="text-base font-semibold">Customers</p>
-      <p class="text-xs text-[var(--text-3)]">{(data.customers as any[]).length} total</p>
-    </div>
-    <Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add</Button>
+<header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Directory</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Customers</h1>
+    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">{(data.customers as any[]).length} total</p>
   </div>
+  <Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add</Button>
+</header>
 
   <SearchBar bind:value={search} placeholder="Search by name or phone…" class="mb-4" />
 
@@ -85,7 +85,7 @@
       {/snippet}
     </EmptyState>
   {:else}
-    <div class="card overflow-hidden">
+    <div class="surface-card overflow-hidden">
       {#each filtered() as c}
         {@const tier = getCustomerTier(c)}
         <a
@@ -118,8 +118,6 @@
       {/each}
     </div>
   {/if}
-</PageShell>
-
 <Modal bind:open={showAdd} title={editing ? 'Edit customer' : 'New customer'} maxWidth="max-w-sm">
   <form onsubmit={(e) => { e.preventDefault(); save(); }} class="flex flex-col gap-3">
     <Input label="Full name" bind:value={form.name}  required />

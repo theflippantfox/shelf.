@@ -4,7 +4,6 @@
   import { auth }       from '$lib/stores/auth.svelte';
   import { PERMISSIONS } from '$lib/config/permissions';
   import { getEffectivePermissions } from '$lib/utils/permissions';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
   import Modal     from '$lib/components/ui/Modal.svelte';
   import Input     from '$lib/components/ui/Input.svelte';
@@ -96,14 +95,18 @@
 </script>
 
 <svelte:head><title>Team · Shëlf</title></svelte:head>
-<PageShell>
-  <div class="flex items-center gap-3 mb-5">
-    <a href="/settings" class="btn btn-ghost btn-icon btn-sm"><ArrowLeft size={16} strokeWidth={1.75} /></a>
-    <p class="font-semibold text-sm flex-1">Team</p>
-    <Button size="sm" onclick={() => showAdd = true}><Plus size={14} strokeWidth={2} /> Add member</Button>
-  </div>
 
-  <div class="card overflow-hidden">
+  <header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Settings</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Team</h1>
+  </div>
+  <Button size="sm" onclick={() => showAdd = true}><Plus size={14} strokeWidth={2} /> Add member</Button>
+</header>
+
+<div class="page-shell">
+
+  <div class="surface-card overflow-hidden">
     {#each data.members as m}
       {@const Icon = roleIcon[(m as any).role] ?? UserCheck}
       {@const isMe = (m as any).user?.id === auth.user?.id}
@@ -133,8 +136,6 @@
       </div>
     {/each}
   </div>
-</PageShell>
-
 <!-- Add member modal -->
 <Modal bind:open={showAdd} title="Add team member" maxWidth="max-w-sm">
   <form onsubmit={(e) => { e.preventDefault(); addMember(); }} class="flex flex-col gap-3">
@@ -178,3 +179,4 @@
     </div>
   {/snippet}
 </Modal>
+</div>

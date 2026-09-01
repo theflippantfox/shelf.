@@ -45,14 +45,8 @@
 
 <aside class="sidebar hidden md:flex">
   <div class="sidebar-brand">
-    <span class="sidebar-brand-text"
-      >Shëlf<span class="sidebar-brand-dot">.</span></span
-    >
-    {#if currentShop.data?.name}
-      <p class="text-[10px] text-white/30 mt-0.5 truncate">
-        {currentShop.data.name}
-      </p>
-    {/if}
+    <span class="sidebar-brand-mark">S</span>
+    <span class="sidebar-brand-text">Shëlf<span class="sidebar-brand-dot">.</span></span>
   </div>
 
   <nav class="flex-1 overflow-y-auto py-2">
@@ -83,24 +77,23 @@
   </nav>
 
   <div class="sidebar-footer">
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2.5">
       <Avatar name={auth.user?.name ?? ""} size={28} />
       <div class="flex-1 min-w-0">
-        <p class="text-xs font-semibold text-white/70 truncate">
+        <p class="text-[12.5px] font-semibold truncate" style="color:var(--sidebar-text)">
           {auth.user?.name}
         </p>
-        <p class="text-[10px] text-white/35 capitalize">{auth.role}</p>
+        <p class="text-[10px] truncate" style="color:var(--sidebar-muted)">
+          {(auth as any).role}
+        </p>
       </div>
       <button
         class="btn btn-ghost btn-icon btn-sm"
         onclick={logout}
         title="Log out"
+        aria-label="Log out"
       >
-        <LogOut
-          size={15}
-          strokeWidth={1.75}
-          style="color:rgba(255,255,255,0.4)"
-        />
+        <LogOut size={14} strokeWidth={1.75} style="color:var(--sidebar-muted)" />
       </button>
     </div>
   </div>

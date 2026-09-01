@@ -3,7 +3,6 @@
   import { formatCurrency, formatDateTime } from '$lib/utils/format';
   import { auth } from '$lib/stores/auth.svelte';
   import { toasts } from '$lib/stores/toast.svelte';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
   import Modal     from '$lib/components/ui/Modal.svelte';
   import Input     from '$lib/components/ui/Input.svelte';
@@ -42,16 +41,13 @@
 <svelte:head><title>Sale {s?.sale_ref ?? 'Unknown'} · Shëlf</title></svelte:head>
 
 {#if !s}
-  <PageShell>
-    <div class="card p-8 text-center">
+  <div class="surface-card p-6 md:p-8 text-center">
       <p class="text-sm text-[var(--text-3)]">Sale not found.</p>
       <button class="btn btn-ghost btn-sm mt-3" onclick={() => goto('/history')}>Back to history</button>
     </div>
-  </PageShell>
-{:else}
+  {:else}
 
-<PageShell>
-  <div class="flex items-center gap-3 mb-5">
+<div class="flex items-center gap-3 mb-5">
     <button class="btn btn-ghost btn-icon" onclick={() => goto('/history')}>
       <ArrowLeft size={16} strokeWidth={1.75} />
     </button>
@@ -75,7 +71,7 @@
   </div>
 
   <!-- Line items -->
-  <div class="card overflow-hidden mb-4">
+  <div class="surface-card overflow-hidden mb-4">
     <table class="tbl">
       <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead>
       <tbody>
@@ -95,7 +91,7 @@
   </div>
 
   <!-- Summary -->
-  <div class="card p-4 mb-4">
+  <div class="surface-card p-4 md:p-5 mb-4">
     <div class="flex flex-col gap-1.5 text-xs">
       <div class="flex justify-between"><span class="text-[var(--text-3)]">Subtotal</span><span>{formatCurrency(s.subtotal)}</span></div>
       {#if s.discount_amount > 0}
@@ -111,7 +107,7 @@
   </div>
 
   <!-- Meta -->
-  <div class="card p-4 text-xs flex flex-col gap-2">
+  <div class="surface-card p-4 md:p-5 text-xs flex flex-col gap-2">
     <div class="flex justify-between"><span class="text-[var(--text-3)]">Customer</span><span>{s.customer?.name ?? 'Walk-in'}</span></div>
     <div class="flex justify-between"><span class="text-[var(--text-3)]">Payment</span><span class="capitalize">{s.payment_method}</span></div>
     <div class="flex justify-between"><span class="text-[var(--text-3)]">Served by</span>
@@ -122,8 +118,6 @@
       {#if s.void_reason}<div class="flex justify-between text-[var(--crimson-fg)]"><span>Reason</span><span>{s.void_reason}</span></div>{/if}
     {/if}
   </div>
-</PageShell>
-
 {/if}
 
 <Modal bind:open={showVoid} title="Void sale" maxWidth="max-w-sm">

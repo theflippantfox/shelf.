@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import PageShell from "$lib/components/layout/PageShell.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -151,23 +150,23 @@
 <svelte:head><title>Suppliers · Shëlf</title></svelte:head>
 
 <!-- ─── Page content ─────────────────────────────────────────────────────── -->
-<PageShell>
-  <div class="page-header">
-    <div class="flex-1">
-      <p class="text-base font-semibold">Suppliers</p>
-      <p class="text-xs text-[var(--text-3)]">
+<header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Restocking</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Suppliers</h1>
+    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">
         Manage your product sources and payment terms
       </p>
-    </div>
-    <Button size="sm" onclick={openAdd}>
+  </div>
+  <Button size="sm" onclick={openAdd}>
       <Plus size={14} strokeWidth={2} /> Add supplier
     </Button>
-  </div>
+</header>
 
   {#if loading}
     <div class="flex flex-col gap-2">
       {#each Array(4) as _}
-        <div class="card p-4 flex items-center gap-3">
+        <div class="surface-card p-4 md:p-5 flex items-center gap-3">
           <div
             class="w-9 h-9 rounded-lg bg-[var(--surface2)] animate-pulse flex-shrink-0"
           ></div>
@@ -196,7 +195,7 @@
     </EmptyState>
   {:else}
     <!-- Desktop table -->
-    <div class="card overflow-hidden hidden md:block">
+    <div class="surface-card overflow-hidden hidden md:block">
       <table class="tbl">
         <thead>
           <tr>
@@ -273,7 +272,7 @@
     <!-- Mobile cards -->
     <div class="flex flex-col gap-3 md:hidden">
       {#each suppliers as s}
-        <div class="card p-4 flex items-start gap-3">
+        <div class="surface-card p-4 md:p-5 flex items-start gap-3">
           <div
             class="w-9 h-9 rounded-lg bg-[var(--primary-dim)] flex items-center justify-center flex-shrink-0 mt-0.5"
           >
@@ -318,9 +317,7 @@
       {/each}
     </div>
   {/if}
-</PageShell>
-
-<!-- ─── Modals rendered OUTSIDE <PageShell> to escape the fade-up stacking context ─── -->
+<!-- ─── Modals rendered OUTSIDE to escape the fade-up stacking context ─── -->
 
 <Modal
   bind:open={showAdd}

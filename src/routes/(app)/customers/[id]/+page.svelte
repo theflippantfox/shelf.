@@ -3,7 +3,6 @@
   import { formatCurrency, formatDate, formatDateTime } from '$lib/utils/format';
   import { getCustomerTier, TIER_LABELS, TIER_BADGE_CLASS } from '$lib/utils/tiers';
   import { toasts }   from '$lib/stores/toast.svelte';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Avatar    from '$lib/components/ui/Avatar.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
   import Modal     from '$lib/components/ui/Modal.svelte';
@@ -45,8 +44,7 @@
 
 <svelte:head><title>{c.name} · Shëlf</title></svelte:head>
 
-<PageShell>
-  <!-- Back + actions -->
+<!-- Back + actions -->
   <div class="flex items-center gap-2 mb-5">
     <a href="/customers" class="btn btn-ghost btn-icon btn-sm"><ArrowLeft size={16} strokeWidth={1.75} /></a>
     <div class="flex-1"></div>
@@ -55,7 +53,7 @@
   </div>
 
   <!-- Profile card -->
-  <div class="card p-5 mb-4">
+  <div class="surface-card p-4 md:p-5 mb-4">
     <div class="flex items-center gap-3 mb-4">
       <Avatar name={c.name} size={44} />
       <div>
@@ -106,7 +104,7 @@
     {#if sales.length === 0}
       <EmptyState icon="ShoppingCart" title="No purchases yet" />
     {:else}
-      <div class="card overflow-hidden">
+      <div class="surface-card overflow-hidden">
         {#each sales as s}
           <a href="/history/{s.id}"
              class="flex items-center gap-3 px-4 py-3 border-b last:border-0 border-[var(--border)] hover:bg-[var(--surface2)] transition-colors">
@@ -123,8 +121,6 @@
       </div>
     {/if}
   </div>
-</PageShell>
-
 <Modal bind:open={showEdit} title="Edit customer" maxWidth="max-w-sm">
   <form onsubmit={(e) => { e.preventDefault(); save(); }} class="flex flex-col gap-3">
     <Input label="Name"  bind:value={form.name}  required />

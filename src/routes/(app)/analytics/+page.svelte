@@ -360,7 +360,7 @@
       <!-- ── §D Yearly Trend + §E Time Distribution (2/1 split) ──────────── -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Yearly trend (2/3) -->
-        <div class="card p-4 space-y-4 lg:col-span-2">
+        <div class="surface-card p-4 md:p-5 space-y-4 lg:col-span-2">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"

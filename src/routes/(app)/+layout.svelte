@@ -17,10 +17,9 @@
     currentShop.init(data.currentShop as any);
 
     if (data.currentShop) {
-      theme.init((data.currentShop as any).theme ?? 'system');
-      theme.applyShopPalette(
-        (data.currentShop as any).primary_color ?? '#7B4F8A',
-        (data.currentShop as any).sidebar_bg    ?? '#150F1C',
+      theme.init(
+        (data.currentShop as any).theme ?? 'system',
+        (data.currentShop as any).palette_id ?? undefined,
       );
     }
   });

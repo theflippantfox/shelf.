@@ -441,6 +441,7 @@ export type Database = {
       }
       sale_items: {
         Row: {
+          cost_at_sale: number | null
           id: string
           line_total: number
           product_id: string
@@ -451,6 +452,7 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          cost_at_sale?: number | null
           id?: string
           line_total: number
           product_id: string
@@ -461,6 +463,7 @@ export type Database = {
           unit_price: number
         }
         Update: {
+          cost_at_sale?: number | null
           id?: string
           line_total?: number
           product_id?: string
@@ -635,6 +638,7 @@ export type Database = {
           onboarding_complete: boolean
           onboarding_step: string
           owner_id: string
+          palette_id: string
           primary_color: string
           receipt_footer: string | null
           receipt_header: string | null
@@ -661,6 +665,7 @@ export type Database = {
           onboarding_complete?: boolean
           onboarding_step?: string
           owner_id: string
+          palette_id?: string
           primary_color?: string
           receipt_footer?: string | null
           receipt_header?: string | null
@@ -687,6 +692,7 @@ export type Database = {
           onboarding_complete?: boolean
           onboarding_step?: string
           owner_id?: string
+          palette_id?: string
           primary_color?: string
           receipt_footer?: string | null
           receipt_header?: string | null

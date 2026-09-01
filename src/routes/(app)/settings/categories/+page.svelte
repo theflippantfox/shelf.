@@ -64,15 +64,15 @@
 </script>
 
 <svelte:head><title>Categories · Shëlf</title></svelte:head>
-<PageShell>
-  <div class="flex items-center gap-3 mb-6">
-    <a href="/settings" class="btn btn-ghost btn-icon btn-sm"><ArrowLeft size={16} strokeWidth={1.75} /></a>
-    <div class="flex-1">
-      <p class="font-semibold text-base">Categories</p>
-      <p class="text-xs text-[var(--text-3)] mt-0.5">Organize your inventory with custom categories</p>
-    </div>
-    <Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add</Button>
+
+<header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Settings</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Categories</h1>
+    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">Organize your inventory with custom categories</p>
   </div>
+  <Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add</Button>
+</header>
 
   {#if (data.categories as any[]).length === 0}
     <EmptyState icon="Tag" title="No categories yet" message="Add categories to organise your inventory.">
@@ -82,7 +82,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 stagger-fade">
       {#each data.categories as cat}
         <div 
-          class="card p-4 transition-all hover:shadow-md hover:-translate-y-0.5"
+          class="surface-card p-4 md:p-5 transition-all hover:shadow-md hover:-translate-y-0.5"
           style="border-left: 3px solid {(cat as any).color}"
         >
           <div class="flex items-start gap-3">
@@ -140,8 +140,6 @@
       </p>
     </div>
   {/if}
-</PageShell>
-
 <Modal bind:open={showModal} title={editing ? 'Edit category' : 'New category'} maxWidth="max-w-sm">
   <div class="flex flex-col gap-4">
     <Input label="Name" bind:value={form.name} required />

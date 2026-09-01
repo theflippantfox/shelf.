@@ -4,10 +4,8 @@
   import { COUNTRIES } from '$lib/config/countries';
   import { TIMEZONES } from '$lib/config/timezones';
   import { CURRENCIES, getCurrency } from '$lib/config/currencies';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Select    from '$lib/components/ui/Select.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
-  import { ArrowLeft } from 'lucide-svelte';
 
   let { data } = $props();
   const shop = data.shop as any;
@@ -50,12 +48,16 @@
 </script>
 
 <svelte:head><title>Locale · Shëlf</title></svelte:head>
-<PageShell>
-  <div class="flex items-center gap-3 mb-5">
-    <a href="/settings" class="btn btn-ghost btn-icon btn-sm"><ArrowLeft size={16} strokeWidth={1.75} /></a>
-    <p class="font-semibold text-sm">Locale</p>
+
+  <header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Settings</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Locale & currency</h1>
   </div>
-  <div class="card p-5 flex flex-col gap-4 max-w-lg">
+</header>
+
+<div class="page-shell">
+  <div class="surface-card p-4 md:p-5 flex flex-col gap-4 max-w-lg">
     <Select label="Currency"    bind:value={currency}    options={curOptions}  />
     <Select label="Timezone"    bind:value={timezone}    options={tzOptions}   />
     <Select label="Date format" bind:value={date_format} options={dateOptions} />
@@ -64,4 +66,4 @@
       <Button onclick={save} loading={saving}>Save changes</Button>
     </div>
   </div>
-</PageShell>
+</div>

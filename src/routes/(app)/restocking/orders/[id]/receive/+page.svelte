@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Toggle from '$lib/components/ui/Toggle.svelte';
@@ -69,19 +68,20 @@
 </script>
 
 <PageShell title="Receive Delivery">
-  <div class="page-header">
-    <div class="flex-1">
-      <p class="text-base font-semibold">Receive Delivery</p>
-      <p class="text-xs text-[var(--text-3)]">Verify and record delivered stock</p>
-    </div>
-    <Button variant="ghost" href="/restocking/orders/{$page.params.id}" size="sm">Cancel</Button>
+  <header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Restocking</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Receive Delivery</h1>
+    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">Verify and record delivered stock</p>
   </div>
+  <Button variant="ghost" href="/restocking/orders/{$page.params.id}" size="sm">Cancel</Button>
+</header>
 
   <div class="max-w-4xl mx-auto p-4 space-y-6">
     
     <!-- PO Info Summary -->
     {#if order}
-      <div class="card p-6 flex justify-between items-center">
+      <div class="surface-card p-5 md:p-6 flex justify-between items-center">
         <div>
           <div class="text-xs text-muted-foreground uppercase font-bold">{order.order_ref}</div>
           <div class="text-xl font-bold">{order.supplier?.name || 'Unknown Supplier'}</div>
@@ -95,13 +95,13 @@
     {/if}
 
     <!-- Receipt Details -->
-    <div class="card p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="surface-card p-5 md:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
       <Input label="Received Date" type="date" bind:value={received_date} />
       <Input label="Receipt Notes" placeholder="e.g. Missing 2 units, damaged box..." bind:value={notes} />
     </div>
 
     <!-- Items Receiving Table -->
-    <div class="card overflow-hidden">
+    <div class="surface-card overflow-hidden">
       <div class="p-4 border-b border-[var(--border)] bg-muted/30">
         <h3 class="font-semibold text-sm">Items to Receive</h3>
         <p class="text-xs text-[var(--text-3)]">Adjust quantities to match actual delivery</p>
@@ -162,4 +162,3 @@
       </Button>
     </div>
   </div>
-</PageShell>

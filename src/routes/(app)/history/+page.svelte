@@ -125,20 +125,21 @@
 
 <svelte:head><title>Sales History · Shëlf</title></svelte:head>
 
-<PageShell>
-  <!-- Header -->
-  <div class="page-header">
-    <div class="flex-1 min-w-0">
-      <p class="text-base font-semibold">Sales History</p>
-      <p class="text-xs text-[var(--text-3)]">
+<!-- Header -->
+  <header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Activity</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Sales History</h1>
+    <p class="text-xs text-[var(--text-3)]">
         {(data as any).totalMatching.toLocaleString()} matching sale{(data as any).totalMatching === 1 ? '' : 's'}
         {#if (data as any).totalMatching > (data as any).sales.length} · page {(data as any).page}{/if}
       </p>
-    </div>
   </div>
+  
+</header>
 
   <!-- Filter bar -->
-  <div class="card-flat p-3 mb-4">
+  <div class="surface-card-flat p-3 mb-4">
     <div class="flex flex-col md:flex-row md:items-center gap-3">
       <div class="flex-1 min-w-0">
         <SearchBar
@@ -226,7 +227,7 @@
         {@const voided  = !!s.voided_at}
         <a
           href="/history/{s.id}"
-          class="card p-3 flex items-center gap-3 hover:border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] hover:-translate-y-0.5 hover:shadow-[var(--shadow-sm)] transition-all
+          class="surface-card p-3 md:p-4 flex items-center gap-3 hover:border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] hover:-translate-y-0.5 hover:shadow-[var(--shadow-sm)] transition-all
                  {voided ? 'opacity-60' : ''}"
         >
           <!-- Payment-method icon -->
@@ -295,4 +296,3 @@
       >Next <ChevronRight size={13} strokeWidth={2} /></button>
     </div>
   {/if}
-</PageShell>

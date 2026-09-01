@@ -1,18 +1,322 @@
+/**
+ * Palette system — each palette is a complete set of design tokens.
+ * The theme store applies these as CSS variables on :root (light) and
+ * .dark (dark variant). One palette ID per shop; users can switch.
+ *
+ * Each palette has:
+ *   id          string used in DB
+ *   name        user-facing name
+ *   tagline     short pitch shown in the picker
+ *   accent      single hex used for the palette "vibe" swatch
+ *   light       light-mode tokens
+ *   dark        dark-mode tokens (auto-applied when theme=dark)
+ */
+
 export interface Palette {
-  name: string;
-  primary: string;
-  sidebarBg: string;
-  description: string;
+  id:      string;
+  name:    string;
+  tagline: string;
+  accent:  string;
+  light:   Tokens;
+  dark:    Tokens;
 }
 
+export interface Tokens {
+  bg:            string;  // page background
+  surface:       string;  // card background
+  surface2:      string;  // raised surface (input bg, hover)
+  inset:         string;  // inset / sunken surface
+  border:        string;  // hairline borders
+  text:          string;  // primary text
+  text2:         string;  // secondary text
+  text3:         string;  // tertiary / muted
+  primary:       string;  // primary brand
+  primaryDim:    string;  // primary at 12% on bg (was the dim wash)
+  primaryFg:     string;  // text on primary fill
+  primaryMid:    string;  // primary mid-tone for hover/active
+  sidebarBg:     string;
+  sidebarText:   string;
+  sidebarMuted:  string;
+  sidebarActive: string;  // background of the active nav item
+  sidebarAccent: string;  // left bar on the active item
+}
+
+const mint = '#10B981';
+const mintDark = '#34D399';
+
 export const PALETTES: Palette[] = [
-  { name: 'Velvet Plum', primary: '#7B4F8A', sidebarBg: '#150F1C', description: 'Luxury beauty' },
-  { name: 'Forest & Linen', primary: '#1C7A52', sidebarBg: '#0F1A14', description: 'Natural, organic' },
-  { name: 'Ocean Cobalt', primary: '#2E5FC7', sidebarBg: '#0D1428', description: 'Clean, modern' },
-  { name: 'Terracotta', primary: '#B85430', sidebarBg: '#1C0E08', description: 'Warm, artisan' },
-  { name: 'Midnight Rose', primary: '#C03868', sidebarBg: '#1A0D14', description: 'Bold, feminine' },
-  { name: 'Slate', primary: '#4A5568', sidebarBg: '#0F1114', description: 'Minimal, neutral' },
+  {
+    id: 'graphite-mint',
+    name: 'Graphite & Mint',
+    tagline: 'Cool, fintech-modern',
+    accent: mint,
+    light: {
+      bg: '#F7F7F8',
+      surface: '#FFFFFF',
+      surface2: '#F1F1F3',
+      inset: '#ECECEE',
+      border: '#E4E4E7',
+      text: '#0B0B0F',
+      text2: '#3F3F46',
+      text3: '#71717A',
+      primary: '#0B0B0F',
+      primaryDim: 'rgba(11,11,15,0.06)',
+      primaryFg: '#FFFFFF',
+      primaryMid: '#27272A',
+      sidebarBg: '#0B0B0F',
+      sidebarText: '#FAFAFA',
+      sidebarMuted: '#71717A',
+      sidebarActive: 'rgba(255,255,255,0.06)',
+      sidebarAccent: mint,
+    },
+    dark: {
+      bg: '#08080A',
+      surface: '#111114',
+      surface2: '#18181B',
+      inset: '#0E0E10',
+      border: '#27272A',
+      text: '#FAFAFA',
+      text2: '#A1A1AA',
+      text3: '#71717A',
+      primary: '#FAFAFA',
+      primaryDim: 'rgba(250,250,250,0.06)',
+      primaryFg: '#0B0B0F',
+      primaryMid: '#D4D4D8',
+      sidebarBg: '#08080A',
+      sidebarText: '#FAFAFA',
+      sidebarMuted: '#52525B',
+      sidebarActive: 'rgba(255,255,255,0.05)',
+      sidebarAccent: mintDark,
+    },
+  },
+  {
+    id: 'ink-gold',
+    name: 'Ink & Gold',
+    tagline: 'Editorial, boutique',
+    accent: '#C9A875',
+    light: {
+      bg: '#FAF8F4',
+      surface: '#FFFFFF',
+      surface2: '#F2EEE7',
+      inset: '#EBE5DA',
+      border: '#E5DFD1',
+      text: '#1A1814',
+      text2: '#4A463E',
+      text3: '#8A857A',
+      primary: '#1A1814',
+      primaryDim: 'rgba(26,24,20,0.05)',
+      primaryFg: '#FAF8F4',
+      primaryMid: '#36322C',
+      sidebarBg: '#1A1814',
+      sidebarText: '#FAF8F4',
+      sidebarMuted: '#8A857A',
+      sidebarActive: 'rgba(255,255,255,0.06)',
+      sidebarAccent: '#C9A875',
+    },
+    dark: {
+      bg: '#121110',
+      surface: '#1C1A18',
+      surface2: '#252220',
+      inset: '#161412',
+      border: '#2D2A26',
+      text: '#F2EEE7',
+      text2: '#B8B2A6',
+      text3: '#7A7468',
+      primary: '#F2EEE7',
+      primaryDim: 'rgba(242,238,231,0.06)',
+      primaryFg: '#121110',
+      primaryMid: '#D8D2C6',
+      sidebarBg: '#0E0D0C',
+      sidebarText: '#F2EEE7',
+      sidebarMuted: '#5A554D',
+      sidebarActive: 'rgba(255,255,255,0.05)',
+      sidebarAccent: '#C9A875',
+    },
+  },
+  {
+    id: 'mist-violet',
+    name: 'Mist & Violet',
+    tagline: 'Modern, confident',
+    accent: '#8B5CF6',
+    light: {
+      bg: '#F8F8FB',
+      surface: '#FFFFFF',
+      surface2: '#F1F1F6',
+      inset: '#ECECF1',
+      border: '#E2E2EC',
+      text: '#0F0F14',
+      text2: '#3D3D4A',
+      text3: '#73738A',
+      primary: '#7C3AED',
+      primaryDim: 'rgba(124,58,237,0.08)',
+      primaryFg: '#FFFFFF',
+      primaryMid: '#6D28D9',
+      sidebarBg: '#0F0F14',
+      sidebarText: '#FAFAFA',
+      sidebarMuted: '#73738A',
+      sidebarActive: 'rgba(255,255,255,0.06)',
+      sidebarAccent: '#A78BFA',
+    },
+    dark: {
+      bg: '#0A0A10',
+      surface: '#13131C',
+      surface2: '#1A1A24',
+      inset: '#0F0F16',
+      border: '#27272F',
+      text: '#FAFAFA',
+      text2: '#A1A1AA',
+      text3: '#71717A',
+      primary: '#A78BFA',
+      primaryDim: 'rgba(167,139,250,0.10)',
+      primaryFg: '#0A0A10',
+      primaryMid: '#8B5CF6',
+      sidebarBg: '#08080D',
+      sidebarText: '#FAFAFA',
+      sidebarMuted: '#52525B',
+      sidebarActive: 'rgba(167,139,250,0.10)',
+      sidebarAccent: '#A78BFA',
+    },
+  },
+  {
+    id: 'ocean-cobalt',
+    name: 'Ocean Cobalt',
+    tagline: 'Trusted, enterprise',
+    accent: '#3B82F6',
+    light: {
+      bg: '#F4F7FB',
+      surface: '#FFFFFF',
+      surface2: '#EAEFF6',
+      inset: '#E0E7F0',
+      border: '#D7DFEA',
+      text: '#0E1626',
+      text2: '#37445A',
+      text3: '#6B7A93',
+      primary: '#1E40AF',
+      primaryDim: 'rgba(30,64,175,0.08)',
+      primaryFg: '#FFFFFF',
+      primaryMid: '#1E3A8A',
+      sidebarBg: '#0E1626',
+      sidebarText: '#E4ECF7',
+      sidebarMuted: '#6B7A93',
+      sidebarActive: 'rgba(255,255,255,0.05)',
+      sidebarAccent: '#60A5FA',
+    },
+    dark: {
+      bg: '#0A0F1A',
+      surface: '#121826',
+      surface2: '#1A2230',
+      inset: '#0E131E',
+      border: '#252E3F',
+      text: '#F1F5FB',
+      text2: '#A0AEC5',
+      text3: '#6B7A93',
+      primary: '#60A5FA',
+      primaryDim: 'rgba(96,165,250,0.10)',
+      primaryFg: '#0A0F1A',
+      primaryMid: '#3B82F6',
+      sidebarBg: '#080C14',
+      sidebarText: '#F1F5FB',
+      sidebarMuted: '#4A5568',
+      sidebarActive: 'rgba(96,165,250,0.10)',
+      sidebarAccent: '#60A5FA',
+    },
+  },
+  {
+    id: 'forest-linen',
+    name: 'Forest & Linen',
+    tagline: 'Organic, calm',
+    accent: '#1C7A52',
+    light: {
+      bg: '#F6F5F0',
+      surface: '#FFFFFF',
+      surface2: '#ECEBE3',
+      inset: '#E2E0D5',
+      border: '#D7D4C5',
+      text: '#0E1F15',
+      text2: '#3D4F42',
+      text3: '#6B7A70',
+      primary: '#0F4A30',
+      primaryDim: 'rgba(15,74,48,0.07)',
+      primaryFg: '#F6F5F0',
+      primaryMid: '#173E29',
+      sidebarBg: '#0E1F15',
+      sidebarText: '#E8EDE5',
+      sidebarMuted: '#6B7A70',
+      sidebarActive: 'rgba(255,255,255,0.05)',
+      sidebarAccent: '#4ADE80',
+    },
+    dark: {
+      bg: '#0B100C',
+      surface: '#141A14',
+      surface2: '#1C231C',
+      inset: '#0E130E',
+      border: '#2A302A',
+      text: '#F0F2EC',
+      text2: '#A1A89E',
+      text3: '#6B7A70',
+      primary: '#4ADE80',
+      primaryDim: 'rgba(74,222,128,0.10)',
+      primaryFg: '#0B100C',
+      primaryMid: '#22C55E',
+      sidebarBg: '#080C09',
+      sidebarText: '#F0F2EC',
+      sidebarMuted: '#4F584E',
+      sidebarActive: 'rgba(74,222,128,0.08)',
+      sidebarAccent: '#4ADE80',
+    },
+  },
+  {
+    id: 'rose-clay',
+    name: 'Rose & Clay',
+    tagline: 'Warm, expressive',
+    accent: '#E11D48',
+    light: {
+      bg: '#FAF6F4',
+      surface: '#FFFFFF',
+      surface2: '#F1E9E6',
+      inset: '#E9DFDA',
+      border: '#E2D5CD',
+      text: '#1A0F0F',
+      text2: '#4A3838',
+      text3: '#8A7575',
+      primary: '#9F1239',
+      primaryDim: 'rgba(159,18,57,0.07)',
+      primaryFg: '#FFFFFF',
+      primaryMid: '#881337',
+      sidebarBg: '#1A0F0F',
+      sidebarText: '#FAF6F4',
+      sidebarMuted: '#8A7575',
+      sidebarActive: 'rgba(255,255,255,0.05)',
+      sidebarAccent: '#FB7185',
+    },
+    dark: {
+      bg: '#0F0A0A',
+      surface: '#1A1111',
+      surface2: '#221818',
+      inset: '#130C0C',
+      border: '#322525',
+      text: '#FAF6F4',
+      text2: '#B8A8A8',
+      text3: '#7A6B6B',
+      primary: '#FB7185',
+      primaryDim: 'rgba(251,113,133,0.10)',
+      primaryFg: '#0F0A0A',
+      primaryMid: '#F43F5E',
+      sidebarBg: '#0B0707',
+      sidebarText: '#FAF6F4',
+      sidebarMuted: '#5A4F4F',
+      sidebarActive: 'rgba(251,113,133,0.08)',
+      sidebarAccent: '#FB7185',
+    },
+  },
 ];
+
+export const DEFAULT_PALETTE = PALETTES[0]; // Graphite & Mint
+export const DEFAULT_THEME   = 'system';
+
+export function getPalette(id: string | null | undefined): Palette {
+  return PALETTES.find((p) => p.id === id) ?? DEFAULT_PALETTE;
+}
 
 export const CATEGORY_COLORS = [
   // Purple & Pink
@@ -34,5 +338,3 @@ export const CATEGORY_COLORS = [
   // Indigo & Violet
   '#4F46E5', '#6366F1', '#7C3AED', '#8B5CF6', '#A855F7',
 ];
-
-export const DEFAULT_PALETTE = PALETTES[0];

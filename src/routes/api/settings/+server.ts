@@ -16,7 +16,7 @@ export async function PATCH({ cookies, request, locals  }: import('@sveltejs/kit
   const ALLOWED = [
     'name', 'timezone', 'currency_code', 'currency_symbol', 'currency_locale',
     'date_format', 'time_format', 'tax_rate', 'tax_inclusive', 'tax_name',
-    'theme', 'primary_color', 'sidebar_bg', 'low_stock_threshold',
+    'theme', 'palette_id', 'primary_color', 'sidebar_bg', 'low_stock_threshold',
     'receipt_header', 'receipt_footer', 'country_code',
   ];
   const safe: Record<string, unknown> = {};

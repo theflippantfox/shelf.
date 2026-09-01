@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { api } from '$lib/utils/api';
   import { toasts } from '$lib/stores/toast.svelte';
@@ -29,17 +28,18 @@
 </script>
 
 <PageShell title="Price Comparison">
-  <div class="page-header">
-    <div class="flex-1">
-      <p class="text-base font-semibold">Price Comparison</p>
-      <p class="text-xs text-[var(--text-3)]">Compare latest unit costs across your suppliers</p>
-    </div>
-    <Button href="/restocking/orders/new" size="sm">
+  <header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Restocking</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Price Comparison</h1>
+    <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">Compare latest unit costs across your suppliers</p>
+  </div>
+  <Button href="/restocking/orders/new" size="sm">
       <span class="flex items-center gap-1">
         <span class="text-xs">➕</span> New Order
       </span>
     </Button>
-  </div>
+</header>
 
   <div class="p-4 space-y-6">
     {#if loading}
@@ -47,7 +47,7 @@
         <span class="animate-spin">🌀</span>
       </div>
     {:else}
-      <div class="card overflow-hidden">
+      <div class="surface-card overflow-hidden">
         <div class="p-4 border-b border-[var(--border)] bg-muted/30 flex justify-between items-center">
           <h3 class="font-semibold text-sm">Supplier Price Matrix</h3>
           <p class="text-xs text-[var(--text-3)]">Latest observed unit costs</p>
@@ -103,4 +103,3 @@
       </div>
     {/if}
   </div>
-</PageShell>

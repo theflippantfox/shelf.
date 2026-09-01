@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
-  import PageShell from "$lib/components/layout/PageShell.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -289,25 +288,21 @@
 
 <svelte:head><title>New Purchase Order · Shëlf</title></svelte:head>
 
-<PageShell>
-  <!-- Header -->
-  <div class="page-header mb-6">
-    <div class="flex items-center gap-3 flex-1">
-      <a href="/restocking" class="btn btn-ghost btn-icon btn-sm">
-        <ArrowLeft size={16} strokeWidth={1.75} />
-      </a>
-      <div>
-        <p class="text-base font-semibold">New Purchase Order</p>
-        <p class="text-xs text-[var(--text-3)]">
+<!-- Header -->
+  <header class="flex items-end justify-between gap-3 mb-5">
+  <div class="min-w-0">
+    <p class="eyebrow">Restocking</p>
+    <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">New Purchase Order</h1>
+    <p class="text-xs text-[var(--text-3)]">
           Record incoming stock from a supplier
         </p>
-      </div>
-    </div>
   </div>
+  
+</header>
 
   <div class="flex flex-col gap-5 max-w-4xl mx-auto">
     <!-- ── Order details card ───────────────────────────────────────────── -->
-    <div class="card p-5">
+    <div class="surface-card p-4 md:p-5">
       <p class="text-xs font-semibold text-[var(--text-2)] mb-4">
         Order details
       </p>
@@ -371,7 +366,7 @@
     </div>
 
     <!-- ── Items card ───────────────────────────────────────────────────── -->
-    <div class="card overflow-visible">
+    <div class="surface-card overflow-visible">
       <div
         class="p-4 border-b border-[var(--border)] flex items-center justify-between gap-3"
       >
@@ -563,7 +558,7 @@
 
     <!-- ── Totals + actions ──────────────────────────────────────────────── -->
     <div class="flex justify-end">
-      <div class="card p-5 w-full md:w-80 flex flex-col gap-3">
+      <div class="surface-card p-4 md:p-5 w-full md:w-80 flex flex-col gap-3">
         <p class="text-xs font-semibold text-[var(--text-2)] mb-1">
           Order total
         </p>
@@ -623,8 +618,6 @@
       </div>
     </div>
   </div>
-</PageShell>
-
 <!-- ─── Modals OUTSIDE PageShell to escape transform containing block ──────── -->
 
 <Modal

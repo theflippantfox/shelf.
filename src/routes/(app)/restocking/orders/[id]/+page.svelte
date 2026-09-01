@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { api } from '$lib/utils/api';
   import { toasts } from '$lib/stores/toast.svelte';
@@ -36,7 +35,7 @@
         <span class="animate-spin">🌀</span>
       </div>
     {:else if order}
-      <div class="card p-6 space-y-6">
+      <div class="surface-card p-5 md:p-6 space-y-6">
         <div class="flex justify-between items-start">
           <div>
             <div class="text-3xl font-bold">{order.supplier?.name || 'Unknown Supplier'}</div>
@@ -117,4 +116,3 @@
       </div>
     {/if}
   </div>
-</PageShell>
