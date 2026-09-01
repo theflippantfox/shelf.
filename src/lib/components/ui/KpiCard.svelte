@@ -66,7 +66,7 @@
   );
 </script>
 
-<div class="surface-card relative p-4 md:p-5 overflow-hidden {cls}">
+<div class="surface-card relative p-3.5 md:p-5 overflow-hidden {cls}">
   <!-- Soft brand glow in top-left corner -->
   {#if !cls.includes('no-glow')}
     <div class="absolute -top-12 -left-12 w-40 h-40 rounded-full pointer-events-none opacity-60"
@@ -75,16 +75,17 @@
   {/if}
 
   <div class="relative flex items-start justify-between gap-2 mb-1">
-    <p class="eyebrow">{label}</p>
+    <p class="eyebrow leading-none truncate flex-1 min-w-0">{label}</p>
     {#if icon}
-      <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+      <div class="w-6 h-6 md:w-7 md:h-7 rounded-md md:rounded-lg flex items-center justify-center flex-shrink-0"
            style="background:color-mix(in srgb,{iconColor} 14%,transparent)">
-        <DynamicIcon name={icon} size={14} style="color:{iconColor}" />
+        <DynamicIcon name={icon} size={12} class="md:hidden" style="color:{iconColor}" />
+        <DynamicIcon name={icon} size={14} class="hidden md:block" style="color:{iconColor}" />
       </div>
     {/if}
   </div>
 
-  <p class="relative display-md md:display-lg tabular text-[var(--text)]">
+  <p class="relative display-sm md:display-md tabular text-[var(--text)] leading-tight truncate">
     {#if display != null}
       {display}
     {:else if numericValue != null}
@@ -94,10 +95,10 @@
     {/if}
   </p>
 
-  <div class="relative flex items-center gap-2 mt-1.5 flex-wrap">
-    {#if sub}<p class="text-[12px] text-[var(--text-3)]">{sub}</p>{/if}
+  <div class="relative flex items-center gap-1.5 mt-1.5 min-w-0">
+    {#if sub}<p class="text-[11px] text-[var(--text-3)] truncate flex-1 min-w-0">{sub}</p>{/if}
     {#if trend}
-      <span class="inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-md {trendTone} {trendChipClass}">
+      <span class="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1 py-0.5 rounded-md whitespace-nowrap {trendTone} {trendChipClass}">
         <span aria-hidden="true">{trendArrow}</span>
         <span>{trend.label}</span>
       </span>

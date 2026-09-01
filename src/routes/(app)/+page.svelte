@@ -56,7 +56,7 @@
   </h1>
 
   <!-- ── Stats area: 4 primary KPIs + 3 secondary stats, all in one block ── -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 anim-stagger">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-2 md:mb-3 anim-stagger">
     <KpiCard
       label="Today's Revenue"
       value={formatCurrencyCompact(data.todayRevenue)}
@@ -103,7 +103,7 @@
     />
   </div>
 
-  <div class="grid grid-cols-3 gap-3 mb-6 anim-stagger" style="animation-delay: 200ms">
+  <div class="grid grid-cols-3 gap-2 md:gap-3 mb-6 anim-stagger" style="animation-delay: 200ms">
     <StatTile
       label="Avg basket"
       value={String(data.avgBasket || '—')}
