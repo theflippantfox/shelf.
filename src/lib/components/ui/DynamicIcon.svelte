@@ -6,7 +6,7 @@
     class: cls = '',
     style = '',
   }: {
-    name: string;
+    name: string | unknown;  // accepts a string icon name OR an imported lucide component
     size?: number;
     strokeWidth?: number;
     class?: string;
@@ -17,8 +17,16 @@
   import * as icons from 'lucide-svelte';
   type IconCtor = typeof icons.Package;
 
-  // Resolve to actual component each render with fallback
-  const IconComponent = $derived((icons as Record<string, unknown>)[name] as IconCtor | undefined);
+  // Resolve to actual component each render with fallback.
+  // Accepts either a string name ('Package') or an already-imported
+  // component (the Store variable imported from lucide-svelte).
+  const IconComponent = $derived.by(() => {
+    if (typeof name === 'string') {
+      return (icons as Record<string, unknown>)[name] as IconCtor | undefined;
+    }
+    // name is already a component
+    return name as IconCtor;
+  });
 </script>
 
 {#if IconComponent}
