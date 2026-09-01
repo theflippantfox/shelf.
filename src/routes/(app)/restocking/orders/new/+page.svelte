@@ -104,8 +104,8 @@
       toasts.info(`${p.name} is already in the order`);
       return;
     }
-    // cost_price from Directus is in minor units → divide by 100 for display
-    const costDisp = p.cost_price ? p.cost_price / 100 : 0;
+    // cost_price is stored in major units (rupees).
+    const costDisp = p.cost_price ?? 0;
     items = [
       ...items,
       {
@@ -172,8 +172,8 @@
           sku: newProd.sku,
           category: newProd.category || null,
           unit: newProd.unit,
-          price: Math.round(parseFloat(newProd.price || "0") * 100),
-          cost_price: Math.round(parseFloat(newProd.cost_price || "0") * 100),
+          price: parseFloat(newProd.price || "0"),
+          cost_price: parseFloat(newProd.cost_price || "0"),
           low_stock_threshold: parseInt(newProd.low_stock_threshold || "10"),
           qty: 0,
         }),
@@ -229,11 +229,11 @@
 
     saving = true;
     try {
-      // All monetary fields → minor units (× 100) before hitting the API
-      const subtotalMinor = Math.round(subtotalDisp * 100);
-      const taxMinor = Math.round(Number(taxDisp || 0) * 100);
-      const shippingMinor = Math.round(Number(shippingDisp || 0) * 100);
-      const totalMinor = subtotalMinor + taxMinor + shippingMinor;
+      // Monetary fields are sent in major units (rupees).
+      const subtotalMajor = subtotalDisp;
+      const taxMajor      = Number(taxDisp      || 0);
+      const shippingMajor = Number(shippingDisp || 0);
+      const totalMajor    = subtotalMajor + taxMajor + shippingMajor;
 
       const poRes = await fetch("/api/purchase-orders", {
         method: "POST",
@@ -244,10 +244,10 @@
           status,
           order_date: orderDate,
           expected_delivery_date: delivDate || null,
-          subtotal: subtotalMinor,
-          tax_amount: taxMinor,
-          shipping_cost: shippingMinor,
-          total_cost: totalMinor,
+          subtotal: subtotalMajor,
+          tax_amount: taxMajor,
+          shipping_cost: shippingMajor,
+          total_cost: totalMajor,
           notes: notes || null,
         }),
       });
@@ -259,10 +259,10 @@
       }
       const po = await poRes.json();
 
-      // Post each line item — unit_cost and line_total in minor units
+      // Post each line item — unit_cost and line_total in major units
       for (const item of items) {
-        const unitCostMinor = Math.round(item.unitCostDisp * 100);
-        const lineTotalMinor = Math.round(item.lineTotalDisp * 100);
+        const unitCostMajor  = item.unitCostDisp;
+        const lineTotalMajor = item.lineTotalDisp;
 
         await fetch(`/api/purchase-orders/${po.id}/items`, {
           method: "POST",
@@ -273,8 +273,8 @@
             product_sku: item.productSku,
             quantity_ordered: item.qtyOrdered,
             quantity_received: 0,
-            unit_cost: unitCostMinor,
-            line_total: lineTotalMinor,
+            unit_cost: unitCostMajor,
+            line_total: lineTotalMajor,
             is_new_product: item.isNew,
           }),
         });
@@ -491,8 +491,7 @@
                     />
                   </td>
                   <td class="text-right text-xs font-semibold">
-                    <!-- lineTotalDisp is display units → pass × 100 to formatCurrency -->
-                    {formatCurrency(Math.round(item.lineTotalDisp * 100))}
+                    {formatCurrency(item.lineTotalDisp)}
                   </td>
                   <td>
                     <button
@@ -553,7 +552,7 @@
                 </div>
               </div>
               <div class="flex justify-end text-xs font-semibold">
-                Total: {formatCurrency(Math.round(item.lineTotalDisp * 100))}
+                Total: {formatCurrency(item.lineTotalDisp)}
               </div>
             </div>
           {/each}
@@ -571,7 +570,7 @@
         <div class="flex justify-between items-center text-xs">
           <span class="text-[var(--text-3)]">Subtotal</span>
           <span class="font-medium"
-            >{formatCurrency(Math.round(subtotalDisp * 100))}</span
+            >{formatCurrency(subtotalDisp)}</span
           >
         </div>
 
@@ -604,7 +603,7 @@
         >
           <span class="text-sm font-semibold">Total investment</span>
           <span class="text-base font-bold" style="color:var(--primary)">
-            {formatCurrency(Math.round(totalDisp * 100))}
+            {formatCurrency(totalDisp)}
           </span>
         </div>
 

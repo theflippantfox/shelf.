@@ -140,8 +140,8 @@
   function openEdit(p: any) {
     form = {
       name: p.name, sku: p.sku,
-      price:      String(p.price / 100),
-      cost_price: String(p.cost_price / 100),
+      price:      String(p.price),
+      cost_price: String(p.cost_price),
       qty:        String(p.qty),
       unit:       p.unit,
       category:   p.category?.id ?? p.category ?? '',
@@ -161,8 +161,8 @@
     const payload = {
       name:                form.name,
       sku:                 form.sku,
-      price:               Math.round(parseFloat(form.price  || '0') * 100),
-      cost_price:          Math.round(parseFloat(form.cost_price || '0') * 100),
+      price:               parseFloat(form.price  || '0'),
+      cost_price:          parseFloat(form.cost_price || '0'),
       qty:                 parseInt(form.qty || '0'),
       unit:                form.unit,
       category:            form.category || null,

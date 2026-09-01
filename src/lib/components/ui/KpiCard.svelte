@@ -61,7 +61,7 @@
     display
       ? display
       : (isCurrency && value != null)
-        ? (n: number) => `${symbol}${Math.round(n / 100).toLocaleString()}`
+        ? (n: number) => `${symbol}${Math.round(n).toLocaleString()}`
         : (n: number) => Math.round(n).toLocaleString()
   );
 </script>

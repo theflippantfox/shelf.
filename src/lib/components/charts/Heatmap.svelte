@@ -11,13 +11,13 @@
     hours       = Array.from({ length: 24 }, (_, i) => `${i}:00`),
     days        = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     showHours   = true,
-    currencyMode = false,
+    format      = 'currency',  // 'currency' | 'number'
   }: {
     values?:      number[][];
     hours?:       string[];
     days?:        string[];
     showHours?:   boolean;
-    currencyMode?: boolean;
+    format?:      'currency' | 'number';
   } = $props();
 
   const maxVal = $derived(values.flat().reduce((m, v) => Math.max(m, v), 0) || 1);
@@ -33,10 +33,8 @@
   }
 
   function tooltip(value: number, day: string, hour: string): string {
-    if (currencyMode) {
-      return `${day} ${hour}: ${formatCurrency(value)}`;
-    }
-    return `${day} ${hour}: ${value.toLocaleString()}`;
+    const formatted = format === 'currency' ? formatCurrency(value) : value.toLocaleString();
+    return `${day} ${hour}: ${formatted}`;
   }
 
   // Show hour labels at 0, 6, 12, 18

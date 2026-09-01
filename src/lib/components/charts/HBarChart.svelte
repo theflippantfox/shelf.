@@ -14,14 +14,12 @@
     labels      = [],
     color       = 'var(--primary)',
     height,
-    currencyMode = false,
     yFormat     = 'number',
   }: {
     data?:         number[];
     labels?:       string[];
     color?:        string;
     height?:       number | string;
-    currencyMode?: boolean;
     yFormat?:      'number' | 'currency' | 'count';
   } = $props();
 
@@ -45,9 +43,9 @@
 
   function fmt(n: number): string {
     if (yFormat === 'currency') {
-      const major = currencyMode ? n : n / 100;
-      const abs = Math.abs(major);
-      const sign = major < 0 ? '-' : '';
+      // Chart data is in major units.
+      const abs = Math.abs(n);
+      const sign = n < 0 ? '-' : '';
       if (abs >= 1_000_000) return sign + formatCurrencyMajor(abs / 1_000_000, { decimals: 1 }) + 'M';
       if (abs >= 1_000)     return sign + formatCurrencyMajor(abs / 1_000,     { decimals: 1 }) + 'k';
       return sign + formatCurrencyMajor(abs, { decimals: 0 });
@@ -58,8 +56,7 @@
   }
   function tooltipFmt(n: number): string {
     if (yFormat === 'currency') {
-      const major = currencyMode ? n : n / 100;
-      return formatCurrency(major);
+      return formatCurrency(n);
     }
     return n.toLocaleString();
   }

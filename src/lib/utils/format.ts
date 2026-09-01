@@ -30,15 +30,33 @@ export function setFormatLocale(opts: {
   _timeFormat = opts.timeFormat;
 }
 
-export function formatCurrency(minorUnits: number): string {
+/*
+ * Money conventions in Shëlf:
+ *
+ *   - The DB stores amounts in MAJOR units (rupees, dollars, etc.) as
+ *     numeric(10,2). For an item priced at ₹20, the products.price
+ *     column holds 20, not 2000.
+ *   - The cart sends totals in major units when it calls the sales API.
+ *   - Every formatter below (formatCurrency, formatCurrencyCompact)
+ *     takes a major-units value and returns a display string. There is
+ *     no divide-by-100 anywhere on the read path.
+ *   - The earlier "minor units" convention (multiply by 100 on write,
+ *     divide by 100 on read) was abandoned because the cart and the
+ *     DB both work in major units — see commit history.
+ *
+ * If you ever need to convert major ↔ minor for some other reason, use
+ * plain arithmetic: `major * 100` and `minor / 100`.
+ */
+
+export function formatCurrency(amount: number): string {
   try {
     return new Intl.NumberFormat(_locale, {
       style:    'currency',
       currency: _currency,
       minimumFractionDigits: 2,
-    }).format(minorUnits / 100);
+    }).format(amount);
   } catch {
-    return `${_currency} ${(minorUnits / 100).toFixed(2)}`;
+    return `${_currency} ${amount.toFixed(2)}`;
   }
 }
 
@@ -66,14 +84,6 @@ export function formatRelative(d: string | Date): string {
 
 export function shopNow(): dayjs.Dayjs {
   return dayjs().tz(_timezone);
-}
-
-export function fromMinorUnits(minor: number): number {
-  return minor / 100;
-}
-
-export function toMinorUnits(amount: number): number {
-  return Math.round(amount * 100);
 }
 
 /**
@@ -122,9 +132,10 @@ function trimZeros(s: string): string {
 /** Compact currency formatter — for KPI big numbers and table cells.
  *  Reads the active currency symbol from the Intl formatter when possible.
  *  Falls back to a manual prefix when the locale doesn't expose a symbol.
+ *  Input is a major-units value (the same number you'd see in the DB).
  */
-export function formatCurrencyCompact(minorUnits: number): string {
-  return `${getCurrencySymbol()}${formatCompact(minorUnits / 100)}`;
+export function formatCurrencyCompact(amount: number): string {
+  return `${getCurrencySymbol()}${formatCompact(amount)}`;
 }
 
 /** Return the active shop's currency symbol (e.g. "₹", "$", "€").

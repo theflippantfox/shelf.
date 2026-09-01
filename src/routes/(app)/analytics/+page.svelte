@@ -47,9 +47,8 @@
   /* ── chart data ────────────────────────────────────────────────────────── */
   const trendLabels = $derived(trend.map((t: any) => t.label));
 
-  // Trend values are in minor units (cents/paise), straight from sales.total.
-  // The AreaChart with yFormat="currency" + currencyMode default (false)
-  // divides by 100 once for display, which is what we want.
+  // Trend values are in major units (rupees), straight from sales.total.
+  // The AreaChart with yFormat="currency" formats them as-is — no division.
   const trendDatasets = $derived(
     activeMetric === 'revenue'
       ? [{
@@ -71,9 +70,8 @@
   const customerTiers = $derived(analytics?.customers?.tiers);
   const leaderboard = $derived(analytics?.customers?.leaderboard ?? []);
 
-  // Heatmap values are raw minor units (cents/paise). The Heatmap chart
-  // divides by 100 itself when its currencyMode prop is true; we use the
-  // default (false) so no division happens here.
+  // Heatmap values are in major units (rupees). The Heatmap chart uses
+  // formatCurrency() for tooltips by default.
   const heatmapValues = $derived(
     (analytics?.heatmap ?? []).map((row: any[]) =>
       row.map((v: number) => v ?? 0),
@@ -404,7 +402,7 @@
             <div class="h-44 w-full">
               <DonutChart
                 labels={paymentRows.map((pm: any) => pm.label)}
-                data={paymentRows.map((pm: any) => (pm.revenue ?? 0) / 100)}
+                data={paymentRows.map((pm: any) => pm.revenue ?? 0)}
                 centerValue={formatCurrency(totalPaymentRev)}
                 centerLabel="total"
               />
@@ -680,7 +678,7 @@
             <span>More</span>
           </div>
         </div>
-        <Heatmap values={heatmapValues} currencyMode />
+        <Heatmap values={heatmapValues} />
       </div>
 
     </div>

@@ -49,7 +49,7 @@
       const sale = (data as any).editSale;
       discountStr = sale.discount_type === 'percent'
         ? `${sale.discount_value}%`
-        : `${(sale.discount_value / 100).toFixed(2)}`;
+        : `${Number(sale.discount_value).toFixed(2)}`;
     }
   });
 
@@ -120,7 +120,7 @@
     const v = parseFloat(discountStr);
     if (isNaN(v)) return;
     const type: DiscountType = discountStr.includes("%") ? "percent" : "amount";
-    cart.setDiscount(type, type === "amount" ? Math.round(v * 100) : v);
+    cart.setDiscount(type, v);
   }
 
   async function submitSale() {

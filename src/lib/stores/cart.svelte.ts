@@ -17,7 +17,7 @@ class CartStore {
   #customerId     = $state<string | null>(null);
   #customerName   = $state<string>('');
   #discountType   = $state<DiscountType>('amount');
-  #discountValue  = $state(0);  // minor units or percentage integer
+  #discountValue  = $state(0);  // major units (rupees) for 'amount', 0–100 for 'percent'
   #paymentMethod  = $state<PaymentMethod>('cash');
   #notes          = $state('');
 
@@ -103,6 +103,7 @@ class CartStore {
     this.#customerId    = sale.customer ?? null;
     this.#customerName  = ''; // populated by caller if available
     this.#discountType  = sale.discount_type as DiscountType;
+    // discount_value: in major units for 'amount', in 0–100 for 'percent'.
     this.#discountValue = sale.discount_value;
     this.#paymentMethod = sale.payment_method as PaymentMethod;
     this.#notes         = sale.notes ?? '';

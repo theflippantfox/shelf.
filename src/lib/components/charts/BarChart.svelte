@@ -23,7 +23,6 @@
     color          = 'var(--primary)',
     height         = 220,
     borderRadius   = 6,
-    currencyMode   = false,
     yFormat        = 'number',
     showYAxis      = true,
     highlightLast  = false,
@@ -35,7 +34,6 @@
     color?:          string;
     height?:         number | string;
     borderRadius?:   number;
-    currencyMode?:   boolean;
     yFormat?:        'number' | 'currency' | 'count';
     showYAxis?:      boolean;
     highlightLast?:  boolean;
@@ -63,10 +61,9 @@
   }
   function fmt(n: number): string {
     if (yFormat === 'currency') {
-      // Chart data is already in major units when currencyMode is set;
-      // otherwise we expect minor units (cents) and divide by 100.
-      const major = currencyMode ? n : n / 100;
-      return formatCurrencyMajor(major, { decimals: 1 });
+      // Chart data is in major units (rupees, dollars). Currency-
+      // formatting just needs locale-aware grouping.
+      return formatCurrencyMajor(n, { decimals: 1 });
     }
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
     if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
@@ -74,8 +71,7 @@
   }
   function tooltipFmt(n: number): string {
     if (yFormat === 'currency') {
-      const major = currencyMode ? n : n / 100;
-      return formatCurrency(major);
+      return formatCurrency(n);
     }
     return n.toLocaleString();
   }
