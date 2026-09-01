@@ -70,7 +70,16 @@ function buildGrossProfit(items: any[], compareItems: any[]) {
   };
   const profit  = items.reduce((acc, it) => acc + ((it.line_total ?? 0) - cogs(it)), 0);
   const cprofit = compareItems.reduce((acc, it) => acc + ((it.line_total ?? 0) - cogs(it)), 0);
-  return { profit, cprofit };
+  // Match the API endpoint's shape so the page can use the same
+  // grossProfit.current / .previous / .delta fields.
+  const deltaPct = cprofit > 0 ? ((profit - cprofit) / cprofit) * 100 : null;
+  return {
+    current:  profit,
+    previous: cprofit,
+    delta: deltaPct !== null
+      ? { pct: Math.round(deltaPct), direction: deltaPct >= 0 ? 'up' : 'down' }
+      : null,
+  };
 }
 
 // ─── Load ────────────────────────────────────────────────────────────────────

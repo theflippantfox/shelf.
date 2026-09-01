@@ -20,7 +20,6 @@
   });
 </script>
 
-<PageShell title="Purchase Order Detail">
   <div class="page-header">
     <div class="flex-1">
       <p class="text-base font-semibold">Purchase Order</p>

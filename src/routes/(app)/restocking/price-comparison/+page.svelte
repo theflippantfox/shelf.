@@ -27,7 +27,6 @@
   }
 </script>
 
-<PageShell title="Price Comparison">
   <header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
 <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">Price Comparison</h1>
