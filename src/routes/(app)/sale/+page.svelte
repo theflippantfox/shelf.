@@ -173,10 +173,13 @@
 
 <PageShell>
   <!-- Header row: title + customer + clear -->
-  <div class="flex items-center justify-between gap-3 mb-3">
+  <div class="flex items-end justify-between gap-3 mb-4">
     <div class="min-w-0">
-      <p class="text-base font-semibold">{isEdit ? 'Edit Sale' : 'New Sale'}</p>
-      <p class="text-[11px] text-[var(--text-3)]">
+      <p class="eyebrow">{isEdit ? 'Editing' : 'In progress'}</p>
+      <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+        {isEdit ? 'Edit sale' : 'New sale'}
+      </h1>
+      <p class="text-[11.5px] text-[var(--text-3)] mt-0.5">
         {#if cart.isEmpty}
           Tap a product to start
         {:else}
@@ -264,13 +267,12 @@
       <p class="text-xs text-[var(--text-3)] mt-1">Try a different search or category.</p>
     </div>
   {:else}
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 stagger-fade">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 anim-stagger">
       {#each products as p (p.id)}
         {@const catColor = p.category?.color ?? 'var(--primary)'}
         {@const inCart   = cartByProduct.get(p.id) ?? 0}
         {@const stockPct = Math.min(100, Math.round((p.qty / Math.max(p.qty + 5, 10)) * 100))}
-        <div class="card p-3 flex flex-col gap-2 hover:border-[color-mix(in_srgb,var(--primary)_40%,var(--border))] hover:-translate-y-0.5 hover:shadow-[var(--shadow-sm)] transition-all
-                    {p.qty === 0 ? 'opacity-50' : ''}">
+        <div class="surface-card interactive p-3.5 flex flex-col gap-2 group {p.qty === 0 ? 'opacity-50' : ''}">
           <!-- Top: icon + (in-cart chip) -->
           <div class="flex items-start justify-between">
             <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"

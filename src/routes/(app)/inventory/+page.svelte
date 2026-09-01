@@ -239,12 +239,12 @@
 
 <PageShell>
   <!-- Header -->
-  <div class="page-header">
+  <div class="flex items-end justify-between gap-3 mb-4">
     <div class="flex-1 min-w-0">
-      <p class="text-base font-semibold">Inventory</p>
-      <p class="text-xs text-[var(--text-3)]">
-        {stockStats.total} products · {formatCurrencyCompact(stockStats.value)} in stock value
-      </p>
+      <p class="eyebrow">{stockStats.total} products · {formatCurrencyCompact(stockStats.value)} in stock value</p>
+      <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">
+        Inventory
+      </h1>
     </div>
     {#if auth.can('inventory.manage')}
       <div class="flex gap-2 shrink-0">
@@ -257,7 +257,7 @@
   </div>
 
   <!-- KPI strip -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5 stagger-fade">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5 anim-stagger">
     <KpiCard
       label="Total products"
       value={String(stockStats.total)}
@@ -289,7 +289,7 @@
   </div>
 
   <!-- Filter bar -->
-  <div class="card-flat p-3 mb-4">
+  <div class="surface-card-flat p-3 mb-4">
     <div class="flex flex-col md:flex-row md:items-center gap-3">
       <div class="flex-1 min-w-0">
         <SearchBar bind:value={search} placeholder="Search by name, SKU or description…" />
@@ -363,13 +363,13 @@
       Showing <span class="font-semibold text-[var(--text-2)]">{filtered.length}</span>
       of {stockStats.total} products
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 stagger-fade">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 anim-stagger">
       {#each filtered as p (p.id)}
         {@const badge  = getStockBadge(p)}
         {@const pct    = stockPct(p)}
         {@const margin = marginPct(p)}
         {@const catColor = p.category?.color ?? 'var(--primary)'}
-        <div class="card p-4 group hover:border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] hover:-translate-y-0.5 hover:shadow-[var(--shadow)] transition-all">
+        <div class="surface-card interactive p-4 group">
           <!-- Top: icon + name + actions -->
           <div class="flex items-start gap-3">
             <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center"
