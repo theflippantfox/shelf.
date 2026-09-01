@@ -3,6 +3,7 @@
   import type { Chart as ChartType, ChartConfiguration, TooltipItem } from 'chart.js';
   import { formatCurrency, formatCurrencyMajor } from '$lib/utils/format';
   import { mountChartTooltip, type ChartTooltipHandle } from '$lib/utils/chartTooltip';
+  import { setupTooltipAutoHide } from '$lib/utils/chartTooltipAutoHide';
 
   /**
    * BarChart — premium bar chart with custom HTML tooltip.
@@ -13,6 +14,8 @@
    * - Tabular numbers on every label
    * - Optional highlightLast: last bar is full color, earlier bars are dim
    * - Currency formatting aware
+   * - Auto-hides the tooltip on scroll, page nav, and chart leave so it
+   *   never gets stuck on screen.
    */
   let {
     data           = [],
@@ -44,6 +47,9 @@
   let observer: MutationObserver;
   let ChartCtor: typeof ChartType | null = null;
   let tooltip: ChartTooltipHandle | null = null;
+  // Disposer returned by setupTooltipAutoHide. Removes the scroll /
+  // mousemove / IntersectionObserver listeners it registered.
+  let disposeAutoHide: (() => void) | null = null;
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -78,11 +84,14 @@
   // Uses viewport-fixed positioning (via chartTooltip util) so it can
   // never be clipped by an ancestor's overflow: hidden when the bar
   // sits at the right edge of the chart.
+  function hideTooltip() {
+    tooltip?.destroy();
+    tooltip = null;
+  }
   function externalTooltip(context: any) {
     const { chart: c, tooltip: t } = context;
     if (!t || t.opacity === 0 || !c || !canvas) {
-      tooltip?.destroy();
-      tooltip = null;
+      hideTooltip();
       return;
     }
 
@@ -194,6 +203,13 @@
     rebuild();
     observer = new MutationObserver(rebuild);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    // Auto-hide the tooltip on any scroll, when the cursor leaves the
+    // chart's bounding box, when the canvas leaves the viewport, and
+    // when the page hides. chart.js's external tooltip callback only
+    // runs on hover/move, so without this the tooltip stays stuck on
+    // screen the moment the user scrolls.
+    disposeAutoHide = setupTooltipAutoHide(canvas, hideTooltip);
   });
 
   $effect(() => {
@@ -216,8 +232,8 @@
   });
 
   onDestroy(() => {
-    tooltip?.destroy();
-    tooltip = null;
+    disposeAutoHide?.();
+    hideTooltip();
     chart?.destroy();
     observer?.disconnect();
   });

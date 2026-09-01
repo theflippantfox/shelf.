@@ -3,6 +3,7 @@
   import type { Chart as ChartType, ChartConfiguration } from 'chart.js';
   import { formatCurrency, formatCurrencyMajor } from '$lib/utils/format';
   import { mountChartTooltip, type ChartTooltipHandle } from '$lib/utils/chartTooltip';
+  import { setupTooltipAutoHide } from '$lib/utils/chartTooltipAutoHide';
 
   /**
    * HBarChart — horizontal bar chart for product/category leaderboards.
@@ -29,6 +30,7 @@
   let observer: MutationObserver;
   let ChartCtor: typeof ChartType | null = null;
   let tooltip: ChartTooltipHandle | null = null;
+  let disposeAutoHide: (() => void) | null = null;
 
   function css(name: string): string {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -62,11 +64,15 @@
     return n.toLocaleString();
   }
 
+  function hideTooltip() {
+    tooltip?.destroy();
+    tooltip = null;
+  }
+
   function externalTooltip(context: any) {
     const { chart: c, tooltip: t } = context;
     if (!t || t.opacity === 0 || !c || !canvas) {
-      tooltip?.destroy();
-      tooltip = null;
+      hideTooltip();
       return;
     }
 
@@ -167,6 +173,7 @@
     rebuild();
     observer = new MutationObserver(rebuild);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    disposeAutoHide = setupTooltipAutoHide(canvas, hideTooltip);
   });
 
   $effect(() => {
@@ -177,8 +184,8 @@
   });
 
   onDestroy(() => {
-    tooltip?.destroy();
-    tooltip = null;
+    disposeAutoHide?.();
+    hideTooltip();
     chart?.destroy();
     observer?.disconnect();
   });
