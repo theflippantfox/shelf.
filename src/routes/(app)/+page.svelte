@@ -1,13 +1,12 @@
 <script lang="ts">
   import KpiCard from '$lib/components/ui/KpiCard.svelte';
   import StatTile from '$lib/components/ui/StatTile.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import { formatCurrency, formatCurrencyCompact } from '$lib/utils/format';
   import {
     Wallet, TrendingUp, ShoppingBag, AlertTriangle, Package,
-    ShoppingCart, Users, BarChart3, Receipt, ArrowRight,
+    ShoppingCart, Users, BarChart3, ArrowRight,
     Banknote, CreditCard, ArrowLeftRight,
   } from 'lucide-svelte';
 
@@ -37,29 +36,24 @@
     return Math.min(100, Math.round((qty / cap) * 100));
   }
 
-  // Quick action tiles
+  // Quick action tiles — mobile-first nav.
+  // Desktop users have the sidebar; bottom-nav (mobile) is fixed to 5 items,
+  // so this card surfaces the rest: Inventory, Restock, Analytics, Suppliers.
+  // "New Sale" is intentionally NOT here — it's already in the bottom-nav FAB
+  // and the sidebar's "Point of Sale" entry.
   const actions = [
-    { href: '/sale',                    label: 'New Sale',          icon: 'ShoppingCart', tone: 'primary' },
-    { href: '/inventory',               label: 'Inventory',         icon: 'Package',      tone: 'neutral' },
-    { href: '/restocking/orders/new',   label: 'Restock',           icon: 'Plus',         tone: 'neutral' },
-    { href: '/analytics',               label: 'Analytics',         icon: 'BarChart3',    tone: 'neutral' },
+    { href: '/inventory',               label: 'Inventory',         icon: 'Package',     tone: 'neutral' },
+    { href: '/restocking/orders/new',   label: 'Restock',           icon: 'Plus',        tone: 'neutral' },
+    { href: '/analytics',               label: 'Analytics',         icon: 'BarChart3',   tone: 'neutral' },
+    { href: '/restocking/suppliers',    label: 'Suppliers',         icon: 'Truck',       tone: 'neutral' },
   ] as const;
 </script>
 
 <div class="fade-up">
   <!-- Header -->
-  <div class="flex items-end justify-between gap-3 mb-5">
-    <div class="flex-1 min-w-0">
-<h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
-        {data.greeting}{data.firstName ? `, ${data.firstName}` : ''}
-      </h1>
-    </div>
-    <Button onclick={() => window.location.href = '/sale'} size="md" class="md:btn-lg">
-      <ShoppingCart size={15} strokeWidth={2} />
-      <span class="hidden sm:inline">New sale</span>
-      <span class="sm:hidden">Sale</span>
-    </Button>
-  </div>
+  <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mb-5">
+    {data.greeting}{data.firstName ? `, ${data.firstName}` : ''}
+  </h1>
 
   <!-- ── Stats area: 4 primary KPIs + 3 secondary stats, all in one block ── -->
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 anim-stagger">
@@ -133,36 +127,28 @@
     />
   </div>
 
-  <!-- ── Quick Actions + Today's Sales ─────────────────────────────────────── -->
+  <!-- ── Quick Actions (mobile nav) + Today's Sales ───────────────────── -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
-    <!-- Quick actions -->
-    <!-- Quick Actions -->
-    <div class="surface-card p-4 md:p-5">
+    <!-- Quick actions card: primary nav for mobile (sidebar is desktop-only,
+         bottom-nav is fixed to 5 items). On desktop it's a redundant cluster
+         of links so we hide it. -->
+    <div class="surface-card p-4 md:p-5 md:hidden">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
-          <Receipt size={15} style="color:var(--primary)" />
+          <span class="w-1.5 h-1.5 rounded-full" style="background:var(--primary)"></span>
           <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Quick actions</h3>
         </div>
-        <a
-          href="/restocking/suppliers"
-          class="text-[11px] font-semibold text-[var(--text-3)] hover:text-[var(--text)] inline-flex items-center gap-0.5 transition-colors"
-        >
-          Suppliers <ArrowRight size={11} strokeWidth={2} />
-        </a>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
         {#each actions as a}
-          {@const isPrimary = a.tone === 'primary'}
           <a
             href={a.href}
-            class="surface-card interactive p-3.5 no-glow group {isPrimary ? 'gradient-primary' : ''}"
+            class="surface-card interactive p-3.5 no-glow group"
           >
             <div class="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110"
-                 style="background:{isPrimary
-                   ? 'color-mix(in srgb, var(--primary) 18%, transparent)'
-                   : 'var(--surface2)'}; color:{isPrimary ? 'var(--primary)' : 'var(--text-2)'}">
+                 style="background: var(--surface2); color: var(--text-2)">
               <DynamicIcon name={a.icon} size={16} />
             </div>
             <p class="text-[12.5px] font-semibold leading-tight text-[var(--text)]">{a.label}</p>
@@ -181,12 +167,12 @@
             <span class="badge badge-neutral text-[10px]">{data.todayCount}</span>
           {/if}
         </div>
-        <button
-          onclick={() => window.location.href = '/history'}
+        <a
+          href="/history"
           class="text-[11px] font-semibold text-[var(--text-3)] hover:text-[var(--text)] inline-flex items-center gap-0.5"
         >
           View history <ArrowRight size={11} strokeWidth={2} />
-        </button>
+        </a>
       </div>
 
       {#if !hasSales}
@@ -194,13 +180,7 @@
           icon="ShoppingBag"
           title="No sales yet today"
           message="Once you ring up a sale it'll show up here in real time."
-        >
-          {#snippet action()}
-            <Button onclick={() => window.location.href = '/sale'} size="sm">
-              <ShoppingCart size={14} strokeWidth={2} /> Start your first sale
-            </Button>
-          {/snippet}
-        </EmptyState>
+        />
       {:else}
         <div class="divide-y divide-[var(--border)]">
           {#each data.todaySales as sale}
