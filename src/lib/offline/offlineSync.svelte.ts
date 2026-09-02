@@ -169,6 +169,10 @@ if (browser) {
     _online = true;
     void flushPendingSales();
     void refreshProductsCache();
+    // Ask the SW to drain its own queue too (if any rows were
+    // queued by the SW's fetch handler — the page-side store
+    // doesn't see those).
+    navigator.serviceWorker?.controller?.postMessage({ type: 'flush-sales' });
   };
   const onOffline = () => {
     _online = false;
@@ -181,5 +185,12 @@ if (browser) {
   // background and update the reactive state when done.
   void refreshPendingCount();
   void refreshLastSync();
-  if (_online) void refreshProductsCache();
+  if (_online) {
+    void refreshProductsCache();
+    // Also ask the SW to drain anything it queued in a previous
+    // session.
+    navigator.serviceWorker?.ready?.then((reg) => {
+      reg.active?.postMessage({ type: 'flush-sales' });
+    }).catch(() => { /* SW not yet registered — fine */ });
+  }
 }

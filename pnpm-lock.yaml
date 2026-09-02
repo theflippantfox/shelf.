@@ -84,6 +84,18 @@ importers:
       vite:
         specifier: ^8.0.7
         version: 8.0.14(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)
+      workbox-expiration:
+        specifier: ^7.4.1
+        version: 7.4.1
+      workbox-precaching:
+        specifier: ^7.4.1
+        version: 7.4.1
+      workbox-routing:
+        specifier: ^7.4.1
+        version: 7.4.1
+      workbox-strategies:
+        specifier: ^7.4.1
+        version: 7.4.1
 
 packages:
 

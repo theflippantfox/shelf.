@@ -16,72 +16,23 @@ export default defineConfig({
       // exactly when it runs and which errors surface.
       registerType: 'autoUpdate',
       injectRegister: null,
-      // The Workbox manifest (precache list) is built at build time and
-      // registered into the SW automatically. The settings below tell
-      // Workbox how to cache runtime requests.
-      workbox: {
-        // Don't precache dev-only assets.
-        navigateFallbackDenylist: [/^\/api\//, /^\/__data\.json/, /^\/_app\/version/],
-        // Pages that should always bypass the SW (auth + server-side actions).
-        navigateFallback: null,  // Disable SPA navigation fallback; let SvelteKit
-                                 // routing handle 404s. Pages will still load from
-                                 // the precached shell HTML when offline.
-        runtimeCaching: [
-          {
-            // Google Fonts: stale-while-revalidate so first paint is fast.
-            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts',
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // SvelteKit's own hashed static assets under /_app/immutable/
-            // — precached by the manifest anyway, but route here for safety.
-            urlPattern: /\/_app\/immutable\/.+/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'sveltekit-immutable',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-          {
-            // /api/* — always hit the network. If the network fails, return
-            // a JSON-shaped 503 so the client's fetch() rejects cleanly.
-            // We deliberately do NOT cache API responses, because data
-            // freshness is critical for inventory and sales.
-            urlPattern: /\/api\/.+/,
-            method: 'GET',
-            handler: 'NetworkOnly',
-            options: {
-              backgroundSync: {
-                name: 'shelf-api-get-queue',
-                options: { maxRetentionTime: 24 * 60 },  // 24h in minutes
-              },
-            },
-          },
-          {
-            // Non-GET /api/* — same: network only, with background sync for
-            // queued writes when the user comes back online.
-            urlPattern: /\/api\/.+/,
-            method: 'POST',
-            handler: 'NetworkOnly',
-            options: {
-              backgroundSync: {
-                name: 'shelf-api-write-queue',
-                options: { maxRetentionTime: 24 * 60 },
-              },
-            },
-          },
-        ],
+      // Use injectManifest so we can write our own service worker
+      // (src/service-worker.ts).  The auto-generated workbox SW
+      // doesn't let us intercept POSTs to /api/sales for the
+      // offline write queue, so we do it ourselves.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'service-worker.ts',
+      injectManifest: {
+        // Keep the precache list compact — only the entry points and
+        // a few critical assets.  Workbox precaches everything it
+        // finds in `globPatterns` below.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest,woff2}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,  // 5 MB
       },
 
       manifest: false,  // We ship a static manifest.webmanifest in /static/
                          // so the SvelteKit adapter copies it through.
-      strategies: 'generateSW',
-      srcDir: 'src',
       // SvelteKit adapter-node builds to /build; the SW assets go there too.
     }),
   ],
