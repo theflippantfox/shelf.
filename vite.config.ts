@@ -8,9 +8,11 @@ export default defineConfig({
     tailwindcss(),
     sveltekit(),
     SvelteKitPWA({
-      // Disabled in dev to keep HMR snappy; the SW is fully active in build.
-      // Toggle to `true` to debug the SW locally.
-      devOptions: { enabled: false },
+      // Enable the service worker in dev too so offline mode can
+      // be tested.  HMR stays snappy enough; the SW only intercepts
+      // navigation + Google Fonts + SvelteKit immutable assets, not
+      // the dev module graph itself.
+      devOptions: { enabled: true, type: 'module' },
 
       // We register the service worker manually in app.html so we control
       // exactly when it runs and which errors surface.

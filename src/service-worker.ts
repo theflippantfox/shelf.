@@ -52,20 +52,39 @@ registerRoute(
   new CacheFirst({ cacheName: 'sveltekit-immutable' }),
 );
 
-// Navigation requests: try network first, fall back to the
-// precached shell so the app shell loads offline.  Without this,
-// an offline user would see the browser's "you are offline" page
-// even when the shell is in the cache.
+// Navigation requests: try the network, fall back to the precached
+// shell so the app shell loads offline.  Without this an offline
+// user would see the browser's "you are offline" page even when
+// the shell is in the cache.
+//
+// The route's strategy is a NetworkFirst that returns the response
+// from the precache (createHandlerBoundToURL('/')) if the network
+// times out or fails.  This is the documented Workbox pattern for
+// offline navigations.
 try {
-  const handler = createHandlerBoundToURL('/');
+  const precacheHandler = createHandlerBoundToURL('/');
+  const navigationStrategy = new NetworkFirst({
+    cacheName: 'pages',
+    networkTimeoutSeconds: 3,
+  });
   registerRoute(
     ({ request }) => request.mode === 'navigate',
-    new NetworkFirst({ cacheName: 'pages', networkTimeoutSeconds: 3 }),
+    async (args) => {
+      try {
+        return await navigationStrategy.handle(args);
+      } catch {
+        // Network failed and there's no cached page for this URL.
+        // Return the precached shell so the SPA can take over and
+        // route to the right view client-side.
+        return precacheHandler(args);
+      }
+    },
   );
 } catch {
   // createHandlerBoundToURL throws if the build manifest is empty
-  // (e.g. running this file outside of a Vite build).  Fall back
-  // to no-op for that case.
+  // (running this file outside of a Vite build).  Without the
+  // precache there's nothing to fall back to, so we let the
+  // network-only request go through normally.
 }
 
 // /api/* GETs — always network.  No SW-side cache: data freshness

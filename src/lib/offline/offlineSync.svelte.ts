@@ -185,7 +185,9 @@ if (browser) {
   // background and update the reactive state when done.
   void refreshPendingCount();
   void refreshLastSync();
-  if (_online) {
+  // Read the current value of _online through the store's getter
+  // so Svelte doesn't flag it as a captured initial reference.
+  if (offlineSync.online) {
     void refreshProductsCache();
     // Also ask the SW to drain anything it queued in a previous
     // session.
