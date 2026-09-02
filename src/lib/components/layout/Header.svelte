@@ -5,6 +5,7 @@
   import { theme } from "$lib/stores/theme.svelte";
   import { inventory } from "$lib/stores/inventory.svelte";
   import Avatar from "$lib/components/ui/Avatar.svelte";
+  import SyncBadge from "$lib/components/ui/SyncBadge.svelte";
   import {
     Moon,
     Sun,
@@ -120,6 +121,9 @@
         <Moon size={16} strokeWidth={1.75} />
       {/if}
     </button>
+
+    <!-- Pending sales sync badge (shows only when something is queued or syncing) -->
+    <SyncBadge />
 
     <!-- Low-stock bell -->
     {#if alertCount > 0}
