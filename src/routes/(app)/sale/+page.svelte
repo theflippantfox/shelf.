@@ -11,8 +11,10 @@
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Modal from "$lib/components/ui/Modal.svelte";
-  import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
-  import QtyInput from "$lib/components/ui/QtyInput.svelte";
+  import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
+  import QtyInput from '$lib/components/ui/QtyInput.svelte';
+  import ProductCardSkeleton from '$lib/components/ui/ProductCardSkeleton.svelte';
+  import { navigating } from '$app/state';
   import {
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, CreditCard, ArrowLeftRight, X,
@@ -246,7 +248,19 @@
   {/if}
 
   <!-- Product grid -->
-  {#if products.length === 0}
+  {#if navigating.to}
+    <!--
+      Skeleton state during client-side navigation. Shows 8 ghost
+      cards matching the real grid shape so the layout doesn't
+      shift when the data arrives. The `anim-stagger` makes them
+      appear to fill in left-to-right.
+    -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 anim-stagger">
+      {#each Array(8) as _, i (i)}
+        <ProductCardSkeleton />
+      {/each}
+    </div>
+  {:else if products.length === 0}
     <div class="flex flex-col items-center justify-center py-16 text-center">
       <div class="w-12 h-12 rounded-full bg-[var(--surface2)] flex items-center justify-center mb-3">
         <Search size={22} strokeWidth={1.75} class="text-[var(--text-3)]" />

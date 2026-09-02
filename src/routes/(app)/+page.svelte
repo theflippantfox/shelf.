@@ -143,6 +143,7 @@
         <a
           href={a.href}
           class="surface-card interactive p-3.5 no-glow group"
+          data-sveltekit-preload-data="hover"
         >
           <div class="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5 transition-transform group-hover:scale-110 icon-tint-{a.tone}">
             <DynamicIcon name={a.icon} size={16} />

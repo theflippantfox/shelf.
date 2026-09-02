@@ -93,6 +93,7 @@
       href={item.href}
       class="bottom-nav-item {isActive(item.href) ? 'active' : ''}"
       aria-current={isActive(item.href) ? "page" : undefined}
+      data-sveltekit-preload-data="hover"
     >
       <div class="relative">
         <DynamicIcon
@@ -125,6 +126,7 @@
       href={item.href}
       class="bottom-nav-item {isActive(item.href) ? 'active' : ''}"
       aria-current={isActive(item.href) ? "page" : undefined}
+      data-sveltekit-preload-data="hover"
     >
       <DynamicIcon
         name={ICONS[item.icon as keyof typeof ICONS] ?? item.icon}

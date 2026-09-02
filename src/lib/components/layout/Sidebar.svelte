@@ -57,6 +57,7 @@
           href={item.href}
           class="sidebar-item {isActive(item.href) ? 'active' : ''}"
           aria-current={isActive(item.href) ? "page" : undefined}
+          data-sveltekit-preload-data="hover"
         >
           <span class="sidebar-item-icon">
             <DynamicIcon

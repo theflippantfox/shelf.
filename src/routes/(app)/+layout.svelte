@@ -7,6 +7,7 @@
   import Header            from '$lib/components/layout/Header.svelte';
   import Toast             from '$lib/components/ui/Toast.svelte';
   import OfflineIndicator  from '$lib/components/ui/OfflineIndicator.svelte';
+  import TopProgress       from '$lib/components/ui/TopProgress.svelte';
   import CommandBar        from '$lib/components/CommandBar.svelte';
   import { onMount }       from 'svelte';
 
@@ -42,6 +43,7 @@
 <svelte:head><title>Shëlf</title></svelte:head>
 <Sidebar />
 <BottomNav />
+<TopProgress />
 <div class="app-main min-h-screen flex flex-col">
   <Header onOpenCommandBar={() => (cmdOpen = true)} />
   <main class="page-shell flex-1">
