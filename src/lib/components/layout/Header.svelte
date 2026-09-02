@@ -54,7 +54,7 @@
   let dropdownOpen = $state(false);
 
   function toggleTheme() {
-    theme.set(theme.isDark ? "light" : "dark");
+    theme.setMode(theme.isDark ? "light" : "dark");
   }
 
   async function logout() {

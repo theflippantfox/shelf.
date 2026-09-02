@@ -1,67 +1,37 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { invalidateAll } from '$app/navigation';
   import { toasts } from '$lib/stores/toast.svelte';
-  import { theme as themeStore } from '$lib/stores/theme.svelte';
-  import { PALETTES, getPalette } from '$lib/config/palettes';
-  import { applyTokens } from '$lib/utils/colorUtils';
+  import { theme } from '$lib/stores/theme.svelte';
+  import { PALETTES } from '$lib/config/palettes';
   import { Sun, Moon, Monitor, Check } from 'lucide-svelte';
 
   let { data } = $props();
 
-  // `$derived` so `shop` tracks `data` after `invalidateAll()` — the
-  // `const shop = data.shop` form captures the initial reference and
-  // goes stale after a save reloads the page data.
   const shop = $derived((data as any).shop);
 
-  // Initialize from the first-render `shop` value (synchronously, so SSR
-  // and the first client render agree — no hydration mismatch).  After
-  // the first render, `shop` is still tracked reactively; nothing else
-  // needs to react to it because the form fields are the source of
-  // truth once the user starts clicking palettes.
-  let paletteId   = $state<string>((data as any).shop?.palette_id ?? 'graphite-mint');
-  let themeMode   = $state<'light' | 'dark' | 'system'>((data as any).shop?.theme ?? 'system');
-  let saving      = $state(false);
+  let paletteId = $state<string>((data as any).shop?.palette_id ?? 'graphite-mint');
+  let themeMode = $state<'light' | 'dark' | 'system'>((data as any).shop?.theme ?? 'system');
+  let saving    = $state(false);
 
-  // Direct theme application — bypasses the theme store and goes straight
-  // to applyTokens().  This is the same function the store calls internally
-  // but it runs synchronously in the click handler with no store-side
-  // state mutation that could be raced by the layout's $effect.pre.
-  // If the store call ever silently no-ops, this will still work.
-  function _applyPaletteDirect(id: string) {
-    if (typeof document === 'undefined') return;
-    const p = getPalette(id);
-    if (!p) return;
-    const isDark = themeMode === 'dark'
-      || (themeMode === 'system' && typeof window !== 'undefined'
-          && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    applyTokens(isDark ? p.dark : p.light);
-    // Also pulse the transition class so the change animates
-    document.documentElement.classList.add('palette-transitioning');
-    setTimeout(() => {
-      document.documentElement.classList.remove('palette-transitioning');
-    }, 280);
-  }
-
-  // Live preview — applies to the whole app immediately, no save needed
+  // Live preview — applies to the whole app immediately, no save needed.
+  // These two calls go through the theme store, which writes the CSS
+  // variables on the next tick and pulses the transition.
   function previewPalette(id: string) {
     paletteId = id;
-    // 1) Direct path — guaranteed to update the DOM even if the store
-    //    is somehow stale or shadowed by another instance.
-    _applyPaletteDirect(id);
-    // 2) Store path — keeps the store in sync so the layout's $effect.pre
-    //    doesn't reset the visual back to the saved palette.
-    try { themeStore.applyShopPalette(id); } catch {}
+    theme.setPalette(id);
+  }
+
+  function previewMode(m: 'light' | 'dark' | 'system') {
+    themeMode = m;
+    theme.setMode(m);
   }
 
   async function save() {
     saving = true;
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ palette_id: paletteId, theme: themeMode }),
-      });
-      if (res.ok) {
+      const ok = await theme.persist();
+      if (ok) {
         toasts.success('Appearance saved');
         await invalidateAll();
       } else toasts.error('Failed to save');
@@ -72,28 +42,29 @@
     }
   }
 
-  // Live mode preview (no save) — applies just the mode, not palette
-  function previewMode(m: 'light' | 'dark' | 'system') {
-    themeMode = m;
-    // 1) Direct path — toggle the dark class and re-apply the current
-    //    palette's tokens under the new mode.
-    if (typeof document !== 'undefined') {
-      const isDark = m === 'dark'
-        || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      document.documentElement.classList.toggle('dark', isDark);
-      const p = getPalette(paletteId);
-      if (p) {
-        applyTokens(isDark ? p.dark : p.light);
-        document.documentElement.classList.add('palette-transitioning');
-        setTimeout(() => {
-          document.documentElement.classList.remove('palette-transitioning');
-        }, 280);
+  // Native event delegation as a safety net.  Svelte 5's compiled
+  // `onclick` should fire these directly, but the user reported the
+  // live preview doing nothing on this specific page and we couldn't
+  // reproduce why.  A document-level capture listener with `data-*`
+  // attributes always works, and is idempotent with the Svelte handler
+  // (both call the same theme store functions).
+  onMount(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement)?.closest(
+        '[data-palette], [data-mode]',
+      ) as HTMLElement | null;
+      if (!target) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (target.dataset.palette) {
+        previewPalette(target.dataset.palette);
+      } else if (target.dataset.mode) {
+        previewMode(target.dataset.mode as 'light' | 'dark' | 'system');
       }
-      try { localStorage.setItem('shelf-theme', m); } catch {}
-    }
-    // 2) Store path — keeps the store in sync.
-    try { themeStore.set(m); } catch {}
-  }
+    };
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  });
 </script>
 
 <svelte:head><title>Appearance · Shëlf</title></svelte:head>
@@ -115,7 +86,7 @@
 </header>
 
 <!-- The whole app is the live preview. Pick a palette or mode and the
-     surrounding UI updates immediately with a 240ms colour transition. -->
+     surrounding UI updates immediately with a 280ms colour transition. -->
 
 <section class="mb-6">
   <div class="flex items-baseline justify-between mb-3">
@@ -128,6 +99,7 @@
       {@const light  = p.light}
       <button
         type="button"
+        data-palette={p.id}
         class="group relative text-left rounded-[12px] overflow-hidden border transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 {active ? 'shadow-[0_0_0_2px_var(--primary)]' : 'border-[var(--border)]'}"
         style="border-color:{active ? 'var(--primary)' : 'var(--border)'};"
         onclick={() => previewPalette(p.id)}
@@ -203,6 +175,7 @@
       {@const active = themeMode === opt.v}
       <button
         type="button"
+        data-mode={opt.v}
         class="py-3 rounded-[10px] border text-[12.5px] font-semibold flex flex-col items-center gap-1.5 transition-all"
         style="background:{active ? 'var(--primary)' : 'var(--surface2)'};
                color:{active ? 'var(--primary-fg)' : 'var(--text-2)'};

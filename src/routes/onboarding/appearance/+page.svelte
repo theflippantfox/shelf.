@@ -14,7 +14,7 @@
   function choosePalette(p: Palette) {
     selectedPalette = p;
     // Live preview — the whole app updates immediately
-    themeStore.applyShopPalette(p.id);
+    themeStore.setPalette(p.id);
   }
 
   // The actual hex values being sent depend on the active theme mode
@@ -106,7 +106,7 @@
       <button type="button"
         class="flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-colors capitalize"
         style="background:{themeMode===m?'var(--primary)':'var(--surface2)'};color:{themeMode===m?'#fff':'var(--text-2)'};border-color:{themeMode===m?'var(--primary)':'var(--border)'}"
-        onclick={() => { themeMode = m as any; themeStore.set(m as any); }}>{m}</button>
+        onclick={() => { themeMode = m as any; themeStore.setMode(m as any); }}>{m}</button>
     {/each}
   </div>
 
