@@ -49,21 +49,30 @@ function buildStockValue(products: any[]) {
   return { costValue, retailValue, totalUnits, potentialMargin };
 }
 
-function buildGrossProfit(items: any[], compareItems: any[]) {
-  const calc = (arr: any[]) => {
-    if (!arr || !Array.isArray(arr)) return 0;
-    return arr.reduce((sum, item) => {
-      // Prefer cost_at_sale snapshot; fall back to joined product.cost_price.
-      const unit = item.cost_at_sale ?? item.product?.cost_price ?? 0;
-      const cost = unit * (item.qty ?? 0);
-      return sum + (item.line_total ?? 0) - cost;
-    }, 0);
+function buildGrossProfit(items: any[], compareItems: any[], productCostMap: Map<string, number>) {
+  const toNum = (v: any): number => {
+    if (v === null || v === undefined || v === '') return 0;
+    const n = typeof v === 'number' ? v : parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
   };
-  const current = calc(items);
-  const previous = calc(compareItems);
+  const unitCost = (it: any): number => {
+    const snap = toNum(it.cost_at_sale);
+    if (snap > 0) return snap;
+    const mapped = productCostMap.get(it.product_id);
+    if (mapped !== undefined && mapped > 0) return mapped;
+    return toNum(it.product?.cost_price);
+  };
+  const cogs = (it: any) => unitCost(it) * toNum(it.qty);
+  const sum = (arr: any[]) =>
+    arr.reduce((s, it) => s + (toNum(it.line_total) - cogs(it)), 0);
+  const current = sum(items);
+  const previous = sum(compareItems);
+  const total = items.length + compareItems.length;
+  const withCost = [...items, ...compareItems].filter(it => unitCost(it) > 0).length;
+  const coverage = total > 0 ? Math.round((withCost / total) * 100) : 0;
   const deltaPct = previous > 0 ? ((current - previous) / previous) * 100 : null;
   return {
-    current, previous,
+    current, previous, coverage,
     delta: deltaPct !== null
       ? { pct: Math.round(deltaPct), direction: deltaPct >= 0 ? 'up' : 'down' }
       : null,
@@ -119,41 +128,78 @@ export const GET = async ({ cookies, locals, url, setHeaders  }: import('@svelte
       .is('archived_at', null),
   ]);
 
-  const currentIds = (currentSales as any[]).map((s) => s.id);
-  const compareIds = (compareSales as any[]).map((s) => s.id);
+  const currentIds = (currentSales as any[]).map((s: any) => s.id);
+  const compareIds = (compareSales as any[]).map((s: any) => s.id);
+
+  // Query sale_items via the sales FK to avoid `.in('sale_id', ...)` hitting URI length
+  // limits when a shop has hundreds of sales in the period. See analytics/+page.server.ts.
+  const itemSelect = (extra: string) =>
+    `id, sale_id, product_id, product_name, product_sku, qty, unit_price, line_total, cost_at_sale, ` +
+    `product:products(id, name, sku, price, cost_price, category:categories(id, name, color)), ` +
+    `sales!inner(shop_id, created_at)${extra}`;
 
   const [
     { data: allCurrentItems = [] },
     { data: allCompareItems = [] },
   ] = await Promise.all([
-    currentIds.length
-      ? supabase.from('sale_items')
-          .select('id, sale_id, product_id, product_name, product_sku, qty, unit_price, line_total, cost_at_sale, product:products(cost_price, category:categories(id, name, color))')
-          .in('sale_id', currentIds)
-      : { data: [] },
-    compareIds.length
-      ? supabase.from('sale_items')
-          .select('id, sale_id, product_id, qty, line_total, cost_at_sale, product:products(cost_price)')
-          .in('sale_id', compareIds)
-      : { data: [] },
+    supabase.from('sale_items')
+      .select(itemSelect(''))
+      .eq('sales.shop_id', shopId)
+      .gte('sales.created_at', period.from)
+      .lte('sales.created_at', period.to),
+    supabase.from('sale_items')
+      .select(itemSelect(''))
+      .eq('sales.shop_id', shopId)
+      .gte('sales.created_at', period.cFrom)
+      .lte('sales.created_at', period.cTo),
   ]);
 
   const saleItems = allCurrentItems as any[];
   const compareSaleItems = allCompareItems as any[];
 
-  const kpis = buildKpis(currentSales as any[], compareSales as any[], saleItems, compareSaleItems, shopTz);
+  const productCostMap = new Map<string, number>(
+    ((stockProducts as any[]) ?? []).map((p: any) => [p.id, p.cost_price ?? 0] as const)
+  );
+
+  // Direct-fetch fallback when stockProducts was empty (archived products / RLS strip).
+  // See analytics/+page.server.ts for full explanation.
+  const soldProductIds = Array.from(new Set([
+    ...((saleItems ?? []).map((it: any) => it.product_id)),
+    ...((compareSaleItems ?? []).map((it: any) => it.product_id)),
+  ].filter(Boolean) as string[]));
+
+  if (soldProductIds.length && productCostMap.size === 0) {
+    const { data: directProducts = [] } = await supabase
+      .from('products')
+      .select('id, cost_price')
+      .in('id', soldProductIds);
+    for (const p of (directProducts as any[])) {
+      const cost = Number(p.cost_price ?? 0);
+      if (cost > 0) productCostMap.set(p.id, cost);
+    }
+    if (productCostMap.size === 0) {
+      console.warn(
+        '[api/analytics] gross-profit cost map empty:',
+        `stockProducts=${stockProducts?.length ?? 0} ` +
+        `soldProductIds=${soldProductIds.length} ` +
+        `currentItems=${saleItems.length} compareItems=${compareSaleItems.length}`
+      );
+    }
+  }
+
+  const kpis = buildKpis(currentSales as any[], compareSales as any[], saleItems, compareSaleItems, shopTz, productCostMap);
   const trend = buildTrend(currentSales as any[], period.from, period.to, compareSales as any[], period.cFrom, shopTz);
   const paymentMethods = buildPaymentMethods(currentSales as any[]);
   const hourly = buildHourly(currentSales as any[], shopTz);
   const weekday = buildWeekday(currentSales as any[], shopTz);
-  const products = buildProducts(saleItems);
-  const categories = buildCategories(saleItems);
+  const products = buildProducts(saleItems, productCostMap);
+  const categories = buildCategories(saleItems, productCostMap);
   const customerInsights = buildCustomerInsights(currentSales as any[], customers as any[]);
   const heatmap = buildHeatmap(currentSales as any[], shopTz);
   const slowMovers = buildSlowMovers(saleItems, stockProducts as any[]);
   const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
   const stockValue = buildStockValue(stockProducts as any[]);
-  const grossProfit = buildGrossProfit(saleItems, compareSaleItems);
+  const grossProfit = buildGrossProfit(saleItems, compareSaleItems, productCostMap);
 
   setHeaders({ 'cache-control': 'private, max-age=60' });
 

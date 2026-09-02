@@ -112,6 +112,7 @@ export function buildKpis(
   sales: any[], compareSales: any[],
   items: any[], compareItems: any[],
   shopTz: string,
+  productCostMap?: Map<string, number>,
 ): KpiSet {
   const revenue  = sumField(sales, 'total');
   const pRevenue = sumField(compareSales, 'total');
@@ -120,8 +121,8 @@ export function buildKpis(
   const avg      = txns  ? Math.round(revenue  / txns)  : 0;
   const pAvg     = pTxns ? Math.round(pRevenue / pTxns) : 0;
 
-  const { margin, coverage }  = calcMargin(items);
-  const { margin: pMargin }   = calcMargin(compareItems);
+  const { margin, coverage }  = calcMargin(items, productCostMap);
+  const { margin: pMargin }   = calcMargin(compareItems, productCostMap);
 
   // Last-7-slot sparkline from recent sales buckets
   const spark  = last7Buckets(sales,       shopTz);
@@ -141,14 +142,23 @@ function sumField(arr: any[], field: string): number {
   return arr.reduce((s, r) => s + (r[field] ?? 0), 0);
 }
 
-function calcMargin(items: any[]): { margin: number; coverage: number } {
+function toNum(v: any): number {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function calcMargin(items: any[], productCostMap?: Map<string, number>): { margin: number; coverage: number } {
   if (!items || !items.length) return { margin: 0, coverage: 0 };
   let revenue = 0, cogs = 0, withCost = 0;
   for (const item of items) {
-    // Prefer cost_at_sale snapshot; fall back to joined product.cost_price.
-    const cost = item.cost_at_sale ?? item.product?.cost_price ?? 0;
-    revenue += item.line_total ?? 0;
-    if (cost > 0) { cogs += (item.qty ?? 0) * cost; withCost++; }
+    // Prefer cost_at_sale snapshot; fall back to productCostMap lookup; then joined product.cost_price.
+    const snap = toNum(item.cost_at_sale);
+    const mapped = productCostMap?.get(item.product_id);
+    const joined = toNum(item.product?.cost_price);
+    const cost = snap > 0 ? snap : (mapped && mapped > 0 ? mapped : joined);
+    revenue += toNum(item.line_total);
+    if (cost > 0) { cogs += toNum(item.qty) * cost; withCost++; }
   }
   const coverage = items.length ? Math.round(withCost / items.length * 100) : 0;
   const margin   = revenue > 0 ? Math.round((revenue - cogs) / revenue * 1000) / 10 : 0;
@@ -317,7 +327,7 @@ export interface ProductRow {
   maxUnits?:   number;
 }
 
-export function buildProducts(items: any[]): { byRevenue: ProductRow[]; byUnits: ProductRow[] } {
+export function buildProducts(items: any[], productCostMap?: Map<string, number>): { byRevenue: ProductRow[]; byUnits: ProductRow[] } {
   if (!items || !Array.isArray(items)) return { byRevenue: [], byUnits: [] };
   const map: Record<string, ProductRow> = {};
 
@@ -328,13 +338,16 @@ export function buildProducts(items: any[]): { byRevenue: ProductRow[]; byUnits:
     if (!map[key]) {
       map[key] = { name, sku, revenue: 0, units: 0, margin: null };
     }
-    map[key].revenue += item.line_total ?? 0;
-    map[key].units   += item.qty        ?? 0;
+    map[key].revenue += toNum(item.line_total);
+    map[key].units   += toNum(item.qty);
 
-    const cost = item.cost_at_sale ?? item.product?.cost_price;
+    const snap = toNum(item.cost_at_sale);
+    const mapped = productCostMap?.get(item.product_id);
+    const joined = toNum(item.product?.cost_price);
+    const cost = snap > 0 ? snap : (mapped && mapped > 0 ? mapped : joined);
     if (cost > 0) {
-      const itemRevenue  = item.line_total ?? 0;
-      const itemCogs     = (item.qty ?? 0) * cost;
+      const itemRevenue  = toNum(item.line_total);
+      const itemCogs     = toNum(item.qty) * cost;
       const itemMargin   = itemRevenue > 0 ? Math.round((itemRevenue - itemCogs) / itemRevenue * 100) : 0;
       map[key].margin    = itemMargin;
     }
@@ -364,7 +377,7 @@ export interface CategoryRow {
   margin:  number | null;
 }
 
-export function buildCategories(items: any[]): CategoryRow[] {
+export function buildCategories(items: any[], productCostMap?: Map<string, number>): CategoryRow[] {
   if (!items || !Array.isArray(items)) return [];
   const map: Record<string, CategoryRow> = {};
 
@@ -379,10 +392,13 @@ export function buildCategories(items: any[]): CategoryRow[] {
         revenue: 0, units: 0, cogs: 0, margin: null,
       };
     }
-    map[catId].revenue += item.line_total ?? 0;
-    map[catId].units   += item.qty        ?? 0;
-    const cost = item.cost_at_sale ?? item.product?.cost_price ?? 0;
-    if (cost > 0) map[catId].cogs += (item.qty ?? 0) * cost;
+    map[catId].revenue += toNum(item.line_total);
+    map[catId].units   += toNum(item.qty);
+    const snap = toNum(item.cost_at_sale);
+    const mapped = productCostMap?.get(item.product_id);
+    const joined = toNum(item.product?.cost_price);
+    const cost = snap > 0 ? snap : (mapped && mapped > 0 ? mapped : joined);
+    if (cost > 0) map[catId].cogs += toNum(item.qty) * cost;
   }
 
   return Object.values(map)

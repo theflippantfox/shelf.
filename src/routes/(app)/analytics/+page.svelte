@@ -278,6 +278,11 @@
             </div>
             <p class="text-xl font-bold tabular-nums">{formatCurrencyCompact(grossProfit.current)}</p>
             <p class="text-[10px] text-[var(--text-3)]">vs {formatCurrencyCompact(grossProfit.previous)} prev period</p>
+            {#if grossProfit.coverage !== undefined && grossProfit.coverage < 80}
+              <p class="text-[10px] text-[var(--gold-fg)]" title="Items with cost data available">
+                ⚠ Cost data on {grossProfit.coverage}% of items
+              </p>
+            {/if}
           </div>
         {/if}
 
