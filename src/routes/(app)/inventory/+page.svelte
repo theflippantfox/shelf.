@@ -392,12 +392,12 @@
               </div>
             </div>
             {#if auth.can('inventory.manage')}
-              <div class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)}>
+              <div class="flex items-center gap-0.5 opacity-50 hover:opacity-100 transition-opacity">
+                <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)} aria-label={`Edit ${p.name}`}>
                   <Pencil size={13} strokeWidth={1.75} />
                 </button>
                 <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]"
-                        title="Archive" onclick={() => confirmDelete(p)}>
+                        title="Archive" onclick={() => confirmDelete(p)} aria-label={`Archive ${p.name}`}>
                   <Trash2 size={13} strokeWidth={1.75} />
                 </button>
               </div>
