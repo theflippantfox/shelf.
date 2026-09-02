@@ -373,7 +373,7 @@
         {@const pct    = stockPct(p)}
         {@const margin = marginPct(p)}
         {@const catColor = p.category?.color ?? 'var(--primary)'}
-        <div class="surface-card interactive p-4 group">
+        <div class="surface-card interactive p-4 group" style="contain-intrinsic-size:auto 200px;content-visibility:auto">
           <!-- Top: icon + name + actions -->
           <div class="flex items-start gap-3">
             <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center"

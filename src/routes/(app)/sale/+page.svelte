@@ -375,7 +375,7 @@
         {@const catColor = p.category?.color ?? 'var(--primary)'}
         {@const inCart   = cartByProduct.get(p.id) ?? 0}
         {@const stockPct = Math.min(100, Math.round((p.qty / Math.max(p.qty + 5, 10)) * 100))}
-        <div class="surface-card interactive p-3.5 flex flex-col gap-2 group {p.qty === 0 ? 'opacity-50' : ''}">
+        <div class="surface-card interactive p-3.5 flex flex-col gap-2 group {p.qty === 0 ? 'opacity-50' : ''}" style="contain-intrinsic-size:auto 180px;content-visibility:auto">
           <!-- Top: icon + (in-cart chip) -->
           <div class="flex items-start justify-between">
             <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
