@@ -16,6 +16,9 @@
   import ProductCardSkeleton from '$lib/components/ui/ProductCardSkeleton.svelte';
   import BarcodeScanner from '$lib/components/ui/BarcodeScanner.svelte';
   import { navigating } from '$app/state';
+  import { offlineSync } from '$lib/offline/offlineSync.svelte';
+  import { getDb } from '$lib/offline/offlineDb';
+  import { currentShop } from '$lib/stores/shop.svelte';
   import {
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, CreditCard, ArrowLeftRight, X,
@@ -129,6 +132,7 @@
     const payload = {
       items: cart.items,
       customer_id: cart.customerId,
+      customer_name: cart.customerName,
       discount_type: cart.discountType,
       discount_value: cart.discountValue,
       discount_amount: cart.discountAmount,
@@ -138,11 +142,63 @@
       payment_method: cart.paymentMethod,
       notes: cart.notes,
     };
-    const url    = isEdit && saleId ? `/api/sales/${saleId}` : "/api/sales";
-    const method = isEdit ? "PATCH" : "POST";
+
+    // Offline path: queue the sale in IndexedDB and let the SW
+    // (or the next page boot) flush it.  We don't have a server
+    // reference number yet, so we skip the receipt modal.
+    //
+    // The stored payload matches the snake_case shape the
+    // /api/sales endpoint maps to (see `p_items` mapping in that
+    // handler) — so when the SW or page replays it, it just gets
+    // forwarded as-is.
+    if (!offlineSync.online) {
+      const id = crypto.randomUUID();
+      try {
+        const db = await getDb();
+        const queuePayload = {
+          items: payload.items.map((i: any) => ({
+            product_id: i.productId,
+            name: i.name,
+            sku: i.sku,
+            qty: i.qty,
+            unit_price: i.unitPrice,
+          })),
+          customer_id: payload.customer_id,
+          customer_name: payload.customer_name,
+          discount_type: payload.discount_type,
+          discount_value: payload.discount_value,
+          payment_method: payload.payment_method,
+          notes: payload.notes,
+          subtotal: payload.subtotal,
+          discount_amount: payload.discount_amount,
+          total: payload.total,
+          tax_amount: payload.tax_amount,
+        };
+        await db.put('pending_sales', {
+          id,
+          shop_id: currentShop.data?.id ?? '',
+          created_at: Date.now(),
+          payload: queuePayload,
+          status: 'pending',
+          last_error: null,
+          attempts: 0,
+        });
+        toasts.success("Sale saved offline — it'll sync when you're back online");
+        await offlineSync.refreshPendingCount();
+        showCheckout = false;
+        cart.clear();
+      } catch (e: any) {
+        toasts.error(e?.message ?? 'Could not save offline');
+      }
+      submitting = false;
+      return;
+    }
+
+    const url    = isEdit && saleId ? `/api/sales/${saleId}` : '/api/sales';
+    const method = isEdit ? 'PATCH' : 'POST';
     const res = await fetch(url, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const data2 = await res.json();
@@ -156,7 +212,7 @@
       showReceipt  = true;
       cart.clear();
     } else {
-      toasts.error(data2.error ?? "Sale failed");
+      toasts.error(data2.error ?? 'Sale failed');
     }
     submitting = false;
   }
