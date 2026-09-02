@@ -14,11 +14,12 @@
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import QtyInput from '$lib/components/ui/QtyInput.svelte';
   import ProductCardSkeleton from '$lib/components/ui/ProductCardSkeleton.svelte';
+  import BarcodeScanner from '$lib/components/ui/BarcodeScanner.svelte';
   import { navigating } from '$app/state';
   import {
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, CreditCard, ArrowLeftRight, X,
-    Search, Check, ChevronRight, Package,
+    Search, Check, ChevronRight, Package, ScanLine,
   } from "lucide-svelte";
 
   let { data } = $props();
@@ -30,6 +31,7 @@
   let showCheckout  = $state(false);
   let submitting    = $state(false);
   let showReceipt   = $state(false);
+  let scanOpen      = $state(false);
   let lastSaleRef   = $state("");
   let lastSaleTotal = $state(0);
   let lastSaleMethod = $state<PaymentMethod>('cash');
@@ -165,6 +167,35 @@
     cart.clear();
     discountStr = '';
   }
+
+  /**
+   * Scanner hit handler.  Called by BarcodeScanner with the decoded
+   * barcode string.  Looks up the product and adds it to the cart.
+   *
+   * The scanner already debounces duplicate reads and closes itself
+   * before calling this, so we don't have to worry about a steady
+   * hold firing 30 times — one scan = one cart add.
+   */
+  async function onScanResult(code: string) {
+    scanOpen = false;
+    try {
+      const res = await fetch(`/api/products/by-barcode/${encodeURIComponent(code)}`);
+      if (res.ok) {
+        const p = await res.json();
+        cart.add(p);
+        toasts.success(`Added ${p.name}`);
+      } else if (res.status === 404) {
+        // The user can still add the product to inventory from the
+        // toast's undo affordance (added in a follow-up if useful) or
+        // by navigating to /inventory manually.
+        toasts.error(`No product found for ${code}`);
+      } else {
+        toasts.error('Lookup failed');
+      }
+    } catch {
+      toasts.error('Network error');
+    }
+  }
 </script>
 
 <svelte:head><title>{isEdit ? 'Edit Sale' : 'New Sale'} · Shëlf</title></svelte:head>
@@ -197,11 +228,26 @@
     </div>
   </div>
 
-  <!-- Search + category chips -->
+  <!-- Search + scan button + category chips -->
   <div class="flex gap-2 mb-3">
     <div class="flex-1 min-w-0 relative">
       <SearchBar bind:value={search} placeholder="Search by name or SKU…" />
     </div>
+    <!--
+      Mobile-only: the back camera.  Desktop users have no use for
+      this (they have a webcam at most, not a barcode scanner) so
+      it's hidden on md+ where the search bar is wide enough on its
+      own.
+    -->
+    <button
+      type="button"
+      class="md:hidden shrink-0 w-10 h-10 rounded-md bg-[var(--primary)] text-[var(--primary-fg)] flex items-center justify-center active:scale-95 transition-transform"
+      onclick={() => (scanOpen = true)}
+      aria-label="Scan barcode"
+      title="Scan barcode"
+    >
+      <ScanLine size={16} strokeWidth={2} />
+    </button>
   </div>
 
   <div class="flex gap-1.5 overflow-x-auto pb-1 mb-4 -mx-5 px-5 md:mx-0 md:px-0">
@@ -626,7 +672,7 @@
     <div class="flex gap-2">
       <Button
         variant="secondary"
-        onclick={() => (showReceipt = false)}
+        onclick={() => { showReceipt = false; }}
         class="flex-1 justify-center"
       >
         Done
@@ -640,3 +686,14 @@
     </div>
   {/snippet}
 </Sheet>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+  BARCODE SCANNER
+  Mounted once, controlled by scanOpen.  See BarcodeScanner.svelte for
+  the camera + decoding logic.
+  ───────────────────────────────────────────────────────────────────────── -->
+<BarcodeScanner
+  open={scanOpen}
+  onClose={() => (scanOpen = false)}
+  onResult={onScanResult}
+/>
