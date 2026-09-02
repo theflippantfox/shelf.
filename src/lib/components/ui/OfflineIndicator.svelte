@@ -1,46 +1,40 @@
 <script lang="ts">
   /**
-   * Tiny online/offline pill in the top-right. Reads `navigator.onLine` and
-   * listens for the browser's `online` / `offline` events so it stays
-   * accurate when the device flaps between networks.
+   * Tiny online/offline pill in the top-right. Reads `offlineSync.online`
+   * (which listens for `navigator.onLine` and the `online`/`offline`
+   * window events in one place — see `lib/offline/offlineSync.svelte.ts`).
    *
    * Behavior:
    *  - Online  → hidden (no UI cost when everything is fine).
-   *  - Offline → persistent gold pill: "Offline · changes won't sync".
-   *  - Online → shows a brief "Back online" toast-like pill for ~3s, then hides.
+   *  - Offline → persistent gold pill: "You're offline".
+   *  - Online (just reconnected) → brief "Back online" pill for ~3s.
    */
-  import { onMount } from 'svelte';
+  import { offlineSync } from '$lib/offline/offlineSync.svelte';
   import { WifiOff, Wifi } from 'lucide-svelte';
 
-  let online  = $state(true);
   let justReconnected = $state(false);
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  onMount(() => {
-    online = navigator.onLine;
-    const onOnline = () => {
-      online = true;
+  // React to the shared online state instead of listening to the
+  // window events ourselves.  When online flips to true, briefly
+  // show the "Back online" pill, then hide it.
+  $effect(() => {
+    if (offlineSync.online) {
       justReconnected = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectTimer = setTimeout(() => (justReconnected = false), 3000);
-    };
-    const onOffline = () => {
-      online = false;
+    } else {
       justReconnected = false;
       if (reconnectTimer) clearTimeout(reconnectTimer);
-    };
-    window.addEventListener('online',  onOnline);
-    window.addEventListener('offline', onOffline);
+    }
     return () => {
-      window.removeEventListener('online',  onOnline);
-      window.removeEventListener('offline', onOffline);
       if (reconnectTimer) clearTimeout(reconnectTimer);
     };
   });
 </script>
 
-{#if !online}
-  <!-- Offline: persistent, dismissible in tone -->
+{#if !offlineSync.online}
+  <!-- Offline: persistent -->
   <div
     class="fixed top-3 left-1/2 -translate-x-1/2 z-[60] inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-[var(--shadow)]"
     style="background:var(--gold); color:#fff"
