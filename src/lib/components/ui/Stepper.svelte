@@ -42,8 +42,8 @@
           <!-- Step circle -->
           <div
             class="relative w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold transition-all shrink-0
-              {done   ? 'bg-[var(--primary)] text-white'
-              : active ? 'bg-[var(--primary)] text-white shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_22%,transparent)]'
+              {done   ? 'bg-[var(--primary)] text-[var(--primary-fg)]'
+              : active ? 'bg-[var(--primary)] text-[var(--primary-fg)] shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_22%,transparent)]'
               : 'bg-[var(--surface2)] text-[var(--text-3)] border border-[var(--border)]'}"
             aria-current={active ? 'step' : undefined}
           >

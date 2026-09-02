@@ -86,8 +86,8 @@
       >
         {#if selected}
           <span
-            class="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px]"
-            style="background:{tok.primary}"
+            class="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
+            style="background:{tok.primary}; color:{tok.primaryFg}"
             aria-label="Selected"
           >✓</span>
         {/if}
@@ -105,7 +105,7 @@
     {#each ['light','dark','system'] as m}
       <button type="button"
         class="flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-colors capitalize"
-        style="background:{themeMode===m?'var(--primary)':'var(--surface2)'};color:{themeMode===m?'#fff':'var(--text-2)'};border-color:{themeMode===m?'var(--primary)':'var(--border)'}"
+        style="background:{themeMode===m?'var(--primary)':'var(--surface2)'};color:{themeMode===m?'var(--primary-fg)':'var(--text-2)'};border-color:{themeMode===m?'var(--primary)':'var(--border)'}"
         onclick={() => { themeMode = m as any; themeStore.setMode(m as any); }}>{m}</button>
     {/each}
   </div>

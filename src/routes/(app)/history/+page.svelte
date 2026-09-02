@@ -113,7 +113,7 @@
 
   const chipActiveCls = (tone: 'neutral' | 'teal' | 'crimson'): string => {
     const map = {
-      primary: 'bg-[var(--primary)] text-white shadow-sm',
+      primary: 'bg-[var(--primary)] text-[var(--primary-fg)] shadow-sm',
       teal:    'bg-[var(--teal)] text-white shadow-sm',
       crimson: 'bg-[var(--crimson)] text-white shadow-sm',
       neutral: 'bg-[var(--surface2)] text-[var(--text)]',

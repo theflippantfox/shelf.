@@ -323,8 +323,8 @@
       <button
         onclick={() => (filterCat = active ? '' : catId)}
         class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-pill)] border transition-all flex-shrink-0
-          {active ? 'text-white border-transparent shadow-sm' : 'text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface2)]'}"
-        style={active ? `background:${(cat as any).color ?? 'var(--primary)'}` : ''}
+          {active ? 'text-[var(--primary-fg)] border-transparent shadow-sm' : 'text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface2)]'}"
+        style={active ? `background:${(cat as any).color ?? 'var(--primary)'}; color:${(cat as any).color ? '#fff' : 'var(--primary-fg)'}` : ''}
       >
         <DynamicIcon name={(cat as any).icon ?? 'Package'} size={11} strokeWidth={2} />
         {(cat as any).name}

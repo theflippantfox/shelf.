@@ -341,7 +341,7 @@
               <button
                 class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all"
                 style="background:{active ? 'var(--primary)' : 'transparent'};
-                       color:{active ? '#fff' : 'var(--text-2)'}"
+                       color:{active ? 'var(--primary-fg)' : 'var(--text-2)'}"
                 onclick={() => (activeMetric = tab.key)}
               >
                 <DynamicIcon name={tab.icon} size={11} strokeWidth={2} />

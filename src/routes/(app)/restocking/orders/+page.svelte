@@ -93,7 +93,7 @@
   const chipCount = (key: StatusKey): number => (data as any).counts[key] ?? 0;
 
   const chipActiveCls = (tone: string): string => {
-    if (tone === 'primary') return 'bg-[var(--primary)] text-white shadow-sm';
+    if (tone === 'primary') return 'bg-[var(--primary)] text-[var(--primary-fg)] shadow-sm';
     if (tone === 'teal')    return 'bg-[var(--teal)] text-white shadow-sm';
     if (tone === 'crimson') return 'bg-[var(--crimson)] text-white shadow-sm';
     if (tone === 'amber')   return 'bg-[var(--amber)] text-white shadow-sm';
@@ -126,7 +126,7 @@
     </p>
   </div>
   {#if auth.can('inventory.manage')}
-    <a href="/restocking/orders/new" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--primary)] text-white hover:opacity-90 transition-opacity">
+    <a href="/restocking/orders/new" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--primary)] text-[var(--primary-fg)] hover:opacity-90 transition-opacity">
       <PackagePlus size={13} strokeWidth={2.2} /> New Order
     </a>
   {/if}
