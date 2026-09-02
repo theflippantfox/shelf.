@@ -56,12 +56,15 @@
   function commit() {
     editing = false;
     const n = parseInt(draft, 10);
-    if (Number.isFinite(n) && n > 0) {
-      const clamped = Math.min(Math.max(1, n), max);
-      draft = String(clamped);
-      if (clamped !== value) onChange(clamped);
+    if (Number.isFinite(n) && n >= 0) {
+      // n === 0 means "remove the line" (cart's setQty() handles this).
+      // Negative or NaN reverts to the current value.
+      const target = n < 0 ? value : Math.min(n, max);
+      draft = String(target);
+      if (target !== value) onChange(target);
       else draft = String(value);
     } else {
+      // NaN or empty — revert.
       draft = String(value);
     }
   }
@@ -82,7 +85,10 @@
 
   function bump(delta: number) {
     if (disabled) return;
-    const next = Math.max(1, Math.min(max, value + delta));
+    // At qty=1 with delta=-1, treat as 'remove' by calling onChange(0).
+    // The cart's setQty() (or any other handler) decides what 0 means;
+    // a non-cart consumer that just wants clamping can ignore the 0.
+    const next = Math.max(0, Math.min(max, value + delta));
     if (next !== value) onChange(next);
   }
 
@@ -99,7 +105,8 @@
     else if (e.key === 'ArrowDown') {
       e.preventDefault();
       const step = e.shiftKey ? 10 : 1;
-      const next = Math.max((parseInt(draft, 10) || value) - step, 1);
+      // Floor at 0 so ArrowDown at qty=1 fires onChange(0) → remove.
+      const next = Math.max((parseInt(draft, 10) || value) - step, 0);
       draft = String(next);
       onChange(next);
     }
@@ -134,7 +141,7 @@
       bind:value={draft}
       type="number"
       inputmode="numeric"
-      min="1"
+      min="0"
       {max}
       step="1"
       onclick={(e) => e.stopPropagation()}
@@ -183,7 +190,7 @@
     bind:value={draft}
     type="number"
     inputmode="numeric"
-    min="1"
+    min="0"
     {max}
     step="1"
     onclick={(e) => e.stopPropagation()}
