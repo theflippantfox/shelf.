@@ -6,10 +6,19 @@
   import { Sun, Moon, Monitor, Check } from 'lucide-svelte';
 
   let { data } = $props();
-  const shop = (data as any).shop;
 
-  let paletteId   = $state<string>(shop.palette_id ?? 'graphite-mint');
-  let themeMode   = $state<'light' | 'dark' | 'system'>(shop.theme ?? 'system');
+  // `$derived` so `shop` tracks `data` after `invalidateAll()` — the
+  // `const shop = data.shop` form captures the initial reference and
+  // goes stale after a save reloads the page data.
+  const shop = $derived((data as any).shop);
+
+  // Initialize from the first-render `shop` value (synchronously, so SSR
+  // and the first client render agree — no hydration mismatch).  After
+  // the first render, `shop` is still tracked reactively; nothing else
+  // needs to react to it because the form fields are the source of
+  // truth once the user starts clicking palettes.
+  let paletteId   = $state<string>((data as any).shop?.palette_id ?? 'graphite-mint');
+  let themeMode   = $state<'light' | 'dark' | 'system'>((data as any).shop?.theme ?? 'system');
   let saving      = $state(false);
 
   // Live preview — applies to the whole app immediately, no save needed
