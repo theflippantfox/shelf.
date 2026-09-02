@@ -2,6 +2,7 @@
   import { auth }        from '$lib/stores/auth.svelte';
   import { currentShop } from '$lib/stores/shop.svelte';
   import { theme }       from '$lib/stores/theme.svelte';
+  import { offlineSync } from '$lib/offline/offlineSync.svelte';
   import Sidebar           from '$lib/components/layout/Sidebar.svelte';
   import BottomNav         from '$lib/components/layout/BottomNav.svelte';
   import Header            from '$lib/components/layout/Header.svelte';
@@ -23,6 +24,15 @@
         (data.currentShop as any).palette_id ?? undefined,
       );
     }
+
+    // Warm the offline caches + drain any pending sales left in
+    // IndexedDB from a previous session.  Both calls are no-ops
+    // when offline (they short-circuit on _online).  They also
+    // gracefully no-op on SSR (browser-only).  We don't await —
+    // the page renders first and the caches update in the
+    // background.
+    void offlineSync.flushPendingSales();
+    void offlineSync.refreshProductsCache();
   });
 
   // Command-bar state — opened by Header's search button or ⌘K
