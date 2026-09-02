@@ -111,10 +111,6 @@
   function setQty(productId: string, qty: number) {
     cart.setQty(productId, qty);
   }
-  function bumpQty(p: any, delta: number) {
-    const cur = cartByProduct.get(p.id) ?? 0;
-    setQty(p.id, cur + delta);
-  }
 
   function applyDiscount() {
     const v = parseFloat(discountStr);
@@ -211,7 +207,7 @@
       onclick={() => (filterCat = '')}
       class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-[var(--radius-pill)] border transition-all flex-shrink-0
         {filterCat === ''
-          ? 'bg-[var(--primary)] text-white border-transparent shadow-sm'
+          ? 'bg-[var(--primary)] text-[var(--primary-fg)] border-transparent shadow-sm'
           : 'bg-transparent text-[var(--text-2)] border-[var(--border)] hover:bg-[var(--surface2)]'}"
     >
       <Package size={11} strokeWidth={2} />
@@ -305,19 +301,15 @@
               <Plus size={13} strokeWidth={2.5} /> Add
             </button>
           {:else}
-            <div class="flex items-center justify-between bg-[var(--primary)] text-white rounded-lg overflow-hidden">
-              <button
-                onclick={() => bumpQty(p, -1)}
-                class="px-3 py-1.5 hover:bg-white/10 active:scale-95 transition"
-                aria-label="Decrease quantity"
-              ><Minus size={13} strokeWidth={2.5} /></button>
-              <span class="text-sm font-bold tabular-nums">{inCart}</span>
-              <button
-                onclick={() => bumpQty(p, +1)}
-                class="px-3 py-1.5 hover:bg-white/10 active:scale-95 transition disabled:opacity-50"
-                disabled={inCart >= p.qty}
-                aria-label="Increase quantity"
-              ><Plus size={13} strokeWidth={2.5} /></button>
+            <div class="flex items-center justify-between bg-[var(--primary)] text-[var(--primary-fg)] rounded-lg overflow-hidden">
+              <QtyInput
+                value={inCart}
+                max={p.qty}
+                onChange={(qty) => setQty(p.id, qty)}
+                variant="primary"
+                size="compact"
+                showSteppers
+              />
             </div>
           {/if}
         </div>
@@ -447,7 +439,7 @@
       class="btn btn-primary btn-lg rounded-full shadow-[var(--shadow-lg)] gap-2 px-5 relative active:scale-95"
     >
       <ShoppingCart size={16} strokeWidth={2} />
-      <span class="text-xs text-white/70 tabular-nums">{cart.count}</span>
+      <span class="text-xs text-[var(--primary-fg)]/70 tabular-nums">{cart.count}</span>
       <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(grandTotal)}</span>
     </button>
   </div>
@@ -461,7 +453,7 @@
       class="btn btn-primary btn-lg rounded-full shadow-[var(--shadow-lg)] gap-2 px-5 relative active:scale-95"
     >
       <ShoppingCart size={16} strokeWidth={2} />
-      <span class="text-xs text-white/70 tabular-nums">{cart.count}</span>
+      <span class="text-xs text-[var(--primary-fg)]/70 tabular-nums">{cart.count}</span>
       <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(grandTotal)}</span>
     </button>
   </div>
