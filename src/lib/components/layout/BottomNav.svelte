@@ -58,32 +58,74 @@
     document.documentElement.style.setProperty("--vv-bottom", `${offset}px`);
   }
 
+  /*
+   * Smooth update loop.
+   *
+   * visualViewport events fire on the right hooks (URL bar show/hide,
+   * keyboard, rotation) but during a fast inertial scroll the
+   * intermediate states arrive in batches and the nav visibly hops —
+   * it lifts to the URL-bar-visible offset, then snaps to the
+   * URL-bar-hidden offset when scroll lands.
+   *
+   * Solution: use a rAF loop keyed off `requestAnimationFrame` while
+   * a scroll is in progress, and keep it running for ~150ms after the
+   * last scroll event to catch the settle. rAF runs at the display
+   * refresh rate (60–120Hz), so the --vv-bottom variable updates
+   * continuously and the CSS sees a smooth animation.
+   */
+  let rafId = 0;
+  let settleTimer = 0;
+  function scheduleUpdate() {
+    if (settleTimer) clearTimeout(settleTimer);
+    if (!rafId) {
+      const tick = () => {
+        rafId = 0;
+        updateViewportOffset();
+      };
+      rafId = requestAnimationFrame(tick);
+    }
+    settleTimer = window.setTimeout(() => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      updateViewportOffset();
+    }, 180);
+  }
+
   onMount(() => {
     if (typeof window === "undefined") return;
     updateViewportOffset();
     const vv = window.visualViewport;
     // visualViewport is the most reliable signal on mobile; it fires on
     // every scroll/zoom/pan that changes the visible area.
-    vv?.addEventListener("resize",  updateViewportOffset);
-    vv?.addEventListener("scroll",  updateViewportOffset);
+    vv?.addEventListener("resize",  scheduleUpdate);
+    vv?.addEventListener("scroll",  scheduleUpdate);
     // The layout viewport can also change (rotation, address-bar show
     // / hide that does fire resize on Android).
-    window.addEventListener("resize", updateViewportOffset);
+    window.addEventListener("resize", scheduleUpdate);
     // When the soft keyboard opens / closes, the visual viewport
     // changes height but `resize` doesn't always fire on every browser
     // — this extra listener catches focus-in on any form element.
-    document.addEventListener("focusin",  updateViewportOffset);
-    document.addEventListener("focusout", updateViewportOffset);
+    document.addEventListener("focusin",  scheduleUpdate);
+    document.addEventListener("focusout", scheduleUpdate);
+    // Page scroll on mobile drives the URL-bar collapse animation; the
+    // visualViewport resize event lags behind the scroll, so listen to
+    // window scroll too and feed it through the rAF loop.
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
   });
 
   onDestroy(() => {
     if (typeof window === "undefined") return;
     const vv = window.visualViewport;
-    vv?.removeEventListener("resize",  updateViewportOffset);
-    vv?.removeEventListener("scroll",  updateViewportOffset);
-    window.removeEventListener("resize", updateViewportOffset);
-    document.removeEventListener("focusin",  updateViewportOffset);
-    document.removeEventListener("focusout", updateViewportOffset);
+    vv?.removeEventListener("resize",  scheduleUpdate);
+    vv?.removeEventListener("scroll",  scheduleUpdate);
+    window.removeEventListener("resize", scheduleUpdate);
+    document.removeEventListener("focusin",  scheduleUpdate);
+    document.removeEventListener("focusout", scheduleUpdate);
+    window.removeEventListener("scroll", scheduleUpdate);
+    if (rafId) cancelAnimationFrame(rafId);
+    if (settleTimer) clearTimeout(settleTimer);
   });
 </script>
 

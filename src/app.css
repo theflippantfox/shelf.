@@ -427,9 +427,11 @@ textarea.input { resize: vertical; min-height: 80px; }
   padding-top: 8px; box-shadow: 0 -2px 12px 0 rgb(0 0 0 / 0.08);
   backdrop-filter: blur(12px);
   background: color-mix(in srgb, var(--surface) 95%, transparent);
-  /* No transition on `bottom` — the JS handler updates the
-   * --vv-bottom variable on every visualViewport event, so the
-   * nav tracks the visible bottom in real time without lag. */
+  /* Tiny transition so the per-frame --vv-bottom updates from the
+   * rAF loop in BottomNav.svelte read as a smooth slide rather
+   * than a step. Anything more than 120ms starts to feel laggy. */
+  transition: bottom 120ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: bottom;
 }
 @media (max-width: 767px) {
   .bottom-nav { display: flex; align-items: flex-end; }
