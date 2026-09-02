@@ -85,70 +85,70 @@ export const ICONS = {
   website:     'Link',
 
   // Categories - Beauty & Personal Care
-  skincare:    'sparkles',
-  makeup:      'wand-2',
-  haircare:    'scissors',
-  fragrance:   'wind',
-  bodycare:    'droplets',
-  nails:       'brush',
-  wellness:    'heart',
-  spa:         'flower',
-  
+  skincare:    'Sparkles',
+  makeup:      'WandSparkles',
+  haircare:    'Scissors',
+  fragrance:   'Wind',
+  bodycare:    'Droplets',
+  nails:       'Brush',
+  wellness:    'Heart',
+  spa:         'Flower',
+
   // Categories - Fashion & Accessories
-  accessories: 'watch',
-  clothing:    'shirt',
-  jewelry:     'diamond',
-  glasses:     'glasses',
-  bag:         'backpack',
-  shoe:        'footprints',
-  
+  accessories: 'Watch',
+  clothing:    'Shirt',
+  jewelry:     'Diamond',
+  glasses:     'Glasses',
+  bag:         'Backpack',
+  shoe:        'Footprints',
+
   // Categories - Tools & Equipment
-  tools:       'wrench',
-  brush:       'brush',
-  hammer:      'hammer',
-  
+  tools:       'Wrench',
+  brush:       'Brush',
+  hammer:      'Hammer',
+
   // Categories - Health & Nutrition
-  supplements: 'pill',
-  medical:     'stethoscope',
-  nutrition:   'apple',
-  fitness:     'activity',
-  
+  supplements: 'Pill',
+  medical:     'Stethoscope',
+  nutrition:   'Apple',
+  fitness:     'Activity',
+
   // Categories - Home & Living
-  home:        'home',
-  food:        'shopping-bag',
-  garden:      'flower-2',
-  flower2:     'flower-2',
-  kitchen:     'coffee',
-  furniture:   'armchair',
-  
+  home:        'House',
+  food:        'ShoppingBag',
+  garden:      'Flower2',
+  flower2:     'Flower2',
+  kitchen:     'Coffee',
+  furniture:   'Armchair',
+
   // Categories - Electronics & Tech
-  electronics: 'zap',
-  smartphone:  'smartphone',
-  computer:    'laptop',
-  camera:      'camera',
-  
+  electronics: 'Zap',
+  smartphone:  'Smartphone',
+  computer:    'Laptop',
+  camera:      'Camera',
+
   // Categories - Sports & Recreation
-  sports:      'dumbbell',
-  toys:        'gamepad-2',
-  music:       'music',
-  gaming:      'gamepad',
-  
+  sports:      'Dumbbell',
+  toys:        'Gamepad2',
+  music:       'Music',
+  gaming:      'Gamepad',
+
   // Categories - Professional & Creative
-  art:         'paint-bucket',
-  books:       'book-open',
-  office:      'briefcase',
-  education:   'graduation-cap',
-  
+  art:         'PaintBucket',
+  books:       'BookOpen',
+  office:      'Briefcase',
+  education:   'GraduationCap',
+
   // Categories - Vehicles & Transport
-  automotive:  'car',
+  automotive:  'Car',
   truck:       'Truck',
-  bicycle:     'bike',
-  
+  bicycle:     'Bike',
+
   // Categories - Animals & Gifts
-  pets:        'paw-print',
-  gifts:       'gift',
-  baby:        'baby',
-  party:       'party-popper',
+  pets:        'PawPrint',
+  gifts:       'Gift',
+  baby:        'Baby',
+  party:       'PartyPopper',
 } as const;
 
 export type IconKey = keyof typeof ICONS;

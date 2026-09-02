@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { CATEGORY_COLORS } from '$lib/config/palettes';
-  import { CATEGORY_ICON_KEYS } from '$lib/config/icons';
+  import { CATEGORY_ICON_KEYS, ICONS } from '$lib/config/icons';
   import Button     from '$lib/components/ui/Button.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import { Plus, Trash2, Palette } from 'lucide-svelte';
@@ -10,9 +10,9 @@
   interface Cat { name: string; icon: string; color: string }
 
   const PRESETS: Cat[] = [
-    { name: 'Skincare',   icon: 'Sparkles', color: '#7B4F8A' },
-    { name: 'Makeup',     icon: 'Wand2',    color: '#C03868' },
-    { name: 'Haircare',   icon: 'Scissors', color: '#C5930A' },
+    { name: 'Skincare',   icon: 'Sparkles',     color: '#7B4F8A' },
+    { name: 'Makeup',     icon: 'WandSparkles', color: '#C03868' },
+    { name: 'Haircare',   icon: 'Scissors',     color: '#C5930A' },
     { name: 'Body care',  icon: 'Droplets', color: '#0D7A6E' },
     { name: 'Fragrance',  icon: 'Wind',     color: '#2E5FC7' },
     { name: 'Nails',      icon: 'Brush',    color: '#B85430' },
@@ -122,14 +122,15 @@
               <p class="text-[10px] font-bold uppercase tracking-wide text-[var(--text-3)] mb-1.5">Icon</p>
               <div class="grid grid-cols-8 gap-1.5">
                 {#each CATEGORY_ICON_KEYS as key}
+                  {@const iconName = ICONS[key]}
                   <button
                     type="button"
                     class="w-8 h-8 rounded-md flex items-center justify-center transition-colors"
-                    style="background:{cat.icon === key ? 'color-mix(in srgb, '+cat.color+' 20%, transparent)' : 'var(--surface2)'}; color:{cat.icon === key ? cat.color : 'var(--text-2)'}"
-                    onclick={() => (cat.icon = key)}
+                    style="background:{cat.icon === iconName ? 'color-mix(in srgb, '+cat.color+' 20%, transparent)' : 'var(--surface2)'}; color:{cat.icon === iconName ? cat.color : 'var(--text-2)'}"
+                    onclick={() => (cat.icon = iconName)}
                     aria-label="Icon: {key}"
                   >
-                    <DynamicIcon name={key} size={14} />
+                    <DynamicIcon name={iconName} size={14} />
                   </button>
                 {/each}
               </div>

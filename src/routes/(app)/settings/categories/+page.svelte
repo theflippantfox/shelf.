@@ -27,7 +27,7 @@
   }
 
   function openEdit(c: any) {
-    form    = { name: c.name, icon: c.icon.toLowerCase(), color: c.color };
+    form    = { name: c.name, icon: c.icon, color: c.color };
     editing = c;
     showModal = true;
   }
@@ -104,22 +104,23 @@
               </div>
             </div>
 
-            <!-- Actions -->
             <div class="flex gap-1">
-              <button 
-                class="btn btn-ghost btn-icon btn-sm opacity-0 group-hover:opacity-100 transition-opacity"
+              <button
+                class="btn btn-ghost btn-icon btn-sm opacity-50 hover:opacity-100 transition-opacity"
                 onclick={() => openEdit(cat)}
                 title="Edit category"
+                aria-label={`Edit ${cat.name}`}
               >
                 <Pencil size={13} strokeWidth={1.75} />
               </button>
-              <button 
-                class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)] opacity-0 group-hover:opacity-100 transition-opacity"
+              <button
+                class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)] opacity-50 hover:opacity-100 transition-opacity"
                 onclick={() => archive(cat)}
-                disabled={deleting === (cat as any).id}
+                disabled={deleting === cat.id}
                 title="Archive category"
+                aria-label={`Archive ${cat.name}`}
               >
-                {#if deleting === (cat as any).id}
+                {#if deleting === cat.id}
                   <div class="w-3 h-3 border-2 border-[var(--crimson)] border-t-transparent rounded-full animate-spin"></div>
                 {:else}
                   <Trash2 size={13} strokeWidth={1.75} />
