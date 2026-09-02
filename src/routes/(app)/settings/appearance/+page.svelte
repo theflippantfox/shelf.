@@ -2,7 +2,8 @@
   import { invalidateAll } from '$app/navigation';
   import { toasts } from '$lib/stores/toast.svelte';
   import { theme as themeStore } from '$lib/stores/theme.svelte';
-  import { PALETTES } from '$lib/config/palettes';
+  import { PALETTES, getPalette } from '$lib/config/palettes';
+  import { applyTokens } from '$lib/utils/colorUtils';
   import { Sun, Moon, Monitor, Check } from 'lucide-svelte';
 
   let { data } = $props();
@@ -21,10 +22,35 @@
   let themeMode   = $state<'light' | 'dark' | 'system'>((data as any).shop?.theme ?? 'system');
   let saving      = $state(false);
 
+  // Direct theme application — bypasses the theme store and goes straight
+  // to applyTokens().  This is the same function the store calls internally
+  // but it runs synchronously in the click handler with no store-side
+  // state mutation that could be raced by the layout's $effect.pre.
+  // If the store call ever silently no-ops, this will still work.
+  function _applyPaletteDirect(id: string) {
+    if (typeof document === 'undefined') return;
+    const p = getPalette(id);
+    if (!p) return;
+    const isDark = themeMode === 'dark'
+      || (themeMode === 'system' && typeof window !== 'undefined'
+          && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    applyTokens(isDark ? p.dark : p.light);
+    // Also pulse the transition class so the change animates
+    document.documentElement.classList.add('palette-transitioning');
+    setTimeout(() => {
+      document.documentElement.classList.remove('palette-transitioning');
+    }, 280);
+  }
+
   // Live preview — applies to the whole app immediately, no save needed
   function previewPalette(id: string) {
     paletteId = id;
-    themeStore.applyShopPalette(id);
+    // 1) Direct path — guaranteed to update the DOM even if the store
+    //    is somehow stale or shadowed by another instance.
+    _applyPaletteDirect(id);
+    // 2) Store path — keeps the store in sync so the layout's $effect.pre
+    //    doesn't reset the visual back to the saved palette.
+    try { themeStore.applyShopPalette(id); } catch {}
   }
 
   async function save() {
@@ -49,7 +75,24 @@
   // Live mode preview (no save) — applies just the mode, not palette
   function previewMode(m: 'light' | 'dark' | 'system') {
     themeMode = m;
-    themeStore.set(m);
+    // 1) Direct path — toggle the dark class and re-apply the current
+    //    palette's tokens under the new mode.
+    if (typeof document !== 'undefined') {
+      const isDark = m === 'dark'
+        || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+      const p = getPalette(paletteId);
+      if (p) {
+        applyTokens(isDark ? p.dark : p.light);
+        document.documentElement.classList.add('palette-transitioning');
+        setTimeout(() => {
+          document.documentElement.classList.remove('palette-transitioning');
+        }, 280);
+      }
+      try { localStorage.setItem('shelf-theme', m); } catch {}
+    }
+    // 2) Store path — keeps the store in sync.
+    try { themeStore.set(m); } catch {}
   }
 </script>
 
