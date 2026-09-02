@@ -34,6 +34,42 @@ Built with **SvelteKit 2 · Svelte 5 runes · Tailwind CSS v4 · Supabase (Postg
 
 ---
 
+## Offline Mode
+
+The app is offline-first. After the first online load, the products list is cached in IndexedDB, and the app continues to work without a network.
+
+**How it works:**
+
+- **Read cache.** On boot, `/api/products` is fetched and stored in the page-side `shelf` IndexedDB. While online, every page boots from the network as usual; the cache is the fallback when the network drops.
+- **Write queue.** When a sale is submitted while offline, the page-side `offlineSync` module persists the sale (with a `crypto.randomUUID()` client id) to `pending_sales`. A small badge in the header shows the count and a "Syncing…" spinner while a flush is in progress.
+- **Service worker.** A custom `src/service-worker.ts` precaches the SvelteKit shell (93 entries, ~2 MB) and runtime-caches Google Fonts and `/_app/immutable`. POSTs to `/api/sales` that fail at the network are queued in a SW-owned `shelf-sw` IndexedDB and replayed on `sync` or the next `online` event.
+- **Conflict resolution.** The server is authoritative. If a sale fails to sync (e.g. stock changed on the server while the user was offline), the row is marked `failed` in the queue and the user sees a toast with the failure reason. The page-side `offlineSync.flushPendingSales()` stops on the first non-OK response so the user can act on the error before the rest of the queue runs.
+- **Auto-flush.** The layout kicks off `flushPendingSales()` and `refreshProductsCache()` in its `$effect.pre` on every boot. The `online` window event triggers a flush too. The header badge can be clicked for a manual flush.
+
+**Files:**
+
+- `src/lib/offline/offlineDb.ts` — IndexedDB schema (page-side)
+- `src/lib/offline/offlineSync.svelte.ts` — sync engine + Svelte store
+- `src/lib/components/ui/SyncBadge.svelte` — header pill
+- `src/service-worker.ts` — custom SW with `sw-queue` object store
+- `vite.config.ts` — switched to `injectManifest` strategy
+
+**Testing offline:**
+
+1. Open the app online at least once so the products cache is populated.
+2. Open DevTools → Network → set throttling to "Offline".
+3. Try `/sale` — the page still loads from the precached shell + IndexedDB.
+4. Add items to the cart and submit. A "Saved offline" toast appears; the header shows "1 pending".
+5. Switch the network back to "Online". The flush runs automatically; click the badge to retry manually if needed.
+
+**Caveats:**
+
+- Edit mode (PATCH `/api/sales/[id]`) stays online-only.
+- The receipt modal is skipped for offline sales (no server reference number yet — the sync success toast can be extended to surface it later).
+- Background Sync API is Chromium-only; Safari falls back to the `online` event + boot-time flush.
+
+---
+
 ## Quick Start
 
 ### 1. Prerequisites
