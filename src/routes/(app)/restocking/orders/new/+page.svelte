@@ -4,7 +4,7 @@
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Button from "$lib/components/ui/Button.svelte";
-  import Modal from "$lib/components/ui/Modal.svelte";
+  import Sheet from "$lib/components/ui/Sheet.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import { toasts } from "$lib/stores/toast.svelte";
   import { currentShop } from "$lib/stores/shop.svelte";
@@ -625,7 +625,7 @@
   </div>
 <!-- ─── Modals OUTSIDE PageShell to escape transform containing block ──────── -->
 
-<Modal
+<Sheet
   bind:open={showNewProduct}
   title="Create new product"
   maxWidth="max-w-sm"
@@ -685,4 +685,4 @@
       </Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

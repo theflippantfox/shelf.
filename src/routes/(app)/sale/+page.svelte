@@ -10,7 +10,7 @@
   import { formatCurrency, formatCurrencyCompact } from "$lib/utils/format";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
   import Button from "$lib/components/ui/Button.svelte";
-  import Modal from "$lib/components/ui/Modal.svelte";
+  import Sheet from '$lib/components/ui/Sheet.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import QtyInput from '$lib/components/ui/QtyInput.svelte';
   import ProductCardSkeleton from '$lib/components/ui/ProductCardSkeleton.svelte';
@@ -480,7 +480,7 @@
 <!-- ─────────────────────────────────────────────────────────────────────────
   CHECKOUT MODAL
   ───────────────────────────────────────────────────────────────────────── -->
-<Modal bind:open={showCheckout} title="Complete sale" maxWidth="max-w-md">
+<Sheet bind:open={showCheckout} title="Complete sale" maxWidth="max-w-md">
   <div class="flex flex-col gap-4">
     <!-- Customer -->
     <div>
@@ -615,12 +615,12 @@
       </Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>
 
 <!-- ─────────────────────────────────────────────────────────────────────────
   RECEIPT MODAL
   ───────────────────────────────────────────────────────────────────────── -->
-<Modal bind:open={showReceipt} title={isEdit ? 'Sale updated' : 'Sale complete'} maxWidth="max-w-sm">
+<Sheet bind:open={showReceipt} title={isEdit ? 'Sale updated' : 'Sale complete'} maxWidth="max-w-sm">
   <div class="text-center py-3">
     <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
          style="background:var(--teal-dim)">
@@ -665,4 +665,4 @@
       </Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

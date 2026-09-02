@@ -5,7 +5,7 @@
   import { toasts }   from '$lib/stores/toast.svelte';
   import Avatar    from '$lib/components/ui/Avatar.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
-  import Modal     from '$lib/components/ui/Modal.svelte';
+  import Sheet from '$lib/components/ui/Sheet.svelte';
   import Input     from '$lib/components/ui/Input.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import { ArrowLeft, Pencil, Trash2, ShoppingCart } from 'lucide-svelte';
@@ -121,7 +121,7 @@
       </div>
     {/if}
   </div>
-<Modal bind:open={showEdit} title="Edit customer" maxWidth="max-w-sm">
+<Sheet bind:open={showEdit} title="Edit customer" maxWidth="max-w-sm">
   <form onsubmit={(e) => { e.preventDefault(); save(); }} class="flex flex-col gap-3">
     <Input label="Name"  bind:value={form.name}  required />
     <Input label="Phone" bind:value={form.phone}  type="tel" />
@@ -137,4 +137,4 @@
       <Button loading={saving} onclick={save}>Save</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

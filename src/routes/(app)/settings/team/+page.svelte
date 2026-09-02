@@ -5,7 +5,7 @@
   import { PERMISSIONS } from '$lib/config/permissions';
   import { getEffectivePermissions } from '$lib/utils/permissions';
   import Button    from '$lib/components/ui/Button.svelte';
-  import Modal     from '$lib/components/ui/Modal.svelte';
+  import Sheet from '$lib/components/ui/Sheet.svelte';
   import Input     from '$lib/components/ui/Input.svelte';
   import Select    from '$lib/components/ui/Select.svelte';
   import Toggle    from '$lib/components/ui/Toggle.svelte';
@@ -134,7 +134,7 @@
     {/each}
   </div>
 <!-- Add member modal -->
-<Modal bind:open={showAdd} title="Add team member" maxWidth="max-w-sm">
+<Sheet bind:open={showAdd} title="Add team member" maxWidth="max-w-sm">
   <form onsubmit={(e) => { e.preventDefault(); addMember(); }} class="flex flex-col gap-3">
     <div class="grid grid-cols-2 gap-2">
       <Input label="First name" bind:value={form.first_name} required />
@@ -151,10 +151,10 @@
       <Button loading={saving} onclick={addMember}>Add member</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>
 
 <!-- Permissions modal -->
-<Modal bind:open={showPerms} title="Edit permissions — {editMember?.user?.first_name}" maxWidth="max-w-sm">
+<Sheet bind:open={showPerms} title="Edit permissions — {editMember?.user?.first_name}" maxWidth="max-w-sm">
   {#if editMember}
     <p class="text-xs text-[var(--text-3)] mb-4">
       Role: <strong class="capitalize">{editMember.role}</strong>.
@@ -175,4 +175,4 @@
       <Button loading={saving} onclick={savePerms}>Save permissions</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

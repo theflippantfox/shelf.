@@ -111,7 +111,7 @@ src/
 │   ├── analytics.ts            # All analytics builders (revenue, profit, margin, …)
 │   ├── components/
 │   │   ├── layout/             # Sidebar, BottomNav, Header (breadcrumb), PageShell
-│   │   ├── ui/                 # Button, Card, KpiCard, StatTile, Modal, Sheet, …
+│   │   ├── ui/                 # Button, Card, KpiCard, StatTile, Sheet, …
 │   │   ├── charts/             # Bar, Area, HBar, Donut, Sparkline, Heatmap
 │   │   └── CommandBar.svelte   # ⌘K palette
 │   ├── config/                 # app, nav, palettes, permissions, currencies, timezones, …
@@ -196,8 +196,7 @@ Six curated palettes:
 - **KpiCard** (`KpiCard.svelte`) — eyebrow label + display value + trend pill + icon + sub.
 - **StatTile** (`StatTile.svelte`) — smaller companion to KpiCard for secondary stats.
 - **NumberFlow** (`NumberFlow.svelte`) — animated counter using `requestAnimationFrame` with eased interpolation. Respects `prefers-reduced-motion`.
-- **Sheet** (`Sheet.svelte`) — bottom-sheet on mobile, right-side drawer on desktop.
-- **Modal** (`Modal.svelte`) — fly+fade dialog.
+- **Sheet** (`Sheet.svelte`) — the one modal. Centered fly+fade on desktop with `backdrop-blur` overlay, drag-handle bottom-sheet on mobile. Use everywhere — `bind:open`, `title`, `description`, `maxWidth`, `children`, `footer` (snippet).
 
 ### Charts
 

@@ -4,7 +4,7 @@
   import { auth } from '$lib/stores/auth.svelte';
   import { toasts } from '$lib/stores/toast.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
-  import Modal     from '$lib/components/ui/Modal.svelte';
+  import Sheet from '$lib/components/ui/Sheet.svelte';
   import Input     from '$lib/components/ui/Input.svelte';
   import { ArrowLeft, Ban, Pencil } from 'lucide-svelte';
   import { cart } from '$lib/stores/cart.svelte';
@@ -120,7 +120,7 @@
   </div>
 {/if}
 
-<Modal bind:open={showVoid} title="Void sale" maxWidth="max-w-sm">
+<Sheet bind:open={showVoid} title="Void sale" maxWidth="max-w-sm">
   <p class="text-sm text-[var(--text-2)] mb-3">Stock will be restored. This cannot be undone.</p>
   <Input label="Reason (optional)" bind:value={voidReason} placeholder="e.g. Customer returned items" />
   {#snippet footer()}
@@ -129,4 +129,4 @@
       <Button variant="danger" loading={voiding} onclick={doVoid} class="flex-1 justify-center">Void sale</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

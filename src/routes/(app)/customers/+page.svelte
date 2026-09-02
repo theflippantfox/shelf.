@@ -6,7 +6,7 @@
   import PageShell  from '$lib/components/layout/PageShell.svelte';
   import SearchBar  from '$lib/components/ui/SearchBar.svelte';
   import Button     from '$lib/components/ui/Button.svelte';
-  import Modal      from '$lib/components/ui/Modal.svelte';
+  import Sheet from '$lib/components/ui/Sheet.svelte';
   import Input      from '$lib/components/ui/Input.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import Avatar     from '$lib/components/ui/Avatar.svelte';
@@ -116,7 +116,7 @@
       {/each}
     </div>
   {/if}
-<Modal bind:open={showAdd} title={editing ? 'Edit customer' : 'New customer'} maxWidth="max-w-sm">
+<Sheet bind:open={showAdd} title={editing ? 'Edit customer' : 'New customer'} maxWidth="max-w-sm">
   <form onsubmit={(e) => { e.preventDefault(); save(); }} class="flex flex-col gap-3">
     <Input label="Full name" bind:value={form.name}  required />
     <Input label="Phone"     bind:value={form.phone}  type="tel" />
@@ -132,4 +132,4 @@
       <Button loading={saving} onclick={save}>Save</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

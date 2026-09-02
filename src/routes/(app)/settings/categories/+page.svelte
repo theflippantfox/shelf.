@@ -4,7 +4,7 @@
   import { CATEGORY_COLORS } from '$lib/config/palettes';
   import PageShell   from '$lib/components/layout/PageShell.svelte';
   import Button      from '$lib/components/ui/Button.svelte';
-  import Modal       from '$lib/components/ui/Modal.svelte';
+  import Sheet from '$lib/components/ui/Sheet.svelte';
   import Input       from '$lib/components/ui/Input.svelte';
   import ColorSwatch from '$lib/components/ui/ColorSwatch.svelte';
   import IconPicker  from '$lib/components/ui/IconPicker.svelte';
@@ -138,7 +138,7 @@
       </p>
     </div>
   {/if}
-<Modal bind:open={showModal} title={editing ? 'Edit category' : 'New category'} maxWidth="max-w-sm">
+<Sheet bind:open={showModal} title={editing ? 'Edit category' : 'New category'} maxWidth="max-w-sm">
   <div class="flex flex-col gap-4">
     <Input label="Name" bind:value={form.name} required />
     <div class="input-group">
@@ -164,4 +164,4 @@
       <Button loading={saving} onclick={save}>Save</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Modal from './Modal.svelte';
+  import Sheet from './Sheet.svelte';
   import Button from './Button.svelte';
 
   let {
@@ -21,7 +21,7 @@
   } = $props();
 </script>
 
-<Modal bind:open {title}>
+<Sheet bind:open {title}>
   <p class="text-sm text-[var(--text-2)]">{message}</p>
 
   {#snippet footer()}
@@ -30,4 +30,4 @@
       <Button variant={danger ? 'danger' : 'primary'} {loading} onclick={onconfirm}>Confirm</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>

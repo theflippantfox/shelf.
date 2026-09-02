@@ -7,7 +7,7 @@
   import PageShell   from '$lib/components/layout/PageShell.svelte';
   import SearchBar   from '$lib/components/ui/SearchBar.svelte';
   import Button      from '$lib/components/ui/Button.svelte';
-  import Modal       from '$lib/components/ui/Modal.svelte';
+  import Sheet from '$lib/components/ui/Sheet.svelte';
   import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
   import Input       from '$lib/components/ui/Input.svelte';
   import Select      from '$lib/components/ui/Select.svelte';
@@ -432,7 +432,7 @@
   {/if}
 </div>
 
-<Modal bind:open={showAdd} title={editTarget ? 'Edit product' : 'Add product'} maxWidth="max-w-lg">
+<Sheet bind:open={showAdd} title={editTarget ? 'Edit product' : 'Add product'} maxWidth="max-w-lg">
   <form onsubmit={(e) => { e.preventDefault(); saveProduct(); }} class="flex flex-col gap-3">
     <Input label="Name" bind:value={form.name} required />
     <div class="grid grid-cols-2 gap-3">
@@ -461,7 +461,7 @@
       <Button loading={saving} onclick={saveProduct}>Save product</Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>
 
 <ConfirmModal
   bind:open={showDelete}

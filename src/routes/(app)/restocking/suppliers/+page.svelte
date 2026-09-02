@@ -3,7 +3,7 @@
   import Input from "$lib/components/ui/Input.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Button from "$lib/components/ui/Button.svelte";
-  import Modal from "$lib/components/ui/Modal.svelte";
+  import Sheet from "$lib/components/ui/Sheet.svelte";
   import ConfirmModal from "$lib/components/ui/ConfirmModal.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import { toasts } from "$lib/stores/toast.svelte";
@@ -310,7 +310,7 @@
   {/if}
 <!-- ─── Modals rendered OUTSIDE to escape the fade-up stacking context ─── -->
 
-<Modal
+<Sheet
   bind:open={showAdd}
   title={editingSupplier ? "Edit supplier" : "Add supplier"}
   maxWidth="max-w-lg"
@@ -382,7 +382,7 @@
       </Button>
     </div>
   {/snippet}
-</Modal>
+</Sheet>
 
 <ConfirmModal
   bind:open={showDelete}

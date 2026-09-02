@@ -34,12 +34,12 @@
 
   let dialogEl = $state<HTMLElement | null>(null);
 
-  const sizeHeight = {
+  const sizeHeight = $derived({
     sm: 'max-h-[40vh]',
     md: 'max-h-[70vh]',
     lg: 'max-h-[88vh]',
     xl: 'max-h-[95vh]',
-  }[size];
+  }[size]);
 
   $effect(() => {
     if (open && dialogEl) {
