@@ -296,9 +296,13 @@
           {:else if inCart === 0}
             <button
               onclick={() => { cart.add(p); }}
-              class="btn btn-primary btn-sm w-full justify-center gap-1"
+              class="group/btn relative w-full h-7 rounded-md text-[11px] font-semibold tabular-nums
+                     bg-[var(--surface2)] text-[var(--text-2)] border border-[var(--border)]
+                     hover:bg-[var(--primary-dim)] hover:text-[var(--text)] hover:border-[var(--primary)]
+                     active:scale-[0.98] transition-colors transition-transform
+                     inline-flex items-center justify-center gap-1"
             >
-              <Plus size={13} strokeWidth={2.5} /> Add
+              <Plus size={12} strokeWidth={2.5} class="opacity-70 group-hover/btn:opacity-100" /> Add
             </button>
           {:else}
             <div class="flex items-center justify-between bg-[var(--primary)] text-[var(--primary-fg)] rounded-lg overflow-hidden">
@@ -307,7 +311,7 @@
                 max={p.qty}
                 onChange={(qty) => setQty(p.id, qty)}
                 variant="primary"
-                size="compact"
+                size="sm"
                 showSteppers
               />
             </div>
