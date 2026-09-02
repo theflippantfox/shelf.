@@ -24,7 +24,7 @@
  */
 import { precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { CacheFirst, NetworkFirst, NetworkOnly } from 'workbox-strategies';
+import { CacheFirst, NetworkFirst, NetworkOnly, StaleWhileRevalidate } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
 
@@ -92,6 +92,22 @@ try {
 registerRoute(
   ({ url, request }) => url.pathname.startsWith('/api/') && request.method === 'GET',
   new NetworkOnly(),
+);
+
+// SvelteKit's per-route data fetches.  When the SPA navigates
+// client-side it calls /<route>/__data.json.  Without an SW
+// rule these go to the network, fail offline, and SvelteKit
+// throws "Internal Error".  StaleWhileRevalidate means:
+//   - Online: return cached (instant), refresh in background.
+//   - Offline: return cached if present, else 504.
+// We use the same cache name for all routes so a single
+// `caches.delete('sveltekit-data')` clears everything.
+registerRoute(
+  ({ url }) => url.pathname.endsWith('/__data.json'),
+  new StaleWhileRevalidate({
+    cacheName: 'sveltekit-data',
+    plugins: [new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 })],
+  }),
 );
 
 // ---------- SW-side offline write queue ----------

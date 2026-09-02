@@ -8,11 +8,11 @@ export default defineConfig({
     tailwindcss(),
     sveltekit(),
     SvelteKitPWA({
-      // Enable the service worker in dev too so offline mode can
-      // be tested.  HMR stays snappy enough; the SW only intercepts
-      // navigation + Google Fonts + SvelteKit immutable assets, not
-      // the dev module graph itself.
-      devOptions: { enabled: true, type: 'module' },
+      // Disabled in dev: Vite serves all modules on demand over HTTP,
+      // so the precache is empty and offline navigation can't work.
+      // The SW only runs in production builds where the manifest is
+      // populated with the real /_app/immutable/* assets.
+      devOptions: { enabled: false },
 
       // We register the service worker manually in app.html so we control
       // exactly when it runs and which errors surface.
