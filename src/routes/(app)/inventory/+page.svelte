@@ -42,6 +42,7 @@
   let form = $state({
     name: '', sku: '', price: '', cost_price: '',
     qty: '', unit: 'piece', category: '', description: '', low_stock_threshold: '',
+    barcode: '',
   });
 
   /* ── Derived helpers ────────────────────────────────────── */
@@ -133,7 +134,7 @@
   }
 
   function openAdd() {
-    form = { name: '', sku: '', price: '', cost_price: '', qty: '0', unit: 'piece', category: '', description: '', low_stock_threshold: '' };
+    form = { name: '', sku: '', price: '', cost_price: '', qty: '0', unit: 'piece', category: '', description: '', low_stock_threshold: '', barcode: '' };
     editTarget = null; showAdd = true;
   }
 
@@ -147,6 +148,7 @@
       category:   p.category?.id ?? p.category ?? '',
       description: p.description ?? '',
       low_stock_threshold: p.low_stock_threshold ? String(p.low_stock_threshold) : '',
+      barcode:    p.barcode ?? '',
     };
     editTarget = p; showAdd = true;
   }
@@ -168,6 +170,9 @@
       category:            form.category || null,
       description:         form.description || null,
       low_stock_threshold: form.low_stock_threshold ? parseInt(form.low_stock_threshold) : null,
+      // Empty string → null so the DB stores no barcode, not an
+      // empty string.  The unique index ignores nulls.
+      barcode:             form.barcode.trim() || null,
     };
     const url    = editTarget ? `/api/products/${editTarget.id}` : '/api/products';
     const method = editTarget ? 'PATCH' : 'POST';
@@ -439,6 +444,7 @@
       <Input label="SKU"  bind:value={form.sku}  required />
       <Select label="Unit" bind:value={form.unit} options={unitOptions} />
     </div>
+    <Input label="Barcode" bind:value={form.barcode} hint="Optional — scan with the in-app camera to add to cart" />
     <div class="grid grid-cols-2 gap-3">
       <Input label="Selling price" type="number" bind:value={form.price}      hint="e.g. 25.00" required />
       <Input label="Cost price"    type="number" bind:value={form.cost_price} hint="optional" />
