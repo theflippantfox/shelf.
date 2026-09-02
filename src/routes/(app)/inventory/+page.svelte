@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page }       from '$app/stores';
+  import { browser }    from '$app/environment';
   import { formatCurrency, formatCurrencyCompact } from '$lib/utils/format';
   import { auth }       from '$lib/stores/auth.svelte';
   import { toasts }     from '$lib/stores/toast.svelte';
@@ -14,9 +15,11 @@
   import EmptyState  from '$lib/components/ui/EmptyState.svelte';
   import KpiCard     from '$lib/components/ui/KpiCard.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
+  import { inview } from '$lib/utils/inview';
   import { Plus, Pencil, PackagePlus, Trash2, ArrowUpDown, X, Package } from 'lucide-svelte';
   import { appConfig } from '$lib/config/app';
   import { invalidateAll } from '$app/navigation';
+  import { fly } from 'svelte/transition';
 
   let { data } = $props();
 
@@ -38,6 +41,37 @@
   let editTarget  = $state<any>(null);
   let deleteTarget = $state<any>(null);
   let saving      = $state(false);
+
+  // Tracks which product ids currently have their IntersectionObserver mounted
+  // and inside the viewport buffer.
+  //   - SSR (browser === false): all items render real cards (no skeletons
+  //     on first paint).
+  //   - Client mount: observer is set up on every wrapper. The rootMargin
+  //     buffer (400px) means at first paint every visible item intersects,
+  //     so the observer immediately marks them visible. Off-screen items
+  //     have their IDs removed from the set, which swaps them to skeletons.
+  //   - When the filter changes, the $effect below re-seeds to the new
+  //     full set so newly-included items become visible immediately
+  //     without waiting for the observer to catch up.
+  let visibleIds = $state<Set<string>>(new Set());
+  let mounted = $state(false);
+
+  function setVisible(id: string, v: boolean) {
+    if (v) {
+      if (!visibleIds.has(id)) visibleIds.add(id);
+    } else {
+      visibleIds.delete(id);
+    }
+  }
+
+  // On client mount, seed visibility to all filtered ids so the first paint
+  // shows real cards. The observer will then trim as the user scrolls.
+  // SSR also starts with the full set so the server-rendered HTML is real
+  // cards (avoids a flash of skeletons on hydration).
+  $effect(() => {
+    visibleIds = new Set(filtered.map((p: any) => p.id));
+    if (!mounted) mounted = true;
+  });
 
   let form = $state({
     name: '', sku: '', price: '', cost_price: '',
@@ -373,64 +407,89 @@
         {@const pct    = stockPct(p)}
         {@const margin = marginPct(p)}
         {@const catColor = p.category?.color ?? 'var(--primary)'}
-        <div class="surface-card interactive p-4 group" style="contain-intrinsic-size:auto 200px;content-visibility:auto">
-          <!-- Top: icon + name + actions -->
-          <div class="flex items-start gap-3">
-            <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center"
-                 style="background:color-mix(in srgb,{catColor} 15%,transparent)">
-              <DynamicIcon name={p.category?.icon ?? 'Package'} size={16}
-                           style="color:{catColor}" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="text-[13px] font-semibold truncate" title={p.name}>{p.name}</p>
-              <div class="flex items-center gap-1.5 mt-0.5">
-                <span class="font-mono text-[10px] text-[var(--text-3)]">{p.sku}</span>
-                {#if p.category?.name}
-                  <span class="text-[10px] text-[var(--text-3)]">·</span>
-                  <span class="text-[10px] text-[var(--text-2)] truncate">{p.category.name}</span>
+        <div
+          class="inv-grid-item"
+          use:inview={(v) => setVisible(p.id, v)}
+        >
+          {#if !browser || !mounted || visibleIds.has(p.id)}
+            <div
+              class="surface-card interactive p-4 group"
+              in:fly={{ y: 8, duration: 220 }}
+              out:fly={{ y: -8, duration: 160 }}
+            >
+              <!-- Top: icon + name + actions -->
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center"
+                     style="background:color-mix(in srgb,{catColor} 15%,transparent)">
+                  <DynamicIcon name={p.category?.icon ?? 'Package'} size={16}
+                               style="color:{catColor}" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-[13px] font-semibold truncate" title={p.name}>{p.name}</p>
+                  <div class="flex items-center gap-1.5 mt-0.5">
+                    <span class="font-mono text-[10px] text-[var(--text-3)]">{p.sku}</span>
+                    {#if p.category?.name}
+                      <span class="text-[10px] text-[var(--text-3)]">·</span>
+                      <span class="text-[10px] text-[var(--text-2)] truncate">{p.category.name}</span>
+                    {/if}
+                  </div>
+                </div>
+                {#if auth.can('inventory.manage')}
+                  <div class="flex items-center gap-0.5 opacity-50 hover:opacity-100 transition-opacity">
+                    <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)} aria-label={`Edit ${p.name}`}>
+                      <Pencil size={13} strokeWidth={1.75} />
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]"
+                            title="Archive" onclick={() => confirmDelete(p)} aria-label={`Archive ${p.name}`}>
+                      <Trash2 size={13} strokeWidth={1.75} />
+                    </button>
+                  </div>
                 {/if}
               </div>
-            </div>
-            {#if auth.can('inventory.manage')}
-              <div class="flex items-center gap-0.5 opacity-50 hover:opacity-100 transition-opacity">
-                <button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(p)} aria-label={`Edit ${p.name}`}>
-                  <Pencil size={13} strokeWidth={1.75} />
-                </button>
-                <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]"
-                        title="Archive" onclick={() => confirmDelete(p)} aria-label={`Archive ${p.name}`}>
-                  <Trash2 size={13} strokeWidth={1.75} />
-                </button>
-              </div>
-            {/if}
-          </div>
 
-          <!-- Price row -->
-          <div class="flex items-baseline justify-between mt-3">
-            <p class="text-lg font-bold tabular-nums">{formatCurrency(p.price)}</p>
-            {#if margin !== null}
-              <span class="text-[10px] font-semibold {margin >= 30 ? 'text-[var(--teal-fg)]' : margin >= 15 ? 'text-[var(--gold-fg)]' : 'text-[var(--crimson-fg)]'}"
-                    title="Gross margin">
-                {margin}% margin
-              </span>
-            {/if}
-          </div>
-
-          <!-- Stock section: bar + qty + status -->
-          <div class="mt-3">
-            <div class="flex items-center justify-between mb-1.5">
-              <span class="text-[10px] uppercase tracking-wide font-semibold text-[var(--text-3)]">Stock</span>
-              <span class="text-[12px] font-semibold tabular-nums">
-                {p.qty}<span class="text-[var(--text-3)] font-normal"> {p.unit ?? 'in stock'}</span>
-              </span>
-            </div>
-            <div class="flex items-center gap-2">
-              <div class="flex-1 h-1.5 rounded-full bg-[var(--surface2)] overflow-hidden">
-                <div class="h-full rounded-full transition-all"
-                     style="width:{pct}%; background:{stockBarColor(p)}"></div>
+              <!-- Price row -->
+              <div class="flex items-baseline justify-between mt-3">
+                <p class="text-lg font-bold tabular-nums">{formatCurrency(p.price)}</p>
+                {#if margin !== null}
+                  <span class="text-[10px] font-semibold {margin >= 30 ? 'text-[var(--teal-fg)]' : margin >= 15 ? 'text-[var(--gold-fg)]' : 'text-[var(--crimson-fg)]'}"
+                        title="Gross margin">
+                    {margin}% margin
+                  </span>
+                {/if}
               </div>
-              <span class="badge {badge.cls} text-[10px] whitespace-nowrap">{badge.label}</span>
+
+              <!-- Stock section: bar + qty + status -->
+              <div class="mt-3">
+                <div class="flex items-center justify-between mb-1.5">
+                  <span class="text-[10px] uppercase tracking-wide font-semibold text-[var(--text-3)]">Stock</span>
+                  <span class="text-[12px] font-semibold tabular-nums">
+                    {p.qty}<span class="text-[var(--text-3)] font-normal"> {p.unit ?? 'in stock'}</span>
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 rounded-full bg-[var(--surface2)] overflow-hidden">
+                    <div class="h-full rounded-full transition-all"
+                         style="width:{pct}%; background:{stockBarColor(p)}"></div>
+                  </div>
+                  <span class="badge {badge.cls} text-[10px] whitespace-nowrap">{badge.label}</span>
+                </div>
+              </div>
             </div>
-          </div>
+          {:else}
+            <!-- Skeleton placeholder: holds grid space, no content rendered -->
+            <div class="surface-card p-4 inv-skeleton" aria-hidden="true">
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-lg bg-[var(--surface2)]"></div>
+                <div class="flex-1 space-y-1.5">
+                  <div class="h-3 w-3/4 rounded bg-[var(--surface2)]"></div>
+                  <div class="h-2.5 w-1/2 rounded bg-[var(--surface2)]"></div>
+                </div>
+              </div>
+              <div class="h-5 w-1/3 rounded bg-[var(--surface2)] mt-3"></div>
+              <div class="h-3 w-full rounded bg-[var(--surface2)] mt-3"></div>
+              <div class="h-1.5 w-full rounded bg-[var(--surface2)] mt-1.5"></div>
+            </div>
+          {/if}
         </div>
       {/each}
     </div>

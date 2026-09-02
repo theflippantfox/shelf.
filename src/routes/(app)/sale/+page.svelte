@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
+  import { browser } from "$app/environment";
   import {
     cart,
     type PaymentMethod,
@@ -8,13 +9,15 @@
   } from "$lib/stores/cart.svelte";
   import { toasts } from "$lib/stores/toast.svelte";
   import { formatCurrency, formatCurrencyCompact } from "$lib/utils/format";
+  import { inview }  from "$lib/utils/inview";
+  import { fly } from "svelte/transition";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Sheet from '$lib/components/ui/Sheet.svelte';
-  import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
-  import QtyInput from '$lib/components/ui/QtyInput.svelte';
-  import ProductCardSkeleton from '$lib/components/ui/ProductCardSkeleton.svelte';
-  import BarcodeScanner from '$lib/components/ui/BarcodeScanner.svelte';
+  import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
+  import QtyInput from "$lib/components/ui/QtyInput.svelte";
+  import ProductCardSkeleton from "$lib/components/ui/ProductCardSkeleton.svelte";
+  import BarcodeScanner from "$lib/components/ui/BarcodeScanner.svelte";
   import { navigating } from '$app/state';
   import { offlineSync } from '$lib/offline/offlineSync.svelte';
   import { getDb } from '$lib/offline/offlineDb';
@@ -41,6 +44,29 @@
   let lastSaleCustomer = $state<string>('');
   let discountStr   = $state("");
   let customerSearch = $state("");
+
+  // Tracks which product ids are currently in (or near) the viewport — only
+  // those render real card DOM; everything else renders a cheap skeleton.
+  // Cart state lives in the cart store and is independent of card DOM, so
+  // adding to cart / qty steppers all keep working through the full filter
+  // and sort pipeline.
+  //   - SSR (browser === false): all items render real cards.
+  //   - Client mount: observer marks visible items; off-screen items get
+  //     swapped to skeletons via the visibility set.
+  //   - When the products list changes, the $effect re-seeds to the new
+  //     full set so newly-included items become visible immediately.
+  let saleVisibleIds = $state<Set<string>>(new Set());
+  let saleMounted = $state(false);
+
+  function setSaleVisible(id: string, v: boolean) {
+    if (v) saleVisibleIds.add(id);
+    else   saleVisibleIds.delete(id);
+  }
+
+  $effect(() => {
+    saleVisibleIds = new Set(products.map((p: any) => p.id));
+    if (!saleMounted) saleMounted = true;
+  });
   let showCustPicker = $state(false);
 
   const saleId = $derived(page.url.searchParams.get("id"));
@@ -371,70 +397,84 @@
     </div>
   {:else}
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 anim-stagger">
-      {#each products as p (p.id)}
-        {@const catColor = p.category?.color ?? 'var(--primary)'}
-        {@const inCart   = cartByProduct.get(p.id) ?? 0}
-        {@const stockPct = Math.min(100, Math.round((p.qty / Math.max(p.qty + 5, 10)) * 100))}
-        <div class="surface-card interactive p-3.5 flex flex-col gap-2 group {p.qty === 0 ? 'opacity-50' : ''}" style="contain-intrinsic-size:auto 180px;content-visibility:auto">
-          <!-- Top: icon + (in-cart chip) -->
-          <div class="flex items-start justify-between">
-            <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                 style="background:color-mix(in srgb, {catColor} 15%, transparent)">
-              <DynamicIcon name={p.category?.icon ?? 'Package'} size={17}
-                           style="color:{catColor}" />
-            </div>
-            {#if inCart > 0}
-              <span class="badge badge-primary text-[10px]">{inCart} in cart</span>
-            {/if}
-          </div>
-
-          <!-- Name + SKU -->
-          <div class="min-w-0">
-            <p class="text-[13px] font-semibold leading-tight line-clamp-2" title={p.name}>{p.name}</p>
-            <p class="font-mono text-[10px] text-[var(--text-3)] mt-0.5">{p.sku}</p>
-          </div>
-
-          <!-- Price -->
-          <p class="text-base font-bold tabular-nums">{formatCurrency(p.price)}</p>
-
-          <!-- Stock bar -->
-          <div class="flex items-center gap-2 mt-auto">
-            <div class="flex-1 h-1 rounded-full bg-[var(--surface2)] overflow-hidden">
-              <div class="h-full rounded-full"
-                   style="width:{stockPct}%; background:{p.qty === 0 ? 'var(--crimson)' : p.qty <= 5 ? 'var(--gold)' : 'var(--teal)'}"></div>
-            </div>
-            <span class="text-[10px] text-[var(--text-3)] tabular-nums">{p.qty}</span>
-          </div>
-
-          <!-- Add / stepper -->
-          {#if p.qty === 0}
-            <div class="text-center text-[10px] text-[var(--crimson)] font-semibold py-1">Out of stock</div>
-          {:else if inCart === 0}
-            <button
-              onclick={() => { cart.add(p); }}
-              class="group/btn relative w-full h-7 rounded-md text-[11px] font-semibold tabular-nums
-                     bg-[var(--surface2)] text-[var(--text-2)] border border-[var(--border)]
-                     hover:bg-[var(--primary-dim)] hover:text-[var(--text)] hover:border-[var(--primary)]
-                     active:scale-[0.98] transition-colors transition-transform
-                     inline-flex items-center justify-center gap-1"
+          {#each products as p (p.id)}
+            {@const catColor = p.category?.color ?? 'var(--primary)'}
+            {@const inCart   = cartByProduct.get(p.id) ?? 0}
+            {@const stockPct = Math.min(100, Math.round((p.qty / Math.max(p.qty + 5, 10)) * 100))}
+            <div
+              class="inv-grid-item"
+              use:inview={(v) => setSaleVisible(p.id, v)}
             >
-              <Plus size={12} strokeWidth={2.5} class="opacity-70 group-hover/btn:opacity-100" /> Add
-            </button>
-          {:else}
-            <div class="flex items-center justify-between bg-[var(--primary)] text-[var(--primary-fg)] rounded-lg overflow-hidden">
-              <QtyInput
-                value={inCart}
-                max={p.qty}
-                onChange={(qty) => setQty(p.id, qty)}
-                variant="primary"
-                size="sm"
-                showSteppers
-              />
+              {#if !browser || !saleMounted || saleVisibleIds.has(p.id)}
+                <div
+                  class="surface-card interactive p-3.5 flex flex-col gap-2 group {p.qty === 0 ? 'opacity-50' : ''}"
+                  in:fly={{ y: 6, duration: 200 }}
+                  out:fly={{ y: -6, duration: 150 }}
+                >
+                  <!-- Top: icon + (in-cart chip) -->
+                  <div class="flex items-start justify-between">
+                    <div class="w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center"
+                         style="background:color-mix(in srgb, {catColor} 15%, transparent)">
+                      <DynamicIcon name={p.category?.icon ?? 'Package'} size={17}
+                                   style="color:{catColor}" />
+                    </div>
+                    {#if inCart > 0}
+                      <span class="badge badge-primary text-[10px]">{inCart} in cart</span>
+                    {/if}
+                  </div>
+
+                  <!-- Name + SKU -->
+                  <div class="min-w-0">
+                    <p class="text-[13px] font-semibold leading-tight line-clamp-2" title={p.name}>{p.name}</p>
+                    <p class="font-mono text-[10px] text-[var(--text-3)] mt-0.5">{p.sku}</p>
+                  </div>
+
+                  <!-- Price -->
+                  <p class="text-base font-bold tabular-nums">{formatCurrency(p.price)}</p>
+
+                  <!-- Stock bar -->
+                  <div class="flex items-center gap-2 mt-auto">
+                    <div class="flex-1 h-1 rounded-full bg-[var(--surface2)] overflow-hidden">
+                      <div class="h-full rounded-full"
+                           style="width:{stockPct}%; background:{p.qty === 0 ? 'var(--crimson)' : p.qty <= 5 ? 'var(--gold)' : 'var(--teal)'}"></div>
+                    </div>
+                    <span class="text-[10px] text-[var(--text-3)] tabular-nums">{p.qty}</span>
+                  </div>
+
+                  <!-- Add / stepper -->
+                  {#if p.qty === 0}
+                    <div class="text-center text-[10px] text-[var(--crimson)] font-semibold py-1">Out of stock</div>
+                  {:else if inCart === 0}
+                    <button
+                      onclick={() => { cart.add(p); }}
+                      class="group/btn relative w-full h-7 rounded-md text-[11px] font-semibold tabular-nums
+                             bg-[var(--surface2)] text-[var(--text-2)] border border-[var(--border)]
+                             hover:bg-[var(--primary-dim)] hover:text-[var(--text)] hover:border-[var(--primary)]
+                             active:scale-[0.98] transition-colors transition-transform
+                             inline-flex items-center justify-center gap-1"
+                    >
+                      <Plus size={12} strokeWidth={2.5} class="opacity-70 group-hover/btn:opacity-100" /> Add
+                    </button>
+                  {:else}
+                    <div class="flex items-center justify-between bg-[var(--primary)] text-[var(--primary-fg)] rounded-lg overflow-hidden">
+                      <QtyInput
+                        value={inCart}
+                        max={p.qty}
+                        onChange={(qty) => setQty(p.id, qty)}
+                        variant="primary"
+                        size="sm"
+                        showSteppers
+                      />
+                    </div>
+                  {/if}
+                </div>
+              {:else}
+                <!-- Skeleton: stable layout, no content rendered -->
+                <ProductCardSkeleton />
+              {/if}
             </div>
-          {/if}
+          {/each}
         </div>
-      {/each}
-    </div>
   {/if}
 
   <!-- Spacer for cart-sheet / FAB on mobile -->
