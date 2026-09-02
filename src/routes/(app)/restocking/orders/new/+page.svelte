@@ -44,8 +44,9 @@
   let notes = $state("");
 
   // ── Line items ────────────────────────────────────────────────────────────
-  // ALL monetary values in state are DISPLAY units (e.g. 4500 = ₹4,500).
-  // We multiply × 100 → minor units only when posting to the API.
+  // All monetary values in state are already in major units (rupees),
+  // the same convention as the rest of the app. They are posted to
+  // the API as-is — no conversion needed.
   interface LineItem {
     productId: string;
     productName: string;

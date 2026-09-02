@@ -10,11 +10,11 @@ export const appConfig = {
   tiers: {
     vip: {
       minVisits: 15,
-      minSpentMinorUnits: 50000_00, // 500,000 in minor units
+      minSpent: 500_000, // ₹500,000 total spent to qualify as VIP
     },
     regular: {
       minVisits: 8,
-      minSpentMinorUnits: 10000_00,
+      minSpent: 10_000, // ₹10,000 total spent to qualify as Regular
     },
   },
 

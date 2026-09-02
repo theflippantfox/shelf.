@@ -7,12 +7,12 @@ export function getCustomerTier(customer: any): CustomerTier {
   const { vip, regular } = appConfig.tiers;
   if (
     customer.visit_count >= vip.minVisits ||
-    customer.total_spent >= vip.minSpentMinorUnits
+    customer.total_spent >= vip.minSpent
   ) return 'vip';
 
   if (
     customer.visit_count >= regular.minVisits ||
-    customer.total_spent >= regular.minSpentMinorUnits
+    customer.total_spent >= regular.minSpent
   ) return 'regular';
 
   return 'new';

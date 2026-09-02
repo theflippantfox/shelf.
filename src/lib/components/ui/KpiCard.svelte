@@ -6,7 +6,7 @@
 
   let {
     label,
-    /** Numeric value (in minor units if isCurrency). Will be animated. */
+    /** Numeric value (in major units if isCurrency). Will be animated. */
     value,
     sub,
     icon,

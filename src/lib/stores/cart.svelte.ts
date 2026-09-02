@@ -4,7 +4,7 @@ export interface CartItem {
   productId: string;
   name:      string;
   sku:       string;
-  unitPrice: number;  // minor units
+  unitPrice: number;  // major units (rupees) — same as product.price
   qty:       number;
   maxQty:    number;
 }
