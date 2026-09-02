@@ -179,7 +179,7 @@
     </div>
     <div class="flex items-center gap-2 shrink-0">
       {#if cart.customerId}
-        <div class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--primary-dim)] text-[var(--primary-fg)] text-xs font-semibold">
+        <div class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] text-xs font-semibold">
           <User size={11} strokeWidth={2} />
           {cart.customerName}
           <button

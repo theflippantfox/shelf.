@@ -27,7 +27,7 @@
   />
 {:else}
   <div
-    class="rounded-full bg-[var(--primary-dim)] text-[var(--primary-fg)] font-semibold flex items-center justify-center flex-shrink-0 {cls}"
+    class="rounded-full bg-[var(--primary)] text-[var(--primary-fg)] font-semibold flex items-center justify-center flex-shrink-0 {cls}"
     {style}
     aria-label={name}
   >
