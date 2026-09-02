@@ -414,26 +414,26 @@ textarea.input { resize: vertical; min-height: 80px; }
 /* ─── Bottom Nav ────────────────────────────────────── */
 .bottom-nav {
   /*
-   * The nav lives inside the .app-main flex column (see
-   * (app)/+layout.svelte). `margin-top: auto` pushes it to the
-   * bottom of the column so it sits flush with the bottom of
-   * the viewport when the page content is shorter than the
-   * viewport, and at the end of the document when it's longer.
-   * No `position: fixed`, no JS visualViewport tracking — the
-   * layout is stable across scrolls, URL-bar collapses, and
-   * orientation changes.
+   * `position: fixed; bottom: 0` anchors the nav to the bottom
+   * of the layout viewport — the user always sees it, even on
+   * long scrolling pages.  On iOS the URL bar may briefly cover
+   * the bottom of the nav before the first scroll, which is
+   * acceptable: the URL bar collapses as soon as the user starts
+   * scrolling and the nav is fully visible after that.
    *
-   * The padding-bottom respects the iOS safe-area so the FAB
-   * isn't covered by the home indicator.
+   * No JS visualViewport tracking — that was the source of the
+   * wiggle.  No `margin-top: auto` flex layout — that scrolled
+   * the nav out of view on long pages.
    */
-  margin-top: auto;
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
   background: var(--surface); border-top: 1px solid var(--border);
   z-index: 40;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   padding-top: 8px; box-shadow: 0 -2px 12px 0 rgb(0 0 0 / 0.08);
   backdrop-filter: blur(12px);
   background: color-mix(in srgb, var(--surface) 95%, transparent);
-  flex-shrink: 0;
 }
 @media (max-width: 767px) {
   .bottom-nav { display: flex; align-items: flex-end; }
