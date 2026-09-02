@@ -342,79 +342,42 @@
 </div>
 
 <!-- ─────────────────────────────────────────────────────────────────────────
-  CART DRAWER (desktop: right-side panel, mobile: bottom-sheet)
+  CART MODAL (Sheet — centered dialog on desktop, drag-handle bottom-sheet on mobile)
   ───────────────────────────────────────────────────────────────────────── -->
-{#if cartOpen && cart.count > 0}
-  <!-- Backdrop -->
-  <button
-    class="fixed inset-0 bg-black/30 animate-[fadeIn_200ms]"
-    style="z-index: 45;"
-    onclick={() => (cartOpen = false)}
-    aria-label="Close cart"
-  ></button>
-
-  <!-- Drawer / sheet -->
-  <aside
-    class="fixed md:top-0 md:right-0 md:bottom-0 md:w-[380px] md:rounded-none
-           bottom-0 left-0 right-0 max-h-[80vh] rounded-t-[20px]
-           bg-[var(--surface)] border border-[var(--border)]
-           flex flex-col shadow-[var(--shadow-lg)]"
-    style="z-index: 46; padding-bottom: env(safe-area-inset-bottom);"
-  >
-    <!-- Drag handle (mobile only) -->
-    <button
-      class="md:hidden w-10 h-1 rounded-full bg-[var(--border)] mx-auto mt-3 flex-shrink-0"
-      onclick={() => (cartOpen = false)}
-      aria-label="Close cart"
-    ></button>
-
-    <!-- Header -->
-    <div class="flex items-center justify-between px-5 pt-3 pb-2.5 border-b border-[var(--border)] flex-shrink-0">
-      <div class="flex items-center gap-2">
-        <ShoppingCart size={15} strokeWidth={2} class="text-[var(--primary)]" />
-        <p class="text-sm font-semibold">Cart · {cart.count} item{cart.count === 1 ? '' : 's'}</p>
-      </div>
-      <div class="flex items-center gap-1">
-        {#if !cart.isEmpty}
-          <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]" onclick={clearCart} aria-label="Clear cart">
-            <Trash2 size={14} strokeWidth={1.75} />
-          </button>
-        {/if}
-        <button class="btn btn-ghost btn-icon btn-sm" onclick={() => (cartOpen = false)} aria-label="Close">
-          <X size={15} strokeWidth={2} />
-        </button>
-      </div>
-    </div>
-
-    <!-- Items -->
-    <div class="flex-1 overflow-y-auto px-5 py-3 flex flex-col gap-2 min-h-0">
-      {#each cart.items as item (item.productId)}
-        <div class="flex items-center gap-2.5 p-2.5 rounded-lg bg-[var(--surface2)]">
-          <div class="flex-1 min-w-0">
-            <p class="text-[13px] font-semibold truncate">{item.name}</p>
-            <p class="text-[10px] text-[var(--text-3)] tabular-nums">{formatCurrency(item.unitPrice)} each</p>
-          </div>
-          <div class="flex items-center gap-1 bg-[var(--bg)] rounded-lg p-0.5">
-            <button class="btn btn-ghost btn-icon btn-sm"
-                    onclick={() => cart.setQty(item.productId, item.qty - 1)}
-                    aria-label="Decrease"><Minus size={12} strokeWidth={2.5} /></button>
-            <QtyInput
-              value={item.qty}
-              max={item.maxQty}
-              onChange={(q) => cart.setQty(item.productId, q)}
-            />
-            <button class="btn btn-ghost btn-icon btn-sm disabled:opacity-40"
-                    onclick={() => cart.setQty(item.productId, item.qty + 1)}
-                    disabled={item.qty >= item.maxQty}
-                    aria-label="Increase"><Plus size={12} strokeWidth={2.5} /></button>
-          </div>
-          <p class="text-[13px] font-bold tabular-nums w-16 text-right">{formatCurrency(item.unitPrice * item.qty)}</p>
+<Sheet
+  bind:open={cartOpen}
+  title="Cart · {cart.count} item{cart.count === 1 ? '' : 's'}"
+  maxWidth="max-w-md"
+>
+  <!-- Items -->
+  <div class="flex flex-col gap-2 -mx-2">
+    {#each cart.items as item (item.productId)}
+      <div class="flex items-center gap-2.5 p-2.5 rounded-lg bg-[var(--surface2)]">
+        <div class="flex-1 min-w-0">
+          <p class="text-[13px] font-semibold truncate">{item.name}</p>
+          <p class="text-[10px] text-[var(--text-3)] tabular-nums">{formatCurrency(item.unitPrice)} each</p>
         </div>
-      {/each}
-    </div>
+        <div class="flex items-center gap-1 bg-[var(--bg)] rounded-lg p-0.5">
+          <button class="btn btn-ghost btn-icon btn-sm"
+                  onclick={() => cart.setQty(item.productId, item.qty - 1)}
+                  aria-label="Decrease"><Minus size={12} strokeWidth={2.5} /></button>
+          <QtyInput
+            value={item.qty}
+            max={item.maxQty}
+            onChange={(q) => cart.setQty(item.productId, q)}
+          />
+          <button class="btn btn-ghost btn-icon btn-sm disabled:opacity-40"
+                  onclick={() => cart.setQty(item.productId, item.qty + 1)}
+                  disabled={item.qty >= item.maxQty}
+                  aria-label="Increase"><Plus size={12} strokeWidth={2.5} /></button>
+        </div>
+        <p class="text-[13px] font-bold tabular-nums w-16 text-right">{formatCurrency(item.unitPrice * item.qty)}</p>
+      </div>
+    {/each}
+  </div>
 
-    <!-- Footer -->
-    <div class="px-5 pt-3 pb-4 border-t border-[var(--border)] bg-[var(--surface)] flex-shrink-0 space-y-3">
+  {#snippet footer()}
+    <div class="space-y-3">
       <div class="flex flex-col gap-1 text-xs">
         <div class="flex justify-between">
           <span class="text-[var(--text-3)]">Subtotal</span>
@@ -437,17 +400,28 @@
           <span class="tabular-nums">{formatCurrency(grandTotal)}</span>
         </div>
       </div>
-      <Button
-        onclick={() => { cartOpen = false; showCheckout = true; }}
-        class="w-full justify-center"
-        size="lg"
-      >
-        Checkout
-        <ChevronRight size={14} strokeWidth={2.5} />
-      </Button>
+      <div class="flex gap-2">
+        {#if !cart.isEmpty}
+          <button
+            onclick={clearCart}
+            class="btn btn-secondary justify-center px-3"
+            aria-label="Clear cart"
+          >
+            <Trash2 size={14} strokeWidth={1.75} />
+          </button>
+        {/if}
+        <Button
+          onclick={() => { cartOpen = false; showCheckout = true; }}
+          class="flex-1 justify-center"
+          size="lg"
+        >
+          Checkout
+          <ChevronRight size={14} strokeWidth={2.5} />
+        </Button>
+      </div>
     </div>
-  </aside>
-{/if}
+  {/snippet}
+</Sheet>
 
 <!-- Floating cart pill (desktop, when cart closed & has items) -->
 {#if !cartOpen && cart.count > 0}
