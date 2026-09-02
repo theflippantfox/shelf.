@@ -413,25 +413,27 @@ textarea.input { resize: vertical; min-height: 80px; }
 
 /* ─── Bottom Nav ────────────────────────────────────── */
 .bottom-nav {
-  position: fixed;
-  /* `bottom: 0` is anchored to the *layout* viewport on mobile
-   * browsers, which leaves the nav hovering above the URL bar /
-   * iOS bottom bar / soft keyboard. We track the visual viewport
-   * in JS (see BottomNav.svelte) and write the difference to
-   * --vv-bottom, which lifts the nav to the true visible bottom. */
-  bottom: var(--vv-bottom, 0px);
-  left: 0; right: 0;
+  /*
+   * The nav lives inside the .app-main flex column (see
+   * (app)/+layout.svelte). `margin-top: auto` pushes it to the
+   * bottom of the column so it sits flush with the bottom of
+   * the viewport when the page content is shorter than the
+   * viewport, and at the end of the document when it's longer.
+   * No `position: fixed`, no JS visualViewport tracking — the
+   * layout is stable across scrolls, URL-bar collapses, and
+   * orientation changes.
+   *
+   * The padding-bottom respects the iOS safe-area so the FAB
+   * isn't covered by the home indicator.
+   */
+  margin-top: auto;
   background: var(--surface); border-top: 1px solid var(--border);
   z-index: 40;
   padding-bottom: calc(10px + env(safe-area-inset-bottom));
   padding-top: 8px; box-shadow: 0 -2px 12px 0 rgb(0 0 0 / 0.08);
   backdrop-filter: blur(12px);
   background: color-mix(in srgb, var(--surface) 95%, transparent);
-  /* Tiny transition so the per-frame --vv-bottom updates from the
-   * rAF loop in BottomNav.svelte read as a smooth slide rather
-   * than a step. Anything more than 120ms starts to feel laggy. */
-  transition: bottom 120ms cubic-bezier(0.2, 0, 0, 1);
-  will-change: bottom;
+  flex-shrink: 0;
 }
 @media (max-width: 767px) {
   .bottom-nav { display: flex; align-items: flex-end; }
