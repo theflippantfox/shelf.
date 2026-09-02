@@ -29,7 +29,7 @@
     type="search"
     bind:value
     {placeholder}
-    class="input pl-8 pr-8 text-sm"
+    class="input pl-9 pr-9 text-sm"
     oninput={handleInput}
     enterkeyhint="search"
   />
