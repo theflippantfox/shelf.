@@ -155,6 +155,60 @@ export type Database = {
           },
         ]
       }
+      cash_register: {
+        Row: {
+          id: string
+          shop_id: string
+          destination: string
+          amount: number
+          entry_type: string
+          source: string
+          sale_id: string | null
+          transfer_group_id: string | null
+          notes: string
+          created_by: string
+          created_at: string
+          effective_at: string | null
+          voided_at: string | null
+          voided_by: string | null
+          void_reason: string | null
+        }
+        Insert: {
+          id?: string
+          shop_id: string
+          destination: string
+          amount: number
+          entry_type: string
+          source?: string
+          sale_id?: string | null
+          transfer_group_id?: string | null
+          notes?: string
+          created_by: string
+          created_at?: string
+          effective_at?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          void_reason?: string | null
+        }
+        Update: {
+          id?: string
+          shop_id?: string
+          destination?: string
+          amount?: number
+          entry_type?: string
+          source?: string
+          sale_id?: string | null
+          transfer_group_id?: string | null
+          notes?: string
+          created_by?: string
+          created_at?: string
+          effective_at?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+          void_reason?: string | null
+        }
+        Relationships: []
+      }
       product_tags: {
         Row: {
           product_id: string
@@ -1004,6 +1058,10 @@ export type Database = {
         }
       }
       find_user_id_by_email: { Args: { needle: string }; Returns: string }
+      get_register_balance: {
+        Args: { p_shop_id: string }
+        Returns: { destination: string; balance: number; total_balance: number }[]
+      }
       get_user_emails: {
         Args: { ids: string[] }
         Returns: { id: string; email: string }[]
@@ -1011,7 +1069,34 @@ export type Database = {
       }
       is_shop_member: { Args: { shop: string }; Returns: boolean }
       is_shop_owner: { Args: { shop: string }; Returns: boolean }
+      log_register_entry: {
+        Args: {
+          p_shop_id: string
+          p_destination: string
+          p_amount: number
+          p_entry_type: string
+          p_notes: string
+          p_actor_id: string
+          p_effective_at?: string
+          p_adjusts_id?: string
+        }
+        Returns: { id: string; shop_id: string; destination: string; amount: number; entry_type: string; source: string; sale_id: string | null; transfer_group_id: string | null; notes: string; created_by: string; created_at: string; effective_at: string | null; voided_at: string | null; voided_by: string | null; void_reason: string | null }[]
+      }
       set_sale_timestamp: { Args: { p_sale_id: string; p_created_at: string }; Returns: undefined }
+      transfer_register: {
+        Args: {
+          p_shop_id: string
+          p_from: string
+          p_to: string
+          p_amount: number
+          p_notes: string
+          p_actor_id: string
+          p_effective_at?: string
+        }
+        Returns: undefined
+      }
+      void_register_entry: { Args: { p_entry_id: string; p_actor_id: string; p_reason: string }; Returns: undefined }
+      void_sale: { Args: { p_sale_id: string; p_actor_id: string; p_reason: string }; Returns: undefined }
       receive_purchase_order: {
         Args: {
           p_items: Json

@@ -1446,6 +1446,764 @@ update public.products
   end if;
 end $mig$;
 
+-- -----------------------------------------------------------------------------
+-- 0012_sale_created_at_override.sql
+-- -----------------------------------------------------------------------------
+do $mig$
+begin
+  if not public._shelf_has_migration('0012_sale_created_at_override') then
+    raise notice 'Applying 0012_sale_created_at_override …';
+-- 0012_sale_created_at_override.sql
+-- Allow the user to override sales.created_at at checkout and on edit.
+-- Useful for backdating a missed sale (e.g. recorded the next morning)
+-- or correcting the time of an in-progress sale.
+--
+-- This is purely additive:
+--   * p_created_at parameter on create_sale() — defaults to now() so
+--     existing callers (and the SW offline-replay path) keep working.
+--   * sales.created_at is updated in-place on PATCH /api/sales/[id].
+--   * stock_log rows written for this sale use the same timestamp so
+--     analytics reports (which filter on stock_log.created_at) reflect
+--     the actual sale time, not when it was typed in.
+--   * sale_ref keeps the SALE date (not the entry date) so the human-
+--     readable ref is consistent with the timestamp.
+
+-- ── 1. Add p_created_at to create_sale() ────────────────────────────────────
+-- The new signature has one extra parameter. We can't use
+-- `create or replace` (it would error with "function name is not
+-- unique"), so drop the old one first. Both signatures are owned by
+-- the script, so this is safe to run on a live DB — any in-flight
+-- RPC call would complete before the drop acquires its lock.
+drop function if exists public.create_sale(
+  uuid, uuid, uuid, text, text,
+  numeric, text, numeric, numeric, numeric, numeric, jsonb
+);
+-- Add a new parameter with a default, so existing callers
+-- (and the SW offline-replay path) keep working.
+create or replace function public.create_sale(
+  p_shop_id        uuid,
+  p_customer_id    uuid,
+  p_served_by      uuid,
+  p_payment_method text,
+  p_notes          text,
+  p_subtotal       numeric,
+  p_discount_type  text,
+  p_discount_value numeric,
+  p_discount_amount numeric,
+  p_tax_amount     numeric,
+  p_total          numeric,
+  p_items          jsonb,   -- [{product_id, name, sku, qty, unit_price}]
+  p_created_at     timestamptz default null
+)
+returns public.sales
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ref text;
+  v_sale public.sales;
+  v_ts   timestamptz;   -- the effective timestamp for this sale
+  v_item jsonb;
+  v_line_total numeric;
+  v_cost_at_sale numeric;
+begin
+  -- Authorisation: caller must be an active member of this shop
+  if not public.is_shop_member(p_shop_id) then
+    raise exception 'not a member of this shop' using errcode = '42501';
+  end if;
+
+  -- Effective timestamp. Caller can override (backdate or correct
+  -- clock skew). We keep it server-side so client clock doesn't
+  -- matter for analytics.
+  v_ts := coalesce(p_created_at, now());
+
+  -- Sale ref: SL-YYYYMMDD-XXXX (XXXX = 4 chars from md5)
+  -- Date is the SALE date, not the entry date — keeps the ref
+  -- consistent with created_at even on a backdated sale.
+  v_ref := 'SL-' || to_char(v_ts at time zone 'utc', 'YYYYMMDD') || '-' ||
+           upper(substring(md5(random()::text) for 4));
+
+  insert into public.sales (
+    shop_id, sale_ref, customer_id, served_by,
+    subtotal, discount_type, discount_value, discount_amount,
+    tax_amount, total, payment_method, notes, created_at
+  ) values (
+    p_shop_id, v_ref, p_customer_id, p_served_by,
+    p_subtotal, p_discount_type, p_discount_value, p_discount_amount,
+    p_tax_amount, p_total, p_payment_method, p_notes, v_ts
+  )
+  returning * into v_sale;
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    v_line_total := (v_item->>'unit_price')::numeric * (v_item->>'qty')::int;
+    v_cost_at_sale := coalesce(
+      (select cost_price from public.products where id = (v_item->>'product_id')::uuid),
+      0
+    );
+
+    insert into public.sale_items
+      (sale_id, product_id, product_name, product_sku, unit_price, qty, line_total, cost_at_sale)
+    values
+      (v_sale.id, (v_item->>'product_id')::uuid,
+       v_item->>'name', v_item->>'sku',
+       (v_item->>'unit_price')::numeric, (v_item->>'qty')::int, v_line_total, v_cost_at_sale);
+
+    -- Decrement stock (only for products that track it)
+    update public.products
+      set qty = greatest(0, qty - (v_item->>'qty')::int)
+      where id = (v_item->>'product_id')::uuid and track_stock = true;
+
+    insert into public.stock_log
+      (shop_id, product_id, delta, reason, reference, created_by, created_at)
+    values
+      (p_shop_id, (v_item->>'product_id')::uuid,
+       -((v_item->>'qty')::int), 'sale', v_ref, p_served_by, v_ts);
+  end loop;
+
+  if p_customer_id is not null then
+    update public.customers
+      set visit_count = visit_count + 1,
+          total_spent = total_spent + p_total,
+          last_visit  = v_ts
+      where id = p_customer_id;
+  end if;
+
+  return v_sale;
+end;
+$$;
+
+-- Re-grant with the new (longer) signature
+grant execute on function public.create_sale(
+  uuid, uuid, uuid, text, text,
+  numeric, text, numeric, numeric, numeric, numeric, jsonb, timestamptz
+) to authenticated;
+
+-- Drop ALL old comments on create_sale (any signature), so we can
+-- re-attach to the new signature without ambiguity. The do block
+-- runs as SECURITY INVOKER (no definer), so it can read pg_description.
+do $clear_cmt$
+declare r record;
+begin
+  for r in
+    select p.oid, pg_get_function_identity_arguments(p.oid) as args
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'create_sale'
+  loop
+    execute 'comment on function public.create_sale(' || r.args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+
+comment on function public.create_sale(
+  uuid, uuid, uuid, text, text,
+  numeric, text, numeric, numeric, numeric, numeric, jsonb, timestamptz
+) is
+  'Atomically create a sale, its line items, and stock decrement entries. '
+  'Optional p_created_at overrides the sale timestamp (for backdating).';
+
+-- ── 2. Patch set_sale_timestamp() helper for the PATCH /api/sales/[id] path ─
+-- The edit-sale flow updates the sale row in place. We need a way to also
+-- bump the related stock_log rows' created_at so analytics stays consistent.
+-- Wrapped in a SECURITY DEFINER RPC so we don't need to expose stock_log
+-- RLS to the user.
+create or replace function public.set_sale_timestamp(
+  p_sale_id    uuid,
+  p_created_at timestamptz
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_shop_id uuid;
+begin
+  select shop_id into v_shop_id
+  from public.sales
+  where id = p_sale_id;
+  if v_shop_id is null then
+    raise exception 'sale not found';
+  end if;
+  if not public.is_shop_member(v_shop_id) then
+    raise exception 'not a member of this shop' using errcode = '42501';
+  end if;
+
+  update public.sales
+    set created_at = p_created_at
+  where id = p_sale_id;
+
+  -- Also bump the matching stock_log entries by reference = sale_ref.
+  -- (The void/edit flow touches these rows by reference, so this is
+  -- the correct join key.)
+  update public.stock_log
+    set created_at = p_created_at
+  where reference = (select sale_ref from public.sales where id = p_sale_id)
+    and reason    = 'sale';
+end;
+$$;
+
+grant execute on function public.set_sale_timestamp(uuid, timestamptz) to authenticated;
+
+comment on function public.set_sale_timestamp is
+  'Update sales.created_at (and the matching stock_log rows) for a sale. '
+  'Used by the edit-sale flow when the user changes the timestamp.';
+
+    perform public._shelf_mark_migration('0012_sale_created_at_override');
+  end if;
+end $mig$;
+
+-- -----------------------------------------------------------------------------
+-- 0013_cash_register.sql
+-- -----------------------------------------------------------------------------
+do $mig$
+begin
+  if not public._shelf_has_migration('0013_cash_register') then
+    raise notice 'Applying 0013_cash_register …';
+-- 0013_cash_register.sql
+-- Cash register: a per-shop ledger of all money movements. Sales auto-add
+-- to the appropriate destination (cash → counter, card/transfer/credit →
+-- bank). Manual entries cover expenses, injections, adjustments, and
+-- transfers. Each entry is immutable once created; corrections are
+-- recorded as separate "adjustment" entries that link back to the original.
+--
+-- Design notes:
+--   * One ledger table, one row per money movement. Signed `amount`:
+--       positive = money IN to the destination (sale, injection)
+--       negative = money OUT (expense, transfer-out, void)
+--   * `destination` is a free-form text label (e.g. 'counter', 'bank',
+--     'petty_cash'). No FK to a destinations table — keeps the schema
+--     flat and lets the user name their own drawers.
+--   * `source` is a tag describing where the row came from:
+--       'sale'      → created by create_sale() RPC (links to sale_id)
+--       'void'      → created when a sale is voided (links to sale_id)
+--       'manual'    → user-typed entry via /cash-register UI
+--       'transfer'  → linked to a `transfer_group_id` UUID that pairs
+--                     a transfer-out row with its matching transfer-in row
+--   * `voided_at` is the audit-trail kill switch. Setting it hides the
+--     row from balance calculations but keeps it visible in the history.
+--   * No sessions, no shifts — each entry has its own timestamp. Daily
+--     reports just filter by date range.
+--
+-- Permissions (enforced in the API, not in the DB):
+--   * owner + manager: can add injections, transfers, adjustments,
+--     and void existing entries
+--   * cashier:        can add expenses
+--   * suspended:      cannot add anything
+--   * Any shop member can READ (they need to see the balance)
+
+-- ── 1. The ledger table ──────────────────────────────────────────────────
+create table if not exists public.cash_register (
+  id               uuid primary key default gen_random_uuid(),
+  shop_id          uuid not null references public.shops(id) on delete cascade,
+  destination      text not null check (destination in ('counter','bank','other')),
+  amount           numeric(12,2) not null,   -- signed; positive=IN, negative=OUT
+  entry_type       text not null check (entry_type in (
+                     'sale','expense','injection','adjustment','transfer','void'
+                   )),
+  source           text not null default 'manual' check (source in (
+                     'sale','void','manual','transfer'
+                   )),
+  sale_id          uuid references public.sales(id) on delete set null,
+  transfer_group_id uuid,                    -- pairs transfer-out with transfer-in
+  notes            text not null default '',
+  created_by       uuid not null references public.profiles(id),
+  created_at       timestamptz not null default now(),
+  -- For sale/void entries, the original created_at of the sale (so
+  -- the register reflects when the money actually moved, not when
+  -- the register row was written). For manual entries, this is null
+  -- and created_at is the canonical timestamp.
+  effective_at     timestamptz,
+  voided_at        timestamptz,
+  voided_by        uuid references public.profiles(id),
+  void_reason      text
+);
+
+-- Speed up the two most common queries: "today's balance for this
+-- destination" and "this destination's history, newest first".
+create index if not exists cash_register_shop_dest_created_idx
+  on public.cash_register(shop_id, destination, created_at desc);
+
+create index if not exists cash_register_shop_created_idx
+  on public.cash_register(shop_id, created_at desc);
+
+create index if not exists cash_register_sale_id_idx
+  on public.cash_register(sale_id)
+  where sale_id is not null;
+
+create index if not exists cash_register_transfer_group_idx
+  on public.cash_register(transfer_group_id)
+  where transfer_group_id is not null;
+
+-- ── 2. Helper: get a destination label for a sale's payment method ─────
+-- Single source of truth for "this payment method lands in this drawer".
+-- Cash → counter. UPI / card / transfer / credit → bank.
+create or replace function public.cash_register_destination_for_method(method text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when method = 'cash' then 'counter'
+    else 'bank'
+  end;
+$$;
+
+-- ── 3. update create_sale() to also write a register entry ─────────────
+-- Drop the old (12-param) signature, create the new one with the
+-- register write baked in. The cash register row uses effective_at
+-- from p_created_at (or now()) so backdated sales backdate the
+-- register too.
+drop function if exists public.create_sale(
+  uuid, uuid, uuid, text, text,
+  numeric, text, numeric, numeric, numeric, numeric, jsonb
+);
+drop function if exists public.create_sale(
+  uuid, uuid, uuid, text, text,
+  numeric, text, numeric, numeric, numeric, numeric, jsonb, timestamptz
+);
+
+create or replace function public.create_sale(
+  p_shop_id        uuid,
+  p_customer_id    uuid,
+  p_served_by      uuid,
+  p_payment_method text,
+  p_notes          text,
+  p_subtotal       numeric,
+  p_discount_type  text,
+  p_discount_value numeric,
+  p_discount_amount numeric,
+  p_tax_amount     numeric,
+  p_total          numeric,
+  p_items          jsonb,
+  p_created_at     timestamptz default null
+)
+returns public.sales
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ref text;
+  v_sale public.sales;
+  v_ts   timestamptz;
+  v_item jsonb;
+  v_line_total numeric;
+  v_cost_at_sale numeric;
+  v_destination text;
+begin
+  if not public.is_shop_member(p_shop_id) then
+    raise exception 'not a member of this shop' using errcode = '42501';
+  end if;
+
+  v_ts := coalesce(p_created_at, now());
+  v_destination := public.cash_register_destination_for_method(p_payment_method);
+
+  v_ref := 'SL-' || to_char(v_ts at time zone 'utc', 'YYYYMMDD') || '-' ||
+           upper(substring(md5(random()::text) for 4));
+
+  insert into public.sales (
+    shop_id, sale_ref, customer_id, served_by,
+    subtotal, discount_type, discount_value, discount_amount,
+    tax_amount, total, payment_method, notes, created_at
+  ) values (
+    p_shop_id, v_ref, p_customer_id, p_served_by,
+    p_subtotal, p_discount_type, p_discount_value, p_discount_amount,
+    p_tax_amount, p_total, p_payment_method, p_notes, v_ts
+  )
+  returning * into v_sale;
+
+  -- Cash register entry for the sale (effective_at = sale timestamp).
+  -- amount = p_total so cash + tax - discount all flow in.
+  insert into public.cash_register (
+    shop_id, destination, amount, entry_type, source,
+    sale_id, notes, created_by, effective_at
+  ) values (
+    p_shop_id, v_destination, p_total, 'sale', 'sale',
+    v_sale.id,
+    'Auto: sale ' || v_ref,
+    p_served_by, v_ts
+  );
+
+  for v_item in select * from jsonb_array_elements(p_items)
+  loop
+    v_line_total := (v_item->>'unit_price')::numeric * (v_item->>'qty')::int;
+    v_cost_at_sale := coalesce(
+      (select cost_price from public.products where id = (v_item->>'product_id')::uuid),
+      0
+    );
+
+    insert into public.sale_items
+      (sale_id, product_id, product_name, product_sku, unit_price, qty, line_total, cost_at_sale)
+    values
+      (v_sale.id, (v_item->>'product_id')::uuid,
+       v_item->>'name', v_item->>'sku',
+       (v_item->>'unit_price')::numeric, (v_item->>'qty')::int, v_line_total, v_cost_at_sale);
+
+    update public.products
+      set qty = greatest(0, qty - (v_item->>'qty')::int)
+      where id = (v_item->>'product_id')::uuid and track_stock = true;
+
+    insert into public.stock_log
+      (shop_id, product_id, delta, reason, reference, created_by, created_at)
+    values
+      (p_shop_id, (v_item->>'product_id')::uuid,
+       -((v_item->>'qty')::int), 'sale', v_ref, p_served_by, v_ts);
+  end loop;
+
+  if p_customer_id is not null then
+    update public.customers
+      set visit_count = visit_count + 1,
+          total_spent = total_spent + p_total,
+          last_visit  = v_ts
+      where id = p_customer_id;
+  end if;
+
+  return v_sale;
+end;
+$$;
+
+grant execute on function public.create_sale(
+  uuid, uuid, uuid, text, text,
+  numeric, text, numeric, numeric, numeric, numeric, jsonb, timestamptz
+) to authenticated;
+
+-- Drop any old comments on create_sale (across all signatures), then
+-- attach a new one to the latest signature.
+do $clear_cmt$
+declare r record;
+begin
+  for r in
+    select p.oid, pg_get_function_identity_arguments(p.oid) as args
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'create_sale'
+  loop
+    execute 'comment on function public.create_sale(' || r.args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+
+comment on function public.create_sale(
+  uuid, uuid, uuid, text, text,
+  numeric, text, numeric, numeric, numeric, numeric, jsonb, timestamptz
+) is
+  'Atomically create a sale, its line items, stock decrement, and a '
+  'matching cash_register entry. Optional p_created_at backdates both '
+  'the sale and the register row.';
+
+-- ── 4. void_sale() — voids a sale AND its cash register entry ──────────
+-- Wrapped in a single function so the two writes are atomic.
+create or replace function public.void_sale(
+  p_sale_id   uuid,
+  p_actor_id  uuid,
+  p_reason    text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_shop_id    uuid;
+  v_payment    text;
+  v_total      numeric;
+  v_sale_ref   text;
+  v_ts         timestamptz;
+  v_destination text;
+begin
+  select shop_id, payment_method, total, sale_ref, created_at
+    into v_shop_id, v_payment, v_total, v_sale_ref, v_ts
+  from public.sales
+  where id = p_sale_id;
+  if v_shop_id is null then
+    raise exception 'sale not found';
+  end if;
+  if not public.is_shop_member(v_shop_id) then
+    raise exception 'not a member of this shop' using errcode = '42501';
+  end if;
+
+  -- Mark the sale as voided
+  update public.sales
+    set voided_at   = now(),
+        voided_by   = p_actor_id,
+        void_reason = p_reason
+  where id = p_sale_id;
+
+  -- Void the matching cash register entry (don't delete — audit trail)
+  update public.cash_register
+    set voided_at   = now(),
+        voided_by   = p_actor_id,
+        void_reason = p_reason
+  where sale_id = p_sale_id
+    and source  = 'sale'
+    and voided_at is null;
+
+  -- Write a 'void' entry (negative amount) to show the reversal on
+  -- the running balance. Same destination, same effective_at so the
+  -- void lands on the same day as the original sale in reports.
+  v_destination := public.cash_register_destination_for_method(v_payment);
+  insert into public.cash_register (
+    shop_id, destination, amount, entry_type, source,
+    sale_id, notes, created_by, effective_at
+  ) values (
+    v_shop_id, v_destination, -v_total, 'void', 'void',
+    p_sale_id,
+    'Void of sale ' || v_sale_ref || coalesce(': ' || p_reason, ''),
+    p_actor_id, v_ts
+  );
+end;
+$$;
+
+grant execute on function public.void_sale(uuid, uuid, text) to authenticated;
+
+comment on function public.void_sale is
+  'Atomically void a sale: marks sales.voided_at, voids the matching '
+  'cash_register entry, and writes a negative void entry to keep the '
+  'running balance correct.';
+
+-- ── 5. RLS for cash_register ────────────────────────────────────────────
+alter table public.cash_register enable row level security;
+
+drop policy if exists cash_register_select on public.cash_register;
+drop policy if exists cash_register_select on public.cash_register; create policy cash_register_select on public.cash_register
+  for select using (public.is_shop_member(shop_id));
+
+-- Inserts/updates/deletes go through the SECURITY DEFINER functions
+-- (create_sale, void_sale) so we don't need separate RLS policies
+-- for those. The API endpoint for manual entries will also use a
+-- SECURITY DEFINER RPC (added in the same migration).
+
+    perform public._shelf_mark_migration('0013_cash_register');
+  end if;
+end $mig$;
+
+-- -----------------------------------------------------------------------------
+-- 0014_cash_register_rpcs.sql
+-- -----------------------------------------------------------------------------
+do $mig$
+begin
+  if not public._shelf_has_migration('0014_cash_register_rpcs') then
+    raise notice 'Applying 0014_cash_register_rpcs …';
+-- 0014_cash_register_rpcs.sql
+-- Manual-entry RPCs for the cash register UI. The create_sale() and
+-- void_sale() functions (from 0013) handle the auto entries from
+-- sales. This migration adds the user-driven RPCs:
+--
+--   * log_register_entry() — add an expense / injection / adjustment
+--   * transfer_register()  — move money between destinations
+--                              (records as a paired IN + OUT with
+--                              a shared transfer_group_id)
+--   * void_register_entry() — soft-delete a manual entry
+
+-- ── 1. log_register_entry ────────────────────────────────────────────────
+-- Adds a single non-sale entry. Used for expenses, injections, and
+-- adjustments. The API enforces role checks BEFORE calling this; the
+-- RPC itself just trusts the API and validates shape.
+create or replace function public.log_register_entry(
+  p_shop_id      uuid,
+  p_destination  text,
+  p_amount       numeric,
+  p_entry_type   text,
+  p_notes        text,
+  p_actor_id     uuid,
+  p_effective_at timestamptz default null,
+  p_adjusts_id   uuid default null
+)
+returns public.cash_register
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.cash_register;
+  v_source text := 'manual';
+begin
+  if not public.is_shop_member(p_shop_id) then
+    raise exception 'not a member of this shop' using errcode = '42501';
+  end if;
+  if p_destination not in ('counter','bank','other') then
+    raise exception 'invalid destination';
+  end if;
+  if p_entry_type not in ('expense','injection','adjustment') then
+    raise exception 'invalid entry_type for manual entry';
+  end if;
+
+  -- Adjustments must link to the row they're correcting
+  if p_entry_type = 'adjustment' and p_adjusts_id is null then
+    raise exception 'adjustment entries must specify adjusts_id';
+  end if;
+
+  insert into public.cash_register (
+    shop_id, destination, amount, entry_type, source,
+    notes, created_by, effective_at
+  ) values (
+    p_shop_id, p_destination, p_amount, p_entry_type, v_source,
+    coalesce(p_notes, ''), p_actor_id, coalesce(p_effective_at, now())
+  )
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+grant execute on function public.log_register_entry(
+  uuid, text, numeric, text, text, uuid, timestamptz, uuid
+) to authenticated;
+
+comment on function public.log_register_entry is
+  'Add a manual entry to the cash register (expense, injection, or '
+  'adjustment). Role checks are done in the API layer; this RPC just '
+  'validates shape and writes the row.';
+
+-- ── 2. transfer_register ────────────────────────────────────────────────
+-- Moves money from one destination to another. Records as TWO rows
+-- sharing a transfer_group_id: a negative row on the source, a
+-- positive row on the destination, both with the same effective_at.
+-- The amounts cancel out across the shop as a whole (the sum is 0)
+-- so transfers don't change the shop's total cash, just the per-
+-- destination balance.
+create or replace function public.transfer_register(
+  p_shop_id      uuid,
+  p_from         text,
+  p_to           text,
+  p_amount       numeric,
+  p_notes        text,
+  p_actor_id     uuid,
+  p_effective_at timestamptz default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_group uuid := gen_random_uuid();
+  v_ts    timestamptz := coalesce(p_effective_at, now());
+begin
+  if not public.is_shop_member(p_shop_id) then
+    raise exception 'not a member of this shop' using errcode = '42501';
+  end if;
+  if p_from = p_to then
+    raise exception 'cannot transfer to the same destination';
+  end if;
+  if p_from not in ('counter','bank','other') or p_to not in ('counter','bank','other') then
+    raise exception 'invalid destination';
+  end if;
+  if p_amount <= 0 then
+    raise exception 'amount must be positive';
+  end if;
+
+  -- OUT row on the source
+  insert into public.cash_register (
+    shop_id, destination, amount, entry_type, source,
+    transfer_group_id, notes, created_by, effective_at
+  ) values (
+    p_shop_id, p_from, -p_amount, 'transfer', 'transfer',
+    v_group, coalesce(p_notes, '') || ' (out)', p_actor_id, v_ts
+  );
+
+  -- IN row on the destination
+  insert into public.cash_register (
+    shop_id, destination, amount, entry_type, source,
+    transfer_group_id, notes, created_by, effective_at
+  ) values (
+    p_shop_id, p_to, p_amount, 'transfer', 'transfer',
+    v_group, coalesce(p_notes, '') || ' (in)', p_actor_id, v_ts
+  );
+end;
+$$;
+
+grant execute on function public.transfer_register(
+  uuid, text, text, numeric, text, uuid, timestamptz
+) to authenticated;
+
+comment on function public.transfer_register is
+  'Move money between cash-register destinations. Records as a paired '
+  'IN/OUT pair with a shared transfer_group_id. Net effect on the '
+  'shop total is zero; only the per-destination balance changes.';
+
+-- ── 3. void_register_entry ─────────────────────────────────────────────
+-- Soft-void a manual entry. Sale/void entries can't be voided here
+-- (use void_sale() for those — it handles the paired register writes).
+create or replace function public.void_register_entry(
+  p_entry_id uuid,
+  p_actor_id uuid,
+  p_reason   text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_shop_id uuid;
+  v_source  text;
+begin
+  select shop_id, source into v_shop_id, v_source
+  from public.cash_register
+  where id = p_entry_id;
+  if v_shop_id is null then
+    raise exception 'entry not found';
+  end if;
+  if v_source <> 'manual' then
+    raise exception 'only manual entries can be voided here; use void_sale for sales';
+  end if;
+  if not public.is_shop_member(v_shop_id) then
+    raise exception 'not a member of this shop' using errcode = '42501';
+  end if;
+
+  update public.cash_register
+    set voided_at   = now(),
+        voided_by   = p_actor_id,
+        void_reason = p_reason
+  where id = p_entry_id;
+end;
+$$;
+
+grant execute on function public.void_register_entry(uuid, uuid, text) to authenticated;
+
+comment on function public.void_register_entry is
+  'Soft-void a manual cash-register entry. The row stays in the table '
+  'with voided_at set so the audit trail is preserved; balance queries '
+  'exclude voided rows.';
+
+-- ── 4. get_register_balance — small read helper used by the API ───────
+-- Returns the current balance per destination for a shop, plus the
+-- grand total. Excludes voided rows.
+create or replace function public.get_register_balance(p_shop_id uuid)
+returns table (destination text, balance numeric, total_balance numeric)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  with per_dest as (
+    select r.destination, coalesce(sum(r.amount), 0) as balance
+    from public.cash_register r
+    where r.shop_id = p_shop_id
+      and r.voided_at is null
+    group by r.destination
+  ),
+  grand as (
+    select coalesce(sum(balance), 0) as total_balance from per_dest
+  )
+  select pd.destination, pd.balance, g.total_balance
+  from per_dest pd
+  cross join grand g
+  order by pd.destination;
+$$;
+
+grant execute on function public.get_register_balance(uuid) to authenticated;
+
+comment on function public.get_register_balance is
+  'Current cash-register balance per destination for a shop, plus '
+  'the grand total across all destinations. Excludes voided rows.';
+
+    perform public._shelf_mark_migration('0014_cash_register_rpcs');
+  end if;
+end $mig$;
+
 -- =============================================================================
 -- FINAL: RE-ASSERT GRANTS + REFRESH POSTGREST
 -- =============================================================================
@@ -1498,7 +2256,9 @@ begin
      and p.proname in (
        'create_sale','receive_purchase_order','is_shop_member','is_shop_owner',
        'is_shop_invitee','find_user_id_by_email','get_user_emails',
-       'handle_new_user','set_updated_at'
+       'handle_new_user','set_updated_at',
+       'cash_register_destination_for_method','log_register_entry',
+       'transfer_register','void_register_entry','void_sale','get_register_balance'
      );
 
   select count(*) into v_mig_count from public._shelf_migrations;
@@ -1507,7 +2267,7 @@ begin
   raise notice 'Shëlf setup complete.';
   raise notice '  Tables:    %', v_table_count;
   raise notice '  Policies:  %', v_policy_count;
-  raise notice '  RPCs:      % / 9 expected', v_rpc_count;
+  raise notice '  RPCs:      % / 14 expected', v_rpc_count;
   raise notice '  Applied:   % migrations', v_mig_count;
   raise notice '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
 end $verify$;

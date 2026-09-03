@@ -7,6 +7,7 @@ export const ICONS = {
   history:   'ClipboardList',
   analytics: 'BarChart2',
   settings:  'Settings',
+  register:  'Wallet',
 
   // Actions
   add:       'Plus',

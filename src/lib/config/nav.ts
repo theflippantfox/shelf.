@@ -18,6 +18,7 @@ export const navItems: NavItem[] = [
   { label: 'Restocking', href: '/restocking', icon: 'PackagePlus', section: 'Stock', mobileNav: false, permission: 'inventory.view' },
   { label: 'Customers', href: '/customers', icon: 'customers', section: 'Customers', mobileNav: true, mobileOrder: 3, permission: 'customers.view' },
   { label: 'Sales History', href: '/history', icon: 'history', section: 'Records', mobileNav: true, mobileOrder: 4, permission: 'sales.view_all' },
+  { label: 'Cash Register', href: '/cash-register', icon: 'register', section: 'Records', mobileNav: false, permission: 'sales.view_all' },
   { label: 'Analytics', href: '/analytics', icon: 'analytics', section: 'Records', mobileNav: false, permission: 'analytics.view' },
   { label: 'Settings', href: '/settings', icon: 'settings', section: 'Config', permission: 'settings.view' },
 ];

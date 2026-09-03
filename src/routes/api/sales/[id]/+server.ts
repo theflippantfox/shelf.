@@ -46,18 +46,25 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
   const supabase = userClientFromCtx({ cookies } as any);
 
   // ── Void path ──────────────────────────────────────────────────────────────
+  // The atomic void_sale() RPC does three things in one transaction:
+  //   1. Marks the sale as voided
+  //   2. Voids the matching cash_register entry (soft)
+  //   3. Writes a negative 'void' entry to keep the register balance
+  //      correct on the same effective_at as the original sale
+  // After that, we restore stock and write stock_log entries (the
+  // RPC doesn't touch stock — that's a separate concern).
   if (body.void_reason !== undefined) {
-    const { data: sale, error: saleErr } = await supabase
-      .from('sales')
-      .update({
-        voided_at:   new Date().toISOString(),
-        voided_by:   locals.user.id,
-        void_reason: body.void_reason ?? '',
-      })
-      .eq('id', params.id)
-      .select()
-      .single();
-    if (saleErr) return json({ error: saleErr.message }, { status: 400 });
+    const { error: voidErr } = await supabase.rpc('void_sale', {
+      p_sale_id:  params.id,
+      p_actor_id: locals.user.id,
+      p_reason:   body.void_reason ?? '',
+    });
+    if (voidErr) return json({ error: voidErr.message }, { status: 400 });
+
+    // Restore stock for the voided items. We re-fetch the sale + items
+    // since the RPC's side effects don't return them.
+    const { data: sale } = await supabase
+      .from('sales').select('shop_id, sale_ref').eq('id', params.id).single();
 
     const { data: items } = await supabase
       .from('sale_items').select('*').eq('sale_id', params.id);
