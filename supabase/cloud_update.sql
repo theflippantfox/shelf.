@@ -50,10 +50,6 @@ $$;
 -- -----------------------------------------------------------------------------
 -- 0003_functions_create_sale.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0003_functions_create_sale') then
-    raise notice 'Applying 0003_functions_create_sale …';
 -- 0003_functions_create_sale.sql
 -- Atomic sale creation. Replaces the multi-query sale creation in
 -- src/routes/api/sales/+server.ts, which had a race condition between
@@ -63,6 +59,7 @@ begin
 -- when the RLS policy on stock_log would otherwise require created_by = auth.uid().
 -- Membership is still verified inside via is_shop_member().
 
+do $drop_create_sale$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_sale' loop execute 'drop function public.create_sale(' || args || ')'; end loop; end $drop_create_sale$;
 create or replace function public.create_sale(
   p_shop_id      uuid,
   p_customer_id  uuid,
@@ -152,19 +149,28 @@ grant execute on function public.create_sale(
   numeric, text, numeric, numeric, numeric, numeric, jsonb
 ) to authenticated;
 
-comment on function public.create_sale is
-  'Atomically create a sale, its line items, and stock decrement entries.';
-    perform public._shelf_mark_migration('0003_functions_create_sale');
-  end if;
-end $mig$;
+-- clear old comments on any signature of public.create_sale
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.create_sale', '.', 1) and p.proname = split_part('public.create_sale', '.', 2)
+  loop
+    execute 'comment on function public.create_sale(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.create_sale is 'Atomically create a sale, its line items, and stock decrement entries.';
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0003_functions_create_sale');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0004_functions_receive_purchase_order.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0004_functions_receive_purchase_order') then
-    raise notice 'Applying 0004_functions_receive_purchase_order …';
 -- 0004_functions_receive_purchase_order.sql
 -- Atomic purchase-order receiving. Updates per-item quantity_received,
 -- increments product.qty, writes stock_log and supplier_price_history,
@@ -302,19 +308,28 @@ grant execute on function public.receive_purchase_order(
   uuid, jsonb, numeric, numeric, date, text, uuid
 ) to authenticated;
 
-comment on function public.receive_purchase_order is
-  'Atomically receive a purchase order: update items, increment stock, write stock_log and supplier_price_history, recompute PO status.';
-    perform public._shelf_mark_migration('0004_functions_receive_purchase_order');
-  end if;
-end $mig$;
+-- clear old comments on any signature of public.receive_purchase_order
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.receive_purchase_order', '.', 1) and p.proname = split_part('public.receive_purchase_order', '.', 2)
+  loop
+    execute 'comment on function public.receive_purchase_order(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.receive_purchase_order is 'Atomically receive a purchase order: update items, increment stock, write stock_log and supplier_price_history, recompute PO status.';
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0004_functions_receive_purchase_order');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0005_storage_buckets.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0005_storage_buckets') then
-    raise notice 'Applying 0005_storage_buckets …';
 -- 0005_storage_buckets.sql
 -- Set up the three image storage buckets for Supabase Storage.
 -- The buckets replace the Directus /assets/ endpoint that the old code used.
@@ -378,17 +393,16 @@ with check (
 
 -- All reads happen via service-role server-side; clients use signed URLs
 -- rather than direct storage reads. No public read policies here.
-    perform public._shelf_mark_migration('0005_storage_buckets');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0005_storage_buckets');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0006_snapshot_cost_at_sale.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0006_snapshot_cost_at_sale') then
-    raise notice 'Applying 0006_snapshot_cost_at_sale …';
 -- 0006_snapshot_cost_at_sale.sql
 -- Snapshot the product's cost_price at sale time so future cost changes
 -- (e.g. a restock at a higher cost) don't retroactively change historical
@@ -409,17 +423,16 @@ update public.sale_items si
 
 -- (Don't make it NOT NULL — the create_sale RPC will be updated separately
 -- to write it; pre-RPC sales (if any) keep the backfill above.)
-    perform public._shelf_mark_migration('0006_snapshot_cost_at_sale');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0006_snapshot_cost_at_sale');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0007_palette_id.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0007_palette_id') then
-    raise notice 'Applying 0007_palette_id …';
 -- Add palette_id to shops so each shop can pick one of the curated
 -- design palettes. Existing rows get the default ('graphite-mint').
 
@@ -443,17 +456,16 @@ alter table public.shops
 --  remove them in a later migration once the picker has been live for
 --  a while.)
 
-    perform public._shelf_mark_migration('0007_palette_id');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0007_palette_id');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0008_normalize_discount_value_to_major.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0008_normalize_discount_value_to_major') then
-    raise notice 'Applying 0008_normalize_discount_value_to_major …';
 -- 0008_normalize_discount_value_to_major.sql
 --
 -- The Directus → Supabase migration left `sales.discount_value` in minor
@@ -499,17 +511,16 @@ create index if not exists sales_shop_id_created_at_amount_idx
 comment on column public.sales.discount_value is
   'Discount value: major units (rupees) for type=amount, 0–100 for type=percent.';
 
-    perform public._shelf_mark_migration('0008_normalize_discount_value_to_major');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0008_normalize_discount_value_to_major');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0008_palette_id_expand.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0008_palette_id_expand') then
-    raise notice 'Applying 0008_palette_id_expand …';
 -- Extend the palette_id CHECK constraint to include the six palettes
 -- added to the picker (Sandstone, Slate Mono, Sapphire, Sunset Coral,
 -- Emerald Noir). Same shape as 0007 — drop & re-add the constraint
@@ -533,17 +544,16 @@ alter table public.shops
       'sunset-coral',
       'emerald-noir'
     ));
-    perform public._shelf_mark_migration('0008_palette_id_expand');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0008_palette_id_expand');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0009_products_barcode_unique.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0009_products_barcode_unique') then
-    raise notice 'Applying 0009_products_barcode_unique …';
 -- 0009_products_barcode_unique.sql
 --
 -- Barcode scanning on the PoS page needs sub-millisecond lookups.
@@ -559,17 +569,16 @@ create unique index if not exists products_shop_id_barcode_unique_idx
   on public.products (shop_id, barcode)
   where barcode is not null;
 
-    perform public._shelf_mark_migration('0009_products_barcode_unique');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0009_products_barcode_unique');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0010_team_invites.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0010_team_invites') then
-    raise notice 'Applying 0010_team_invites …';
 -- 0010_team_invites.sql
 -- Re-shape team membership so owners can invite existing Shëlf users
 -- and the invitee can review & accept/decline before becoming active.
@@ -721,17 +730,16 @@ drop policy if exists shop_members_invitee_accept on public.shop_members; create
     user_id = auth.uid() and status in ('active', 'suspended')
   );
 
-    perform public._shelf_mark_migration('0010_team_invites');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0010_team_invites');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0011_product_toggles.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0011_product_toggles') then
-    raise notice 'Applying 0011_product_toggles …';
 -- 0011_product_toggles.sql
 -- Two opt-in toggles on products so the user can disable per-item
 -- stock tracking and per-item barcode tracking from the inventory form.
@@ -752,17 +760,16 @@ update public.products
  where barcode is null
    and track_barcode = true;
 
-    perform public._shelf_mark_migration('0011_product_toggles');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0011_product_toggles');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0012_sale_created_at_override.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0012_sale_created_at_override') then
-    raise notice 'Applying 0012_sale_created_at_override …';
 -- 0012_sale_created_at_override.sql
 -- Allow the user to override sales.created_at at checkout and on edit.
 -- Useful for backdating a missed sale (e.g. recorded the next morning)
@@ -784,12 +791,11 @@ begin
 -- unique"), so drop the old one first. Both signatures are owned by
 -- the script, so this is safe to run on a live DB — any in-flight
 -- RPC call would complete before the drop acquires its lock.
-drop function if exists public.create_sale(
-  uuid, uuid, uuid, text, text,
-  numeric, text, numeric, numeric, numeric, numeric, jsonb
-);
+do $drop_create_sale$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_sale' loop execute 'drop function public.create_sale(' || args || ')'; end loop; end $drop_create_sale$;
+
 -- Add a new parameter with a default, so existing callers
 -- (and the SW offline-replay path) keep working.
+do $drop_create_sale$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_sale' loop execute 'drop function public.create_sale(' || args || ')'; end loop; end $drop_create_sale$;
 create or replace function public.create_sale(
   p_shop_id        uuid,
   p_customer_id    uuid,
@@ -918,6 +924,7 @@ comment on function public.create_sale(
 -- bump the related stock_log rows' created_at so analytics stays consistent.
 -- Wrapped in a SECURITY DEFINER RPC so we don't need to expose stock_log
 -- RLS to the user.
+do $drop_set_sale_timestamp$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'set_sale_timestamp' loop execute 'drop function public.set_sale_timestamp(' || args || ')'; end loop; end $drop_set_sale_timestamp$;
 create or replace function public.set_sale_timestamp(
   p_sale_id    uuid,
   p_created_at timestamptz
@@ -956,21 +963,30 @@ $$;
 
 grant execute on function public.set_sale_timestamp(uuid, timestamptz) to authenticated;
 
-comment on function public.set_sale_timestamp is
-  'Update sales.created_at (and the matching stock_log rows) for a sale. '
+-- clear old comments on any signature of public.set_sale_timestamp
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.set_sale_timestamp', '.', 1) and p.proname = split_part('public.set_sale_timestamp', '.', 2)
+  loop
+    execute 'comment on function public.set_sale_timestamp(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.set_sale_timestamp is 'Update sales.created_at (and the matching stock_log rows) for a sale. '
   'Used by the edit-sale flow when the user changes the timestamp.';
 
-    perform public._shelf_mark_migration('0012_sale_created_at_override');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0012_sale_created_at_override');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0013_cash_register.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0013_cash_register') then
-    raise notice 'Applying 0013_cash_register …';
 -- 0013_cash_register.sql
 -- Cash register: a per-shop ledger of all money movements. Sales auto-add
 -- to the appropriate destination (cash → counter, card/transfer/credit →
@@ -1004,7 +1020,32 @@ begin
 --   * Any shop member can READ (they need to see the balance)
 
 -- ── 1. The ledger table ──────────────────────────────────────────────────
--- (create table skipped — already exists on target DB)
+create table if not exists public.cash_register (
+  id               uuid primary key default gen_random_uuid(),
+  shop_id          uuid not null references public.shops(id) on delete cascade,
+  destination      text not null check (destination in ('counter','bank','other')),
+  amount           numeric(12,2) not null,   -- signed; positive=IN, negative=OUT
+  entry_type       text not null check (entry_type in (
+                     'sale','expense','injection','adjustment','transfer','void'
+                   )),
+  source           text not null default 'manual' check (source in (
+                     'sale','void','manual','transfer'
+                   )),
+  sale_id          uuid references public.sales(id) on delete set null,
+  transfer_group_id uuid,                    -- pairs transfer-out with transfer-in
+  notes            text not null default '',
+  created_by       uuid not null references public.profiles(id),
+  created_at       timestamptz not null default now(),
+  -- For sale/void entries, the original created_at of the sale (so
+  -- the register reflects when the money actually moved, not when
+  -- the register row was written). For manual entries, this is null
+  -- and created_at is the canonical timestamp.
+  effective_at     timestamptz,
+  voided_at        timestamptz,
+  voided_by        uuid references public.profiles(id),
+  void_reason      text
+);
+
 -- Speed up the two most common queries: "today's balance for this
 -- destination" and "this destination's history, newest first".
 create index if not exists cash_register_shop_dest_created_idx
@@ -1040,15 +1081,12 @@ $$;
 -- register write baked in. The cash register row uses effective_at
 -- from p_created_at (or now()) so backdated sales backdate the
 -- register too.
-drop function if exists public.create_sale(
-  uuid, uuid, uuid, text, text,
-  numeric, text, numeric, numeric, numeric, numeric, jsonb
-);
-drop function if exists public.create_sale(
-  uuid, uuid, uuid, text, text,
-  numeric, text, numeric, numeric, numeric, numeric, jsonb, timestamptz
-);
+do $drop_create_sale$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_sale' loop execute 'drop function public.create_sale(' || args || ')'; end loop; end $drop_create_sale$;
 
+do $drop_create_sale$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_sale' loop execute 'drop function public.create_sale(' || args || ')'; end loop; end $drop_create_sale$;
+
+
+do $drop_create_sale$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'create_sale' loop execute 'drop function public.create_sale(' || args || ')'; end loop; end $drop_create_sale$;
 create or replace function public.create_sale(
   p_shop_id        uuid,
   p_customer_id    uuid,
@@ -1179,6 +1217,7 @@ comment on function public.create_sale(
 
 -- ── 4. void_sale() — voids a sale AND its cash register entry ──────────
 -- Wrapped in a single function so the two writes are atomic.
+do $drop_void_sale$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'void_sale' loop execute 'drop function public.void_sale(' || args || ')'; end loop; end $drop_void_sale$;
 create or replace function public.void_sale(
   p_sale_id   uuid,
   p_actor_id  uuid,
@@ -1242,8 +1281,18 @@ $$;
 
 grant execute on function public.void_sale(uuid, uuid, text) to authenticated;
 
-comment on function public.void_sale is
-  'Atomically void a sale: marks sales.voided_at, voids the matching '
+-- clear old comments on any signature of public.void_sale
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.void_sale', '.', 1) and p.proname = split_part('public.void_sale', '.', 2)
+  loop
+    execute 'comment on function public.void_sale(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.void_sale is 'Atomically void a sale: marks sales.voided_at, voids the matching '
   'cash_register entry, and writes a negative void entry to keep the '
   'running balance correct.';
 
@@ -1259,17 +1308,16 @@ drop policy if exists cash_register_select on public.cash_register; create polic
 -- for those. The API endpoint for manual entries will also use a
 -- SECURITY DEFINER RPC (added in the same migration).
 
-    perform public._shelf_mark_migration('0013_cash_register');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0013_cash_register');
+end $mark$;
 
 -- -----------------------------------------------------------------------------
 -- 0014_cash_register_rpcs.sql
 -- -----------------------------------------------------------------------------
-do $mig$
-begin
-  if not public._shelf_has_migration('0014_cash_register_rpcs') then
-    raise notice 'Applying 0014_cash_register_rpcs …';
 -- 0014_cash_register_rpcs.sql
 -- Manual-entry RPCs for the cash register UI. The create_sale() and
 -- void_sale() functions (from 0013) handle the auto entries from
@@ -1285,6 +1333,7 @@ begin
 -- Adds a single non-sale entry. Used for expenses, injections, and
 -- adjustments. The API enforces role checks BEFORE calling this; the
 -- RPC itself just trusts the API and validates shape.
+do $drop_log_register_entry$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'log_register_entry' loop execute 'drop function public.log_register_entry(' || args || ')'; end loop; end $drop_log_register_entry$;
 create or replace function public.log_register_entry(
   p_shop_id      uuid,
   p_destination  text,
@@ -1336,8 +1385,18 @@ grant execute on function public.log_register_entry(
   uuid, text, numeric, text, text, uuid, timestamptz, uuid
 ) to authenticated;
 
-comment on function public.log_register_entry is
-  'Add a manual entry to the cash register (expense, injection, or '
+-- clear old comments on any signature of public.log_register_entry
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.log_register_entry', '.', 1) and p.proname = split_part('public.log_register_entry', '.', 2)
+  loop
+    execute 'comment on function public.log_register_entry(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.log_register_entry is 'Add a manual entry to the cash register (expense, injection, or '
   'adjustment). Role checks are done in the API layer; this RPC just '
   'validates shape and writes the row.';
 
@@ -1348,6 +1407,7 @@ comment on function public.log_register_entry is
 -- The amounts cancel out across the shop as a whole (the sum is 0)
 -- so transfers don't change the shop's total cash, just the per-
 -- destination balance.
+do $drop_transfer_register$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'transfer_register' loop execute 'drop function public.transfer_register(' || args || ')'; end loop; end $drop_transfer_register$;
 create or replace function public.transfer_register(
   p_shop_id      uuid,
   p_from         text,
@@ -1403,14 +1463,25 @@ grant execute on function public.transfer_register(
   uuid, text, text, numeric, text, uuid, timestamptz
 ) to authenticated;
 
-comment on function public.transfer_register is
-  'Move money between cash-register destinations. Records as a paired '
+-- clear old comments on any signature of public.transfer_register
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.transfer_register', '.', 1) and p.proname = split_part('public.transfer_register', '.', 2)
+  loop
+    execute 'comment on function public.transfer_register(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.transfer_register is 'Move money between cash-register destinations. Records as a paired '
   'IN/OUT pair with a shared transfer_group_id. Net effect on the '
   'shop total is zero; only the per-destination balance changes.';
 
 -- ── 3. void_register_entry ─────────────────────────────────────────────
 -- Soft-void a manual entry. Sale/void entries can't be voided here
 -- (use void_sale() for those — it handles the paired register writes).
+do $drop_void_register_entry$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'void_register_entry' loop execute 'drop function public.void_register_entry(' || args || ')'; end loop; end $drop_void_register_entry$;
 create or replace function public.void_register_entry(
   p_entry_id uuid,
   p_actor_id uuid,
@@ -1448,14 +1519,25 @@ $$;
 
 grant execute on function public.void_register_entry(uuid, uuid, text) to authenticated;
 
-comment on function public.void_register_entry is
-  'Soft-void a manual cash-register entry. The row stays in the table '
+-- clear old comments on any signature of public.void_register_entry
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.void_register_entry', '.', 1) and p.proname = split_part('public.void_register_entry', '.', 2)
+  loop
+    execute 'comment on function public.void_register_entry(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.void_register_entry is 'Soft-void a manual cash-register entry. The row stays in the table '
   'with voided_at set so the audit trail is preserved; balance queries '
   'exclude voided rows.';
 
 -- ── 4. get_register_balance — small read helper used by the API ───────
 -- Returns the current balance per destination for a shop, plus the
 -- grand total. Excludes voided rows.
+do $drop_get_register_balance$ declare args text; begin for args in select pg_get_function_identity_arguments(p.oid) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'get_register_balance' loop execute 'drop function public.get_register_balance(' || args || ')'; end loop; end $drop_get_register_balance$;
 create or replace function public.get_register_balance(p_shop_id uuid)
 returns table (destination text, balance numeric, total_balance numeric)
 language sql
@@ -1481,13 +1563,26 @@ $$;
 
 grant execute on function public.get_register_balance(uuid) to authenticated;
 
-comment on function public.get_register_balance is
-  'Current cash-register balance per destination for a shop, plus '
+-- clear old comments on any signature of public.get_register_balance
+do $clear_cmt$ declare args text; begin
+  for args in
+    select pg_get_function_identity_arguments(p.oid)
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = split_part('public.get_register_balance', '.', 1) and p.proname = split_part('public.get_register_balance', '.', 2)
+  loop
+    execute 'comment on function public.get_register_balance(' || args || ') is NULL';
+  end loop;
+end $clear_cmt$;
+-- attach the new comment to the latest signature
+comment on function public.get_register_balance is 'Current cash-register balance per destination for a shop, plus '
   'the grand total across all destinations. Excludes voided rows.';
 
-    perform public._shelf_mark_migration('0014_cash_register_rpcs');
-  end if;
-end $mig$;
+
+-- Mark as applied (idempotent)
+do $mark$
+begin
+  perform public._shelf_mark_migration('0014_cash_register_rpcs');
+end $mark$;
 
 -- =============================================================================
 -- FINAL: RE-ASSERT GRANTS + REFRESH POSTGREST
