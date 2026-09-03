@@ -99,7 +99,7 @@ class CartStore {
     this.#notes         = '';
   }
 
-  loadFromSale(sale: { customer: string | null; discount_type: string; discount_value: number; payment_method: string; notes: string | null }, items: { product: string | { id: string }; product_name: string; product_sku: string; unit_price: number; qty: number }[]) {
+  loadFromSale(sale: { customer: string | null; discount_type: string; discount_value: number; payment_method: string; notes: string | null }, items: { product_id: string; product_name: string; product_sku: string; unit_price: number; qty: number }[]) {
     this.#customerId    = sale.customer ?? null;
     this.#customerName  = ''; // populated by caller if available
     this.#discountType  = sale.discount_type as DiscountType;
@@ -108,7 +108,7 @@ class CartStore {
     this.#paymentMethod = sale.payment_method as PaymentMethod;
     this.#notes         = sale.notes ?? '';
     this.#items         = items.map(i => ({
-      productId: typeof i.product === 'string' ? i.product : i.product.id,
+      productId: i.product_id,
       name:      i.product_name,
       sku:       i.product_sku,
       unitPrice: i.unit_price,
