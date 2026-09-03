@@ -563,7 +563,11 @@
         <p class="flex-1 text-xs font-semibold text-[var(--text)]">Barcode</p>
         <button
           type="button"
-          class="text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
+          class="inline-flex items-center justify-center w-4 h-4 rounded-full
+                 text-[9px] font-semibold leading-none text-[var(--text-3)]
+                 ring-1 ring-inset ring-[var(--border)] hover:ring-[var(--text-3)]
+                 hover:text-[var(--text-2)] hover:bg-[var(--surface2)]
+                 transition-colors"
           aria-label="What does tracking a barcode do?"
           title="Track a barcode for this product. Disable for items sold loose or in bulk."
         >?</button>
@@ -573,7 +577,11 @@
         <p class="flex-1 text-xs font-semibold text-[var(--text)]">Low-stock alerts</p>
         <button
           type="button"
-          class="text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
+          class="inline-flex items-center justify-center w-4 h-4 rounded-full
+                 text-[9px] font-semibold leading-none text-[var(--text-3)]
+                 ring-1 ring-inset ring-[var(--border)] hover:ring-[var(--text-3)]
+                 hover:text-[var(--text-2)] hover:bg-[var(--surface2)]
+                 transition-colors"
           aria-label="What do low-stock alerts do?"
           title="Show a warning when quantity drops to or below the alert level. Disable for items you don't count, like samples or custom orders."
         >?</button>
