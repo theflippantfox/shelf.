@@ -11,7 +11,7 @@
   import { formatDateTime } from '$lib/utils/format';
   import {
     Plus, TrendingUp, TrendingDown, ArrowLeftRight, Ban,
-    ShoppingCart, Wallet, Building2, Box, X,
+    ShoppingCart, Wallet, Building2, Box,
   } from 'lucide-svelte';
 
   let { data } = $props();
@@ -62,7 +62,6 @@
     sheetSubmitting = true;
     try {
       if (sheetTab === 'transfer') {
-        // Transfer: amount is always positive; the API applies the sign
         const res = await fetch('/api/cash-register/transfer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -77,7 +76,6 @@
         if (!res.ok) { toasts.error(data.error ?? 'Transfer failed'); return; }
         toasts.success(`Transferred ${formatCurrency(Math.abs(amt))}`);
       } else {
-        // Expense / injection: sign the amount based on tab
         const signed = sheetTab === 'expense' ? -Math.abs(amt) : Math.abs(amt);
         const res = await fetch('/api/cash-register', {
           method: 'POST',
@@ -175,30 +173,56 @@
     if (!p) return '';
     return `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
   }
+  function dayLabel(iso: string) {
+    const d = new Date(iso);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const yesterdayIso = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    if (iso === todayIso) return 'Today';
+    if (iso === yesterdayIso) return 'Yesterday';
+    return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  function relativeDay(iso: string) {
+    // Lightweight "2h ago" / "Mon" for mobile
+    const d = new Date(iso);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const yesterdayIso = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const dIso = d.toISOString().slice(0, 10);
+    if (dIso === todayIso) {
+      return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+    if (dIso === yesterdayIso) return 'Yesterday';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  }
 
   // Group entries by day (newest first within each day)
   const groupedByDay = $derived.by(() => {
     const groups: Record<string, Entry[]> = {};
     for (const e of (data.entries ?? []) as Entry[]) {
-      const day = (e.effective_at ?? e.created_at).slice(0, 10);  // YYYY-MM-DD
+      const day = (e.effective_at ?? e.created_at).slice(0, 10);
       if (!groups[day]) groups[day] = [];
       groups[day].push(e);
     }
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   });
 
-  // Today / 7d totals for the headline KPIs
-  const today = new Date().toISOString().slice(0, 10);
-  const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString().slice(0, 10);
+  // Daily totals for the headline row
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
   const todayTotal = $derived(
     ((data.entries ?? []) as Entry[])
-      .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) === today)
+      .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) === todayIso)
       .reduce((s, e) => s + e.amount, 0),
   );
   const weekTotal = $derived(
     ((data.entries ?? []) as Entry[])
-      .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) >= sevenDaysAgo)
+      .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) >= sevenDaysAgoIso)
       .reduce((s, e) => s + e.amount, 0),
+  );
+  const counterBal = $derived(
+    (data.balance?.destinations ?? []).find((d: any) => d.destination === 'counter')?.balance ?? 0,
+  );
+  const bankBal = $derived(
+    (data.balance?.destinations ?? []).find((d: any) => d.destination === 'bank')?.balance ?? 0,
   );
 
   // Role gates
@@ -211,84 +235,84 @@
 <svelte:head><title>Cash register · Shëlf</title></svelte:head>
 
 <PageShell>
-  <div class="flex flex-col gap-4 md:gap-5">
-    <!-- Header -->
-    <div class="flex items-end justify-between gap-3">
-      <div>
-        <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight">
+  <div class="flex flex-col gap-3 md:gap-5">
+    <!-- Header — stack on mobile, row on md+ -->
+    <div class="flex flex-col gap-2.5 md:flex-row md:items-end md:justify-between md:gap-3">
+      <div class="min-w-0">
+        <h1 class="text-[20px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight leading-tight">
           Cash register
         </h1>
-        <p class="text-xs text-[var(--text-3)] mt-0.5">
+        <p class="text-[11px] md:text-xs text-[var(--text-3)] mt-0.5">
           All money movements in and out of the shop.
         </p>
       </div>
+
+      <!-- Action buttons: full-width on mobile, auto on md+ -->
       <div class="flex items-center gap-2 shrink-0">
-        <Button variant="secondary" size="sm" onclick={() => openSheet('expense')}>
-          <TrendingDown size={14} strokeWidth={2} />
-          Expense
+        <Button variant="secondary" size="sm" onclick={() => openSheet('expense')} class="flex-1 md:flex-initial justify-center">
+          <TrendingDown size={13} strokeWidth={2} />
+          <span class="hidden sm:inline">Expense</span>
+          <span class="sm:hidden">Out</span>
         </Button>
         {#if canInject}
-          <Button variant="secondary" size="sm" onclick={() => openSheet('injection')}>
-            <TrendingUp size={14} strokeWidth={2} />
-            Injection
+          <Button variant="secondary" size="sm" onclick={() => openSheet('injection')} class="flex-1 md:flex-initial justify-center">
+            <TrendingUp size={13} strokeWidth={2} />
+            <span class="hidden sm:inline">Injection</span>
+            <span class="sm:hidden">In</span>
           </Button>
         {/if}
-        {#if canTransfer}
-          <Button variant="primary" size="sm" onclick={() => openSheet('transfer')}>
-            <Plus size={14} strokeWidth={2.5} />
-            New entry
-          </Button>
-        {:else}
-          <Button variant="primary" size="sm" onclick={() => openSheet('expense')}>
-            <Plus size={14} strokeWidth={2.5} />
-            New entry
-          </Button>
-        {/if}
+        <Button variant="primary" size="sm" onclick={() => openSheet(canTransfer ? 'transfer' : 'expense')} class="flex-1 md:flex-initial justify-center">
+          <Plus size={13} strokeWidth={2.5} />
+          <span>New</span>
+        </Button>
       </div>
     </div>
 
-    <!-- Balance cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div class="surface-card p-4">
-        <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)]">Total</p>
-        <p class="text-2xl font-bold tabular-nums text-[var(--text)] mt-1">
-          {formatCurrency(data.balance?.total ?? 0)}
-        </p>
-        <p class="text-[10px] text-[var(--text-3)] mt-1">
-          across all destinations
-        </p>
-      </div>
-      <div class="surface-card p-4">
-        <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)] flex items-center gap-1.5">
-          <Wallet size={11} strokeWidth={2.5} /> Counter
-        </p>
-        <p class="text-2xl font-bold tabular-nums text-[var(--text)] mt-1">
-          {formatCurrency((data.balance?.destinations ?? []).find((d: any) => d.destination === 'counter')?.balance ?? 0)}
-        </p>
-        <p class="text-[10px] text-[var(--text-3)] mt-1">cash drawer</p>
-      </div>
-      <div class="surface-card p-4">
-        <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)] flex items-center gap-1.5">
-          <Building2 size={11} strokeWidth={2.5} /> Bank
-        </p>
-        <p class="text-2xl font-bold tabular-nums text-[var(--text)] mt-1">
-          {formatCurrency((data.balance?.destinations ?? []).find((d: any) => d.destination === 'bank')?.balance ?? 0)}
-        </p>
-        <p class="text-[10px] text-[var(--text-3)] mt-1">UPI / card receipts</p>
+    <!-- Total balance — single hero card on mobile, split on md+ -->
+    <div class="surface-card p-4">
+      <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)]">Total balance</p>
+      <p class="text-3xl md:text-4xl font-bold tabular-nums text-[var(--text)] mt-1 leading-none">
+        {formatCurrency(data.balance?.total ?? 0)}
+      </p>
+
+      <!-- Per-destination split — inline on mobile, side-by-side on md+ -->
+      <div class="mt-3 grid grid-cols-2 gap-3 md:gap-6">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-[var(--surface2)] flex items-center justify-center shrink-0">
+            <Wallet size={14} strokeWidth={1.75} class="text-[var(--text-2)]" />
+          </div>
+          <div class="min-w-0">
+            <p class="text-[10px] text-[var(--text-3)] font-medium leading-tight">Counter</p>
+            <p class="text-sm font-semibold tabular-nums text-[var(--text)] leading-tight truncate">
+              {formatCurrency(counterBal)}
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-[var(--surface2)] flex items-center justify-center shrink-0">
+            <Building2 size={14} strokeWidth={1.75} class="text-[var(--text-2)]" />
+          </div>
+          <div class="min-w-0">
+            <p class="text-[10px] text-[var(--text-3)] font-medium leading-tight">Bank</p>
+            <p class="text-sm font-semibold tabular-nums text-[var(--text)] leading-tight truncate">
+              {formatCurrency(bankBal)}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Headline KPIs (today / this week) -->
-    <div class="grid grid-cols-2 gap-3">
-      <div class="surface-card p-3">
+    <!-- Headline KPIs — single row, compact on mobile -->
+    <div class="grid grid-cols-2 gap-2 md:gap-3">
+      <div class="surface-card px-3 py-2.5 md:p-3">
         <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)]">Today</p>
-        <p class="text-base font-semibold tabular-nums {amountClass(todayTotal)} mt-0.5">
+        <p class="text-sm md:text-base font-semibold tabular-nums {amountClass(todayTotal)} mt-0.5 truncate">
           {amountPrefix(todayTotal)}{formatCurrency(todayTotal)}
         </p>
       </div>
-      <div class="surface-card p-3">
+      <div class="surface-card px-3 py-2.5 md:p-3">
         <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)]">Last 7 days</p>
-        <p class="text-base font-semibold tabular-nums {amountClass(weekTotal)} mt-0.5">
+        <p class="text-sm md:text-base font-semibold tabular-nums {amountClass(weekTotal)} mt-0.5 truncate">
           {amountPrefix(weekTotal)}{formatCurrency(weekTotal)}
         </p>
       </div>
@@ -302,39 +326,50 @@
         icon="Wallet"
       />
     {:else}
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-3">
         {#each groupedByDay as [day, entries] (day)}
           <div>
-            <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)] mb-1.5 px-1">
-              {new Date(day).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-            </p>
+            <div class="flex items-center justify-between mb-1 px-1">
+              <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)]">
+                {dayLabel(day)}
+              </p>
+              <p class="text-[10px] tabular-nums text-[var(--text-3)] font-semibold">
+                {formatCurrency(entries.reduce((s, e) => s + e.amount, 0))}
+              </p>
+            </div>
             <div class="surface-card overflow-hidden">
               <ul class="divide-y divide-[var(--border)]">
                 {#each entries as e (e.id)}
                   {@const Icon = entryIcon(e.entry_type)}
                   {@const DIcon = destIcon(e.destination)}
-                  <li class="px-3 py-2.5 flex items-start gap-3">
+                  <li class="px-3 py-2.5 flex items-start gap-2.5 md:gap-3">
+                    <!-- Type icon -->
                     <div class="w-8 h-8 rounded-full bg-[var(--surface2)] flex items-center justify-center shrink-0">
                       <Icon size={14} strokeWidth={1.75} class="text-[var(--text-2)]" />
                     </div>
+
+                    <!-- Middle: label + meta -->
                     <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-1.5">
+                      <div class="flex items-center gap-1.5 min-w-0">
                         <p class="text-xs font-semibold truncate">{entryLabel(e)}</p>
-                        <span class="text-[10px] text-[var(--text-3)] flex items-center gap-0.5">
+                        <span class="text-[10px] text-[var(--text-3)] flex items-center gap-0.5 shrink-0">
                           <DIcon size={9} strokeWidth={2.5} />
-                          {destLabel(e.destination)}
+                          <span class="hidden sm:inline">{destLabel(e.destination)}</span>
                         </span>
                       </div>
                       {#if e.notes}
-                        <p class="text-[11px] text-[var(--text-3)] mt-0.5 line-clamp-2">{e.notes}</p>
+                        <p class="text-[11px] text-[var(--text-3)] mt-0.5 line-clamp-2 break-words">{e.notes}</p>
                       {/if}
                       <p class="text-[10px] text-[var(--text-3)] mt-0.5">
-                        {formatDateTime(e.effective_at ?? e.created_at)}
-                        {#if authorName(e)} · {authorName(e)}{/if}
+                        <span class="sm:hidden">{relativeDay(e.effective_at ?? e.created_at)}</span>
+                        <span class="hidden sm:inline">{formatDateTime(e.effective_at ?? e.created_at)}</span>
+                        {#if authorName(e)}<span class="hidden sm:inline"> · {authorName(e)}</span>{/if}
                       </p>
                     </div>
-                    <div class="flex flex-col items-end gap-1 shrink-0">
-                      <p class="text-sm font-semibold tabular-nums {amountClass(e.amount)}">
+
+                    <!-- Right: amount + void -->
+                    <div class="flex flex-col items-end gap-0.5 shrink-0">
+                      <p class="text-sm font-semibold tabular-nums {amountClass(e.amount)} whitespace-nowrap">
                         {amountPrefix(e.amount)}{formatCurrency(e.amount)}
                       </p>
                       {#if e.source === 'manual' && canVoid}
@@ -363,14 +398,14 @@
     <!-- Tab chooser -->
     <div class="flex gap-1 p-1 rounded-lg bg-[var(--surface2)]">
       <button
-        class="flex-1 px-2 py-1.5 text-xs font-semibold rounded-md transition {sheetTab === 'expense' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)]'}"
+        class="flex-1 px-2 py-2 text-xs font-semibold rounded-md transition {sheetTab === 'expense' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)]'}"
         onclick={() => sheetTab = 'expense'}
       >
         Expense
       </button>
       {#if canInject}
         <button
-          class="flex-1 px-2 py-1.5 text-xs font-semibold rounded-md transition {sheetTab === 'injection' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)]'}"
+          class="flex-1 px-2 py-2 text-xs font-semibold rounded-md transition {sheetTab === 'injection' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)]'}"
           onclick={() => sheetTab = 'injection'}
         >
           Injection
@@ -378,7 +413,7 @@
       {/if}
       {#if canTransfer}
         <button
-          class="flex-1 px-2 py-1.5 text-xs font-semibold rounded-md transition {sheetTab === 'transfer' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)]'}"
+          class="flex-1 px-2 py-2 text-xs font-semibold rounded-md transition {sheetTab === 'transfer' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)]'}"
           onclick={() => sheetTab = 'transfer'}
         >
           Transfer
@@ -392,7 +427,7 @@
         <div>
           <p class="input-label mb-1.5">From</p>
           <select class="input" bind:value={sheetDestination}>
-            <option value="counter">Counter (cash)</option>
+            <option value="counter">Counter</option>
             <option value="bank">Bank</option>
             <option value="other">Other</option>
           </select>
@@ -400,7 +435,7 @@
         <div>
           <p class="input-label mb-1.5">To</p>
           <select class="input" bind:value={sheetTransferTo}>
-            <option value="counter">Counter (cash)</option>
+            <option value="counter">Counter</option>
             <option value="bank">Bank</option>
             <option value="other">Other</option>
           </select>
@@ -422,11 +457,11 @@
       <p class="input-label mb-1.5">
         Amount
         {#if sheetTab === 'expense'}
-          <span class="text-[var(--text-3)] font-normal">(will be recorded as negative)</span>
+          <span class="text-[var(--text-3)] font-normal">(recorded as negative)</span>
         {:else if sheetTab === 'injection'}
-          <span class="text-[var(--text-3)] font-normal">(will be recorded as positive)</span>
+          <span class="text-[var(--text-3)] font-normal">(recorded as positive)</span>
         {:else}
-          <span class="text-[var(--text-3)] font-normal">(positive number)</span>
+          <span class="text-[var(--text-3)] font-normal">(positive)</span>
         {/if}
       </p>
       <Input

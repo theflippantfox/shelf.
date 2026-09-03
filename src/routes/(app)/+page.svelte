@@ -38,14 +38,14 @@
 
   // Quick action tiles — mobile-first nav.
   // Desktop users have the sidebar; bottom-nav (mobile) is fixed to 5 items,
-  // so this card surfaces the rest: Inventory, Restock, Analytics, Suppliers.
+  // so this card surfaces the rest: Inventory, Restock, Analytics, Cash Register.
   // "New Sale" is intentionally NOT here — it's already in the bottom-nav FAB
   // and the sidebar's "Point of Sale" entry.
   const actions = [
-    { href: '/inventory',               label: 'Inventory',         icon: 'Package',     tone: 'cobalt'  },
-    { href: '/restocking/orders/new',   label: 'Restock',           icon: 'Plus',        tone: 'teal'    },
-    { href: '/analytics',               label: 'Analytics',         icon: 'BarChart3',   tone: 'violet'  },
-    { href: '/restocking/suppliers',    label: 'Suppliers',         icon: 'Truck',       tone: 'gold'    },
+    { href: '/inventory',               label: 'Inventory',     icon: 'Package',     tone: 'cobalt'  },
+    { href: '/restocking/orders/new',   label: 'Restock',       icon: 'Plus',        tone: 'teal'    },
+    { href: '/analytics',               label: 'Analytics',     icon: 'BarChart3',   tone: 'violet'  },
+    { href: '/cash-register',           label: 'Cash Register', icon: 'Wallet',      tone: 'gold'    },
   ] as const;
 </script>
 
