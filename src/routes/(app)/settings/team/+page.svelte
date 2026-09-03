@@ -10,7 +10,8 @@
   import Select    from '$lib/components/ui/Select.svelte';
   import Toggle    from '$lib/components/ui/Toggle.svelte';
   import Avatar    from '$lib/components/ui/Avatar.svelte';
-  import { ArrowLeft, Plus, Pencil, UserMinus, Crown, ShieldCheck, UserCheck } from 'lucide-svelte';
+  import { ArrowLeft, Plus, Pencil, UserMinus, Crown, ShieldCheck, UserCheck, Mail, X } from 'lucide-svelte';
+  import { goto } from '$app/navigation';
 
   let { data } = $props();
 
@@ -23,7 +24,7 @@
   let showPerms   = $state(false);
   let editMember  = $state<any>(null);
   let saving      = $state(false);
-  let form        = $state({ first_name:'', last_name:'', email:'', password:'', role:'cashier' });
+  let form        = $state({ email: '', role: 'cashier' });
   let customPerms = $state<Record<string, boolean>>({});
 
   const roleOptions = [
@@ -32,24 +33,32 @@
     { value: 'cashier', label: 'Cashier' },
   ];
 
+  // Split members into active and pending. data.members is already
+  // ordered by status (invited < active alphabetically) so the
+  // filter preserves the server-side ordering.
+  const active = $derived((data.members ?? []).filter((m: any) => m.status === 'active'));
+  const pending = $derived((data.members ?? []).filter((m: any) => m.status === 'invited'));
+
   function openPerms(m: any) {
     editMember  = m;
     customPerms = { ...getEffectivePermissions(m.role, m.permissions ?? {}) };
     showPerms   = true;
   }
 
-  async function addMember() {
+  async function invite() {
     saving = true;
     const res = await fetch('/api/users', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     });
     if (res.ok) {
-      toasts.success('Team member added'); showAdd = false; form = { first_name:'', last_name:'', email:'', password:'', role:'cashier' };
+      toasts.success(`Invite sent to ${form.email}`);
+      showAdd = false;
+      form = { email: '', role: 'cashier' };
       await invalidateAll();
     } else {
-      const d = await res.json();
-      toasts.error(d.error ?? 'Failed to add member');
+      const d = await res.json().catch(() => ({}));
+      toasts.error(d.message || d.error || 'Failed to send invite');
     }
     saving = false;
   }
@@ -57,7 +66,6 @@
   async function savePerms() {
     saving = true;
     const defaults = getEffectivePermissions(editMember.role, {});
-    // Only store overrides that differ from role defaults
     const overrides: Record<string, boolean> = {};
     for (const p of PERMISSIONS) {
       if (customPerms[p] !== defaults[p]) overrides[p] = customPerms[p];
@@ -71,7 +79,14 @@
     saving = false;
   }
 
-  async function suspend(m: any) {
+  async function cancelInvite(m: any) {
+    if (!confirm(`Cancel the invite for ${m.user?.email}?`)) return;
+    const res = await fetch(`/api/users/${m.id}`, { method: 'DELETE' });
+    if (res.ok) { toasts.success('Invite cancelled'); await invalidateAll(); }
+    else toasts.error('Failed to cancel invite');
+  }
+
+  async function remove(m: any) {
     if (!confirm(`Remove ${m.user.first_name} from the team?`)) return;
     const res = await fetch(`/api/users/${m.id}`, { method: 'DELETE' });
     if (res.ok) { toasts.success('Member removed'); await invalidateAll(); }
@@ -96,36 +111,69 @@
 
 <svelte:head><title>Team · Shëlf</title></svelte:head>
 
-  <header class="flex items-end justify-between gap-3 mb-5">
+<header class="flex items-end justify-between gap-3 mb-5">
   <div class="min-w-0">
     <h1 class="text-[22px] md:text-[26px] font-semibold text-[var(--text)] tracking-tight mt-0.5">Team</h1>
+    <p class="text-[12px] text-[var(--text-3)] mt-0.5">Invite existing Shëlf users and manage their roles.</p>
   </div>
-  <Button size="sm" onclick={() => showAdd = true}><Plus size={14} strokeWidth={2} /> Add member</Button>
+  <Button size="sm" onclick={() => showAdd = true}><Plus size={14} strokeWidth={2} /> Invite member</Button>
 </header>
 
+<!-- Pending invites -->
+{#if pending.length > 0}
+  <div class="mb-5">
+    <h2 class="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)] mb-2">Pending invites</h2>
+    <div class="surface-card overflow-hidden">
+      {#each pending as m (m.id)}
+        <div class="flex items-center gap-3 px-4 py-3 border-b last:border-0 border-[var(--border)]">
+          <div class="w-[34px] h-[34px] rounded-full bg-[var(--primary-dim)] flex items-center justify-center text-[var(--primary)]">
+            <Mail size={14} strokeWidth={1.75} />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold truncate">{m.user?.email}</p>
+            <p class="text-[10px] text-[var(--text-3)]">
+              Invited {new Date(m.invited_at).toLocaleDateString()}{#if m.invited_by_name} by {m.invited_by_name}{/if}
+            </p>
+          </div>
+          <span class="text-[10px] font-semibold capitalize px-2 py-0.5 rounded-full"
+                style="background:color-mix(in srgb, {roleColors[m.role]} 15%, transparent); color:{roleColors[m.role]}">
+            {m.role}
+          </span>
+          <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]" onclick={() => cancelInvite(m)} title="Cancel invite" aria-label={`Cancel invite for ${m.user?.email}`}>
+            <X size={13} strokeWidth={1.75} />
+          </button>
+        </div>
+      {/each}
+    </div>
+  </div>
+{/if}
+
+<!-- Active members -->
+<div>
+  <h2 class="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)] mb-2">Active members</h2>
   <div class="surface-card overflow-hidden">
-    {#each data.members as m}
-      {@const Icon = roleIcon[(m as any).role] ?? UserCheck}
-      {@const isMe = (m as any).user?.id === auth.user?.id}
-      <div class="flex items-center gap-3 px-4 py-3 border-b last:border-0 border-[var(--border)] {(m as any).status === 'suspended' ? 'opacity-40' : ''}">
-        <Avatar name={`${(m as any).user?.first_name} ${(m as any).user?.last_name}`} size={34} />
+    {#each active as m (m.id)}
+      {@const Icon = roleIcon[m.role] ?? UserCheck}
+      {@const isMe = m.user?.id === auth.user?.id}
+      <div class="flex items-center gap-3 px-4 py-3 border-b last:border-0 border-[var(--border)] {m.status === 'suspended' ? 'opacity-40' : ''}">
+        <Avatar name={`${m.user?.first_name} ${m.user?.last_name}`} size={34} />
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
-            <p class="text-xs font-semibold truncate">{(m as any).user?.first_name} {(m as any).user?.last_name}</p>
+            <p class="text-xs font-semibold truncate">{m.user?.first_name} {m.user?.last_name}</p>
             {#if isMe}<span class="badge badge-neutral text-[9px] px-1.5 py-0">You</span>{/if}
           </div>
-          <p class="text-[10px] text-[var(--text-3)]">{(m as any).user?.email}</p>
+          <p class="text-[10px] text-[var(--text-3)]">{m.user?.email}</p>
         </div>
-        <div class="flex items-center gap-1" style="color:{roleColors[(m as any).role]}">
+        <div class="flex items-center gap-1" style="color:{roleColors[m.role]}">
           <Icon size={13} strokeWidth={1.75} />
-          <span class="text-[10px] font-semibold capitalize">{(m as any).role}</span>
+          <span class="text-[10px] font-semibold capitalize">{m.role}</span>
         </div>
         {#if !isMe}
           <div class="flex gap-1">
-            <button class="btn btn-ghost btn-icon btn-sm" onclick={() => openPerms(m)} title="Edit permissions">
+            <button class="btn btn-ghost btn-icon btn-sm" onclick={() => openPerms(m)} title="Edit permissions" aria-label={`Edit permissions for ${m.user?.first_name}`}>
               <Pencil size={13} strokeWidth={1.75} />
             </button>
-            <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]" onclick={() => suspend(m)} title="Remove">
+            <button class="btn btn-ghost btn-icon btn-sm text-[var(--crimson)]" onclick={() => remove(m)} title="Remove" aria-label={`Remove ${m.user?.first_name}`}>
               <UserMinus size={13} strokeWidth={1.75} />
             </button>
           </div>
@@ -133,22 +181,19 @@
       </div>
     {/each}
   </div>
-<!-- Add member modal -->
-<Sheet bind:open={showAdd} title="Add team member" maxWidth="max-w-sm">
-  <form onsubmit={(e) => { e.preventDefault(); addMember(); }} class="flex flex-col gap-3">
-    <div class="grid grid-cols-2 gap-2">
-      <Input label="First name" bind:value={form.first_name} required />
-      <Input label="Last name"  bind:value={form.last_name} />
-    </div>
-    <Input label="Email"    type="email"    bind:value={form.email}    required />
-    <Input label="Password" type="password" bind:value={form.password} required
-           hint="They can change it after first login." />
+</div>
+
+<!-- Invite modal -->
+<Sheet bind:open={showAdd} title="Invite team member" maxWidth="max-w-sm">
+  <form onsubmit={(e) => { e.preventDefault(); invite(); }} class="flex flex-col gap-3">
+    <Input label="Email" type="email" bind:value={form.email} required
+           hint="They must already have a Shëlf account. If not, ask them to sign up first." />
     <Select label="Role" bind:value={form.role} options={roleOptions} />
   </form>
   {#snippet footer()}
     <div class="flex justify-end gap-2">
       <Button variant="secondary" onclick={() => showAdd = false}>Cancel</Button>
-      <Button loading={saving} onclick={addMember}>Add member</Button>
+      <Button loading={saving} onclick={invite}>Send invite</Button>
     </div>
   {/snippet}
 </Sheet>

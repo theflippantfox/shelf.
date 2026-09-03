@@ -583,6 +583,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          invited_at: string | null
+          invited_by: string | null
           permissions: Json | null
           role: string
           shop_id: string
@@ -592,6 +594,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           permissions?: Json | null
           role: string
           shop_id: string
@@ -601,6 +605,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           permissions?: Json | null
           role?: string
           shop_id?: string
@@ -608,6 +614,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "shop_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "shop_members_shop_id_fkey"
             columns: ["shop_id"]
@@ -982,6 +995,12 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      find_user_id_by_email: { Args: { needle: string }; Returns: string }
+      get_user_emails: {
+        Args: { ids: string[] }
+        Returns: { id: string; email: string }[]
+        SetofOptions: { from: "*"; to: "auth.users"; isOneToOne: false; isSetofReturn: true }
       }
       is_shop_member: { Args: { shop: string }; Returns: boolean }
       is_shop_owner: { Args: { shop: string }; Returns: boolean }

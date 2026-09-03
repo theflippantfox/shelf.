@@ -103,13 +103,18 @@ export const appearanceSchema = z.object({
   palette_id:    z.string().trim().max(64).optional(),
 });
 
-const inviteSchema = z.object({
-  first_name: nonEmptyString(50),
-  email:      emailSchema,
-  password:   passwordSchema,
-  role:       z.enum(['manager', 'cashier']),
+// Note: the team-invite schema is now minimal — invitees are existing
+// Shëlf users, so no password or first_name. Only email + role.
+//   POST /api/users     → inviteSchema
+//   (onboarding/team    → page just lists existing pending invites,
+//                         no schema needed)
+export const inviteSchema = z.object({
+  email: emailSchema,
+  role:  z.enum(['owner', 'manager', 'cashier']),
 });
 
+// Kept for backwards-compat with any in-flight /api/onboarding/team
+// payloads from older clients. New code uses inviteSchema directly.
 export const teamSchema = z.object({
   invites: z.array(inviteSchema).default([]),
 });

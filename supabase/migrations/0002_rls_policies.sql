@@ -72,6 +72,27 @@ alter table public.product_batches        enable row level security;
 create policy profiles_self_select on public.profiles
   for select using (id = auth.uid());
 
+-- Profiles of co-members of any shop I'm also a member of are visible
+-- to me — needed for the team page to show member names + avatars next
+-- to the email we already know. Uses is_shop_member() (which already
+-- treats 'invited' as a member status) so that pending invitees can
+-- see who else is on the team / who invited them.
+create policy profiles_coselect on public.profiles
+  for select using (
+    exists (
+      select 1
+      from public.shop_members me
+      where me.user_id = auth.uid()
+        and me.status in ('active', 'invited')
+        and exists (
+          select 1
+          from public.shop_members them
+          where them.user_id = profiles.id
+            and them.shop_id = me.shop_id
+        )
+    )
+  );
+
 create policy profiles_self_update on public.profiles
   for update using (id = auth.uid()) with check (id = auth.uid());
 

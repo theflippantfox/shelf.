@@ -47,6 +47,16 @@
         products = d.products ?? d ?? [];
       }
     } catch { /* offline or auth not yet ready — fine */ }
+
+    // Populate the shop switcher. SSR has nothing here because the
+    // endpoint requires the user to be signed in.
+    try {
+      const res = await fetch('/api/auth/my-shops');
+      if (res.ok) {
+        const shops = await res.json();
+        currentShop.setAllShops(shops);
+      }
+    } catch { /* offline — header switcher will just show current */ }
   });
 </script>
 

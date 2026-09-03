@@ -1,7 +1,8 @@
 <script lang="ts">
   import { page } from "$app/stores";
-  import { goto } from "$app/navigation";
+  import { goto, invalidateAll } from "$app/navigation";
   import { auth } from "$lib/stores/auth.svelte";
+  import { currentShop } from "$lib/stores/shop.svelte";
   import { theme } from "$lib/stores/theme.svelte";
   import { inventory } from "$lib/stores/inventory.svelte";
   import Avatar from "$lib/components/ui/Avatar.svelte";
@@ -14,11 +15,18 @@
     LogOut,
     ChevronDown,
     Search,
+    Mail,
+    Check,
+    Store,
+    Plus,
   } from "lucide-svelte";
 
   let { onOpenCommandBar }: { onOpenCommandBar?: () => void } = $props();
 
   const alertCount = $derived(inventory.alertCount);
+  const inviteCount = $derived(currentShop.pendingInviteCount);
+  const activeShops = $derived(currentShop.activeShops);
+  const showSwitcher = $derived(activeShops.length > 1);
 
   // (label, href) per top-level section — used to build the breadcrumb
   // on the second-level pages (e.g. /settings/shop → "Settings / Shop details").
@@ -53,6 +61,7 @@
   });
 
   let dropdownOpen = $state(false);
+  let switchingId = $state<string | null>(null);
 
   function toggleTheme() {
     theme.setMode(theme.isDark ? "light" : "dark");
@@ -62,6 +71,23 @@
     dropdownOpen = false;
     await fetch("/api/auth", { method: "DELETE" });
     goto("/login");
+  }
+
+  async function switchShop(shopId: string) {
+    if (shopId === currentShop.data?.id) {
+      dropdownOpen = false;
+      return;
+    }
+    switchingId = shopId;
+    try {
+      await currentShop.switchTo(shopId);
+      dropdownOpen = false;
+      await invalidateAll();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      switchingId = null;
+    }
   }
 
   // Close dropdown when clicking outside
@@ -139,6 +165,21 @@
       </a>
     {/if}
 
+    <!-- Pending team invites -->
+    {#if inviteCount > 0}
+      <a
+        href="/invites"
+        class="btn btn-ghost btn-icon btn-sm relative"
+        aria-label="{inviteCount} pending team invite{inviteCount === 1 ? '' : 's'}"
+        title="{inviteCount} pending invite{inviteCount === 1 ? '' : 's'}"
+      >
+        <Mail size={16} strokeWidth={1.75} />
+        <span
+          class="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-[var(--primary)] text-[var(--primary-fg)] text-[9px] font-bold flex items-center justify-center"
+        >{inviteCount}</span>
+      </a>
+    {/if}
+
     <!-- Profile dropdown -->
     <div class="relative ml-1" data-dropdown>
       <button
@@ -186,7 +227,55 @@
               />
               Settings
             </a>
+            <a
+              href="/invites"
+              class="flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--surface2)] transition-colors"
+              onclick={() => (dropdownOpen = false)}
+            >
+              <Mail
+                size={13}
+                strokeWidth={1.75}
+                class="text-[var(--text-3)]"
+              />
+              Invites
+              {#if inviteCount > 0}
+                <span class="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--primary)] text-[var(--primary-fg)]">{inviteCount}</span>
+              {/if}
+            </a>
           </div>
+
+          <!-- Shop switcher (only when user has 2+ active shops) -->
+          {#if showSwitcher}
+            <div class="border-t border-[var(--border)] py-1">
+              <p class="px-3 pt-1.5 pb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Your shops</p>
+              {#each activeShops as s (s.id)}
+                <button
+                  class="w-full flex items-center gap-2.5 px-3 py-2 text-xs hover:bg-[var(--surface2)] transition-colors disabled:opacity-50"
+                  onclick={() => switchShop(s.id)}
+                  disabled={switchingId !== null}
+                >
+                  <Store
+                    size={13}
+                    strokeWidth={1.75}
+                    class="text-[var(--text-3)] flex-shrink-0"
+                  />
+                  <span class="flex-1 text-left truncate">{s.name}</span>
+                  <span class="text-[9px] uppercase tracking-wide font-semibold text-[var(--text-3)]">{s.role}</span>
+                  {#if currentShop.data?.id === s.id}
+                    <Check size={12} strokeWidth={2.5} class="text-[var(--teal)] flex-shrink-0" />
+                  {/if}
+                </button>
+              {/each}
+              <a
+                href="/invites"
+                class="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[var(--text-3)] hover:bg-[var(--surface2)] hover:text-[var(--text-2)] transition-colors"
+                onclick={() => (dropdownOpen = false)}
+              >
+                <Plus size={13} strokeWidth={1.75} />
+                Join another shop
+              </a>
+            </div>
+          {/if}
 
           <div class="border-t border-[var(--border)] py-1">
             <button
