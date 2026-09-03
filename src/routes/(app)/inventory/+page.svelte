@@ -547,8 +547,18 @@
       <Input label="SKU"  bind:value={form.sku}  required />
       <Select label="Unit" bind:value={form.unit} options={unitOptions} />
     </div>
+    <div class="grid grid-cols-2 gap-3">
+      <Input label="Selling price" type="number" bind:value={form.price}      hint="e.g. 25.00" required />
+      <Input label="Cost price"    type="number" bind:value={form.cost_price} hint="optional" />
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <Input label="Qty in stock" type="number" bind:value={form.qty} />
+    </div>
 
-    <!-- ─── Track barcode + low-stock toggles (side by side) ── -->
+    <!-- ─── Track barcode + low-stock toggles (side by side) ──
+         Placed under the fields they control. Each input appears
+         only when its toggle is ON. When both are ON the inputs
+         sit side by side; when only one is ON it fills its column. -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
         <div class="flex-1 min-w-0">
@@ -570,10 +580,6 @@
         <Toggle bind:checked={form.track_stock} />
       </div>
     </div>
-
-    <!-- Conditional fields driven by the toggles above. Each input
-         appears only when its toggle is ON. When both are ON they
-         sit side by side; when only one is ON it fills its column. -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {#if form.track_barcode}
         <Input label="Barcode" bind:value={form.barcode} hint="Optional — scan with the in-app camera to add to cart" />
@@ -581,14 +587,6 @@
       {#if form.track_stock}
         <Input label="Low-stock alert at" type="number" bind:value={form.low_stock_threshold} hint="e.g. 5" />
       {/if}
-    </div>
-
-    <div class="grid grid-cols-2 gap-3">
-      <Input label="Selling price" type="number" bind:value={form.price}      hint="e.g. 25.00" required />
-      <Input label="Cost price"    type="number" bind:value={form.cost_price} hint="optional" />
-    </div>
-    <div class="grid grid-cols-2 gap-3">
-      <Input label="Qty in stock" type="number" bind:value={form.qty} />
     </div>
     <Select label="Category" bind:value={form.category}
       options={[{ value: '', label: 'No category' },
