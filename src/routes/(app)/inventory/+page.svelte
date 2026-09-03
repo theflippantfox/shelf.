@@ -556,27 +556,27 @@
     </div>
 
     <!-- ─── Track barcode + low-stock toggles (side by side) ──
-         Placed under the fields they control. Each input appears
-         only when its toggle is ON. When both are ON the inputs
-         sit side by side; when only one is ON it fills its column. -->
+         The description for each toggle is a `?` tooltip so the
+         toggle rows stay compact and on the same line. -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
-        <div class="flex-1 min-w-0">
-          <p class="text-xs font-semibold text-[var(--text)]">Barcode</p>
-          <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
-            Track a barcode for this product. Disable for items sold loose or in bulk.
-          </p>
-        </div>
+      <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
+        <p class="flex-1 text-xs font-semibold text-[var(--text)]">Barcode</p>
+        <button
+          type="button"
+          class="text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
+          aria-label="What does tracking a barcode do?"
+          title="Track a barcode for this product. Disable for items sold loose or in bulk."
+        >?</button>
         <Toggle bind:checked={form.track_barcode} />
       </div>
-      <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
-        <div class="flex-1 min-w-0">
-          <p class="text-xs font-semibold text-[var(--text)]">Low-stock alerts</p>
-          <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
-            Show a warning when quantity drops to or below the alert level.
-            Disable for items you don't count, like samples or custom orders.
-          </p>
-        </div>
+      <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
+        <p class="flex-1 text-xs font-semibold text-[var(--text)]">Low-stock alerts</p>
+        <button
+          type="button"
+          class="text-[var(--text-3)] hover:text-[var(--text-2)] transition-colors"
+          aria-label="What do low-stock alerts do?"
+          title="Show a warning when quantity drops to or below the alert level. Disable for items you don't count, like samples or custom orders."
+        >?</button>
         <Toggle bind:checked={form.track_stock} />
       </div>
     </div>
