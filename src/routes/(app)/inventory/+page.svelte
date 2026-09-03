@@ -548,19 +548,40 @@
       <Select label="Unit" bind:value={form.unit} options={unitOptions} />
     </div>
 
-    <!-- ─── Track barcode toggle ────────────────────────────── -->
-    <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
-      <div class="flex-1 min-w-0">
-        <p class="text-xs font-semibold text-[var(--text)]">Barcode</p>
-        <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
-          Track a barcode for this product. Disable for items sold loose or in bulk.
-        </p>
+    <!-- ─── Track barcode + low-stock toggles (side by side) ── -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-semibold text-[var(--text)]">Barcode</p>
+          <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
+            Track a barcode for this product. Disable for items sold loose or in bulk.
+          </p>
+        </div>
+        <Toggle bind:checked={form.track_barcode} />
       </div>
-      <Toggle bind:checked={form.track_barcode} />
+      <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-semibold text-[var(--text)]">Low-stock alerts</p>
+          <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
+            Show a warning when quantity drops to or below the alert level.
+            Disable for items you don't count, like samples or custom orders.
+          </p>
+        </div>
+        <Toggle bind:checked={form.track_stock} />
+      </div>
     </div>
-    {#if form.track_barcode}
-      <Input label="Barcode" bind:value={form.barcode} hint="Optional — scan with the in-app camera to add to cart" />
-    {/if}
+
+    <!-- Conditional fields driven by the toggles above. Each input
+         appears only when its toggle is ON. When both are ON they
+         sit side by side; when only one is ON it fills its column. -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {#if form.track_barcode}
+        <Input label="Barcode" bind:value={form.barcode} hint="Optional — scan with the in-app camera to add to cart" />
+      {/if}
+      {#if form.track_stock}
+        <Input label="Low-stock alert at" type="number" bind:value={form.low_stock_threshold} hint="e.g. 5" />
+      {/if}
+    </div>
 
     <div class="grid grid-cols-2 gap-3">
       <Input label="Selling price" type="number" bind:value={form.price}      hint="e.g. 25.00" required />
@@ -568,23 +589,6 @@
     </div>
     <div class="grid grid-cols-2 gap-3">
       <Input label="Qty in stock" type="number" bind:value={form.qty} />
-      {#if form.track_stock}
-        <Input label="Low-stock alert at" type="number" bind:value={form.low_stock_threshold} hint="e.g. 5" />
-      {/if}
-    </div>
-
-    <!-- ─── Track stock toggle (only meaningful when the alert
-         field is hidden because the column is OFF). The toggle
-         sits in the same row layout so it doesn't shift the form. -->
-    <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
-      <div class="flex-1 min-w-0">
-        <p class="text-xs font-semibold text-[var(--text)]">Low-stock alerts</p>
-        <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
-          Show a warning when quantity drops to or below the alert level.
-          Disable for items you don't count, like samples or custom orders.
-        </p>
-      </div>
-      <Toggle bind:checked={form.track_stock} />
     </div>
     <Select label="Category" bind:value={form.category}
       options={[{ value: '', label: 'No category' },
