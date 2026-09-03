@@ -561,30 +561,24 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
         <p class="flex-1 text-xs font-semibold text-[var(--text)]">Barcode</p>
-        <button
-          type="button"
+        <span
           class="inline-flex items-center justify-center w-4 h-4 rounded-full
                  text-[9px] font-semibold leading-none text-[var(--text-3)]
-                 ring-1 ring-inset ring-[var(--border)] hover:ring-[var(--text-3)]
-                 hover:text-[var(--text-2)] hover:bg-[var(--surface2)]
-                 transition-colors"
+                 ring-1 ring-inset ring-[var(--border)]"
           aria-label="What does tracking a barcode do?"
           title="Track a barcode for this product. Disable for items sold loose or in bulk."
-        >?</button>
+        >?</span>
         <Toggle bind:checked={form.track_barcode} />
       </div>
       <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
         <p class="flex-1 text-xs font-semibold text-[var(--text)]">Low-stock alerts</p>
-        <button
-          type="button"
+        <span
           class="inline-flex items-center justify-center w-4 h-4 rounded-full
                  text-[9px] font-semibold leading-none text-[var(--text-3)]
-                 ring-1 ring-inset ring-[var(--border)] hover:ring-[var(--text-3)]
-                 hover:text-[var(--text-2)] hover:bg-[var(--surface2)]
-                 transition-colors"
+                 ring-1 ring-inset ring-[var(--border)]"
           aria-label="What do low-stock alerts do?"
           title="Show a warning when quantity drops to or below the alert level. Disable for items you don't count, like samples or custom orders."
-        >?</button>
+        >?</span>
         <Toggle bind:checked={form.track_stock} />
       </div>
     </div>
