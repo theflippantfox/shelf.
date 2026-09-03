@@ -17,7 +17,7 @@ export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').Req
   const supabase = userClientFromCtx({ cookies } as any);
   let q = supabase
     .from('products')
-    .select('id, name, sku, description, price, cost_price, qty, low_stock_threshold, barcode, image_url, archived_at, category_id, category:categories(id, name, color, icon)')
+    .select('id, name, sku, description, price, cost_price, qty, low_stock_threshold, track_stock, track_barcode, barcode, image_url, archived_at, category_id, category:categories(id, name, color, icon)')
     .eq('shop_id', shopId)
     .is('archived_at', null)
     .order('name');
@@ -31,8 +31,10 @@ export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').Req
   let result = products ?? [];
   if (alert === 'true') {
     const threshold = locals.currentShop.low_stock_threshold ?? 10;
+    // Only flag low-stock when the product is actually tracking stock.
+    // track_stock=false opts the product out of low-stock alerts entirely.
     result = result.filter((p: any) =>
-      p.qty === 0 || p.qty <= (p.low_stock_threshold ?? threshold)
+      p.track_stock !== false && (p.qty === 0 || p.qty <= (p.low_stock_threshold ?? threshold))
     );
   }
 
@@ -68,7 +70,11 @@ export async function POST({ cookies, request, locals  }: import('@sveltejs/kit'
     category_id:         clean(body.category_id ?? body.category),
     description:         clean(body.description),
     low_stock_threshold: body.low_stock_threshold === '' ? 5 : (body.low_stock_threshold ?? 5),
-    barcode:             clean(body.barcode),
+    // When track_barcode is false, ignore the barcode field entirely
+    // (clear it on the DB side too so old barcodes don't stick around).
+    barcode:             body.track_barcode === false ? null : clean(body.barcode),
+    track_stock:         body.track_stock !== false,    // default true
+    track_barcode:       body.track_barcode !== false,  // default true
   };
   const { data, error } = await supabase
     .from('products')

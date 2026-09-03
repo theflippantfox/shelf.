@@ -204,6 +204,8 @@ export type Database = {
           reorder_point: number | null
           shop_id: string
           sku: string
+          track_barcode: boolean
+          track_stock: boolean
           unit: string
           updated_at: string
         }
@@ -225,6 +227,8 @@ export type Database = {
           reorder_point?: number | null
           shop_id: string
           sku: string
+          track_barcode?: boolean
+          track_stock?: boolean
           unit?: string
           updated_at?: string
         }
@@ -246,6 +250,8 @@ export type Database = {
           reorder_point?: number | null
           shop_id?: string
           sku?: string
+          track_barcode?: boolean
+          track_stock?: boolean
           unit?: string
           updated_at?: string
         }

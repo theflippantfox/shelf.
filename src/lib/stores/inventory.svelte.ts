@@ -4,6 +4,12 @@ import { appConfig } from '$lib/config/app';
 export type StockStatus = 'ok' | 'low' | 'out';
 
 export function getStockStatus(product: any): StockStatus {
+  // Products that have opted out of low-stock tracking are always 'ok'
+  // for alert purposes. qty=0 still returns 'out' so the user can see
+  // they're empty even if they don't count stock.
+  if (product.track_stock === false) {
+    return product.qty === 0 ? 'out' : 'ok';
+  }
   if (product.qty === 0) return 'out';
   if (product.qty <= (product.low_stock_threshold ?? appConfig.inventory.defaultLowStockThreshold)) return 'low';
   return 'ok';

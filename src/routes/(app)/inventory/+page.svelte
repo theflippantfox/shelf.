@@ -12,6 +12,7 @@
   import ConfirmModal from '$lib/components/ui/ConfirmModal.svelte';
   import Input       from '$lib/components/ui/Input.svelte';
   import Select      from '$lib/components/ui/Select.svelte';
+  import Toggle      from '$lib/components/ui/Toggle.svelte';
   import EmptyState  from '$lib/components/ui/EmptyState.svelte';
   import KpiCard     from '$lib/components/ui/KpiCard.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
@@ -75,12 +76,26 @@
 
   let form = $state({
     name: '', sku: '', price: '', cost_price: '',
-    qty: '', unit: 'piece', category: '', description: '', low_stock_threshold: '',
+    qty: '', unit: 'piece', category: '', description: '',
+    // Toggles default ON for new products. When OFF the matching field
+    // is hidden in the form and ignored on submit. Toggling OFF and
+    // back ON keeps the value the user already typed (so they can
+    // re-enable tracking without re-entering the barcode/threshold).
+    track_stock: true,
+    track_barcode: true,
+    low_stock_threshold: '',
     barcode: '',
   });
 
   /* ── Derived helpers ────────────────────────────────────── */
-  const thresholdOf = (p: any) => p.low_stock_threshold ?? data.threshold;
+  /**
+   * Effective threshold for a product. If the product has opted out
+   * of low-stock tracking (track_stock=false), return Infinity so the
+   * comparisons in stockStats/getStockBadge always say "in stock" and
+   * the product is excluded from low-stock KPI counts.
+   */
+  const thresholdOf = (p: any) =>
+    p.track_stock === false ? Infinity : (p.low_stock_threshold ?? data.threshold);
 
   /**
    * NOTE: `$derived` evaluates an EXPRESSION. The original code wrapped the
@@ -146,6 +161,14 @@
   }
 
   function getStockBadge(p: any) {
+    // If the product has opted out of low-stock tracking, never flag it.
+    if (p.track_stock === false) {
+      // If it's actually out of stock, that's still useful to surface
+      // (you might want to restock even uncounted items). Otherwise
+      // we just say "In stock" — no low-stock warning.
+      if (p.qty === 0) return { label: 'Out of stock', cls: 'badge-crimson' };
+      return { label: 'In stock', cls: 'badge-teal' };
+    }
     if (p.qty === 0) return { label: 'Out of stock', cls: 'badge-crimson' };
     if (p.qty <= thresholdOf(p)) return { label: `Low — ${p.qty}`, cls: 'badge-gold' };
     return { label: 'In stock', cls: 'badge-teal' };
@@ -157,6 +180,11 @@
   }
 
   function stockBarColor(p: any): string {
+    // Uncounted items use a neutral teal bar regardless of qty
+    // (except qty=0, which is still worth highlighting).
+    if (p.track_stock === false) {
+      return p.qty === 0 ? 'var(--crimson)' : 'var(--teal)';
+    }
     if (p.qty === 0) return 'var(--crimson)';
     if (p.qty <= thresholdOf(p)) return 'var(--gold)';
     return 'var(--teal)';
@@ -168,7 +196,12 @@
   }
 
   function openAdd() {
-    form = { name: '', sku: '', price: '', cost_price: '', qty: '0', unit: 'piece', category: '', description: '', low_stock_threshold: '', barcode: '' };
+    form = {
+      name: '', sku: '', price: '', cost_price: '',
+      qty: '0', unit: 'piece', category: '', description: '',
+      track_stock: true, track_barcode: true,
+      low_stock_threshold: '', barcode: '',
+    };
     editTarget = null; showAdd = true;
   }
 
@@ -181,6 +214,12 @@
       unit:       p.unit,
       category:   p.category?.id ?? p.category ?? '',
       description: p.description ?? '',
+      // Derive the toggles from the row. track_* columns are NOT NULL
+      // with default true, so this is always defined for real rows.
+      // For PATCH bodies from old clients that don't send these, the
+      // server defaults to true.
+      track_stock:   p.track_stock   !== false,
+      track_barcode: p.track_barcode !== false,
       low_stock_threshold: p.low_stock_threshold ? String(p.low_stock_threshold) : '',
       barcode:    p.barcode ?? '',
     };
@@ -203,7 +242,12 @@
       unit:                form.unit,
       category:            form.category || null,
       description:         form.description || null,
-      low_stock_threshold: form.low_stock_threshold ? parseInt(form.low_stock_threshold) : null,
+      // Toggles drive whether the field is even sent. The server
+      // clears the matching column when the toggle goes OFF.
+      track_stock:         !!form.track_stock,
+      track_barcode:       !!form.track_barcode,
+      low_stock_threshold: form.track_stock && form.low_stock_threshold
+                             ? parseInt(form.low_stock_threshold) : null,
       // Empty string → null so the DB stores no barcode, not an
       // empty string.  The unique index ignores nulls.
       barcode:             form.barcode.trim() || null,
@@ -503,14 +547,44 @@
       <Input label="SKU"  bind:value={form.sku}  required />
       <Select label="Unit" bind:value={form.unit} options={unitOptions} />
     </div>
-    <Input label="Barcode" bind:value={form.barcode} hint="Optional — scan with the in-app camera to add to cart" />
+
+    <!-- ─── Track barcode toggle ────────────────────────────── -->
+    <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-semibold text-[var(--text)]">Barcode</p>
+        <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
+          Track a barcode for this product. Disable for items sold loose or in bulk.
+        </p>
+      </div>
+      <Toggle bind:checked={form.track_barcode} />
+    </div>
+    {#if form.track_barcode}
+      <Input label="Barcode" bind:value={form.barcode} hint="Optional — scan with the in-app camera to add to cart" />
+    {/if}
+
     <div class="grid grid-cols-2 gap-3">
       <Input label="Selling price" type="number" bind:value={form.price}      hint="e.g. 25.00" required />
       <Input label="Cost price"    type="number" bind:value={form.cost_price} hint="optional" />
     </div>
     <div class="grid grid-cols-2 gap-3">
-      <Input label="Qty in stock"         type="number" bind:value={form.qty} />
-      <Input label="Low-stock alert at"   type="number" bind:value={form.low_stock_threshold} hint="e.g. 5" />
+      <Input label="Qty in stock" type="number" bind:value={form.qty} />
+      {#if form.track_stock}
+        <Input label="Low-stock alert at" type="number" bind:value={form.low_stock_threshold} hint="e.g. 5" />
+      {/if}
+    </div>
+
+    <!-- ─── Track stock toggle (only meaningful when the alert
+         field is hidden because the column is OFF). The toggle
+         sits in the same row layout so it doesn't shift the form. -->
+    <div class="flex items-start gap-3 px-3 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface2)]/40">
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-semibold text-[var(--text)]">Low-stock alerts</p>
+        <p class="text-[10.5px] text-[var(--text-3)] mt-0.5">
+          Show a warning when quantity drops to or below the alert level.
+          Disable for items you don't count, like samples or custom orders.
+        </p>
+      </div>
+      <Toggle bind:checked={form.track_stock} />
     </div>
     <Select label="Category" bind:value={form.category}
       options={[{ value: '', label: 'No category' },

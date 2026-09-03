@@ -37,6 +37,14 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
   if ('unit'                in body) allowed.unit = body.unit;
   if ('description'         in body) allowed.description = clean(body.description);
   if ('low_stock_threshold' in body) allowed.low_stock_threshold = body.low_stock_threshold === '' ? 5 : body.low_stock_threshold;
+  if ('track_stock'         in body) allowed.track_stock = body.track_stock !== false;
+  if ('track_barcode'       in body) {
+    allowed.track_barcode = body.track_barcode !== false;
+    // If the toggle was turned OFF, clear any existing barcode so the
+    // DB state matches the UI. Turning it back ON keeps whatever was
+    // there (which is the empty string from the form, → null).
+    if (body.track_barcode === false) allowed.barcode = null;
+  }
   if ('barcode'             in body) allowed.barcode = clean(body.barcode);
   if ('category_id'         in body || 'category' in body) {
     allowed.category_id = clean(body.category_id ?? body.category);
