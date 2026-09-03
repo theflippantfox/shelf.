@@ -963,6 +963,7 @@ export type Database = {
     Functions: {
       create_sale: {
         Args: {
+          p_created_at?: string
           p_customer_id: string
           p_discount_amount: number
           p_discount_type: string
@@ -1010,6 +1011,7 @@ export type Database = {
       }
       is_shop_member: { Args: { shop: string }; Returns: boolean }
       is_shop_owner: { Args: { shop: string }; Returns: boolean }
+      set_sale_timestamp: { Args: { p_sale_id: string; p_created_at: string }; Returns: undefined }
       receive_purchase_order: {
         Args: {
           p_items: Json

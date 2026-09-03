@@ -20,6 +20,11 @@ class CartStore {
   #discountValue  = $state(0);  // major units (rupees) for 'amount', 0–100 for 'percent'
   #paymentMethod  = $state<PaymentMethod>('cash');
   #notes          = $state('');
+  // Optional override for the sale's created_at timestamp. ISO string or null.
+  // When null, the server uses now(). When set, the server writes this exact
+  // timestamp to sales.created_at (and stock_log.created_at for the items
+  // added by this sale, so analytics reflects the actual sale time).
+  #createdAt      = $state<string | null>(null);
 
   get items()         { return this.#items; }
   get customerId()    { return this.#customerId; }
@@ -28,6 +33,7 @@ class CartStore {
   get discountValue() { return this.#discountValue; }
   get paymentMethod() { return this.#paymentMethod; }
   get notes()         { return this.#notes; }
+  get createdAt()     { return this.#createdAt; }
   get count()         { return this.#items.reduce((s, i) => s + i.qty, 0); }
   get isEmpty()       { return this.#items.length === 0; }
 
@@ -89,6 +95,21 @@ class CartStore {
 
   setNotes(notes: string) { this.#notes = notes; }
 
+  /**
+   * Override the sale's created_at timestamp. Pass null to use now()
+   * (the default). The server writes this exact timestamp to
+   * sales.created_at.
+   *
+   * Format: any string parseable by `new Date()` — usually a local
+   * "YYYY-MM-DDTHH:MM" from the <input type="datetime-local"> picker.
+   * We convert to an ISO string so the server can parse it as timestamptz.
+   */
+  setCreatedAt(iso: string | null) {
+    if (!iso) { this.#createdAt = null; return; }
+    const d = new Date(iso);
+    this.#createdAt = isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
   clear() {
     this.#items         = [];
     this.#customerId    = null;
@@ -97,9 +118,10 @@ class CartStore {
     this.#discountValue = 0;
     this.#paymentMethod = 'cash';
     this.#notes         = '';
+    this.#createdAt     = null;
   }
 
-  loadFromSale(sale: { customer: string | null; discount_type: string; discount_value: number; payment_method: string; notes: string | null }, items: { product_id: string; product_name: string; product_sku: string; unit_price: number; qty: number }[]) {
+  loadFromSale(sale: { customer: string | null; discount_type: string; discount_value: number; payment_method: string; notes: string | null; created_at?: string }, items: { product_id: string; product_name: string; product_sku: string; unit_price: number; qty: number }[]) {
     this.#customerId    = sale.customer ?? null;
     this.#customerName  = ''; // populated by caller if available
     this.#discountType  = sale.discount_type as DiscountType;
@@ -107,6 +129,9 @@ class CartStore {
     this.#discountValue = sale.discount_value;
     this.#paymentMethod = sale.payment_method as PaymentMethod;
     this.#notes         = sale.notes ?? '';
+    // Pre-populate the timestamp override with the sale's existing created_at
+    // so the user can see/edit it from the checkout sheet.
+    this.#createdAt     = sale.created_at ?? null;
     this.#items         = items.map(i => ({
       productId: i.product_id,
       name:      i.product_name,

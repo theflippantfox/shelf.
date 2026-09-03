@@ -51,6 +51,7 @@ export async function POST({ cookies, request, locals  }: import('@sveltejs/kit'
     items, customer_id,
     discount_type, discount_value, discount_amount,
     subtotal, total, tax_amount, payment_method, notes,
+    created_at,
   } = await request.json();
 
   if (!items?.length) return json({ error: 'Cart is empty' }, { status: 400 });
@@ -78,6 +79,9 @@ export async function POST({ cookies, request, locals  }: import('@sveltejs/kit'
       qty: i.qty,
       unit_price: i.unitPrice,
     })),
+    // Optional timestamp override (backdated or corrected sale time).
+    // When null, the function uses now(). Server validates + applies.
+    p_created_at: created_at ?? null,
   });
 
   if (error) return json({ error: error.message }, { status: 400 });

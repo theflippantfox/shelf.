@@ -107,6 +107,21 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
     notes: body.notes ?? (sale as any).notes,
   }).eq('id', params.id);
 
+  // Optional: update the sale's created_at. Done via RPC because we
+  // also need to bump the matching stock_log rows so analytics stay
+  // consistent. The RPC is no-op if the timestamp didn't change.
+  if (body.created_at && body.created_at !== (sale as any).created_at) {
+    const { error: tsErr } = await supabase.rpc('set_sale_timestamp', {
+      p_sale_id: params.id,
+      p_created_at: body.created_at,
+    });
+    if (tsErr) {
+      // Don't fail the whole edit — the timestamp is a non-critical
+      // override. The sale edit still succeeded.
+      console.warn('set_sale_timestamp failed:', tsErr.message);
+    }
+  }
+
   // Sync line items
   const { data: currentItems = [] } = await supabase
     .from('sale_items')

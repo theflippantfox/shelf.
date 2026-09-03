@@ -130,6 +130,20 @@
       : Math.round(cart.total * rate);
   });
 
+  /* ── Derived: datetime-local input value (empty = "now") ─────────────────
+     <input type="datetime-local"> expects "YYYY-MM-DDTHH:MM" in LOCAL time.
+     We convert the cart's ISO string (UTC) to that format. When the cart
+     has no override, we leave the field empty — the input then shows the
+     placeholder (mm/dd/yyyy --:--) and the server uses now() on submit. */
+  const tsLocalValue = $derived.by(() => {
+    if (!cart.createdAt) return '';
+    const d = new Date(cart.createdAt);
+    if (isNaN(d.getTime())) return '';
+    // Format YYYY-MM-DDTHH:MM in the user's local timezone
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+
   const grandTotal = $derived.by(() =>
     data.taxInclusive ? cart.total : cart.total + taxAmount,
   );
@@ -167,6 +181,8 @@
       tax_amount: taxAmount,
       payment_method: cart.paymentMethod,
       notes: cart.notes,
+      // Optional backdate / clock-skew correction. Null = use now().
+      created_at: cart.createdAt,
     };
 
     // Offline path: queue the sale in IndexedDB and let the SW
@@ -199,6 +215,9 @@
           discount_amount: payload.discount_amount,
           total: payload.total,
           tax_amount: payload.tax_amount,
+          // Carry the backdate override through the offline queue so
+          // the SW replay preserves the user's chosen timestamp.
+          created_at: payload.created_at,
         };
         await db.put('pending_sales', {
           id,
@@ -598,6 +617,33 @@
   ───────────────────────────────────────────────────────────────────────── -->
 <Sheet bind:open={showCheckout} title="Complete sale" maxWidth="max-w-md">
   <div class="flex flex-col gap-4">
+    <!-- Sale timestamp — defaults to now; user can backdate or correct clock skew.
+         Above the customer selector per the design decision. -->
+    <div>
+      <p class="input-label mb-1.5">
+        Date &amp; time
+        <span class="text-[var(--text-3)] font-normal">
+          (defaults to now)
+        </span>
+      </p>
+      <input
+        type="datetime-local"
+        class="input"
+        value={tsLocalValue}
+        oninput={(e) => cart.setCreatedAt((e.currentTarget as HTMLInputElement).value || null)}
+      />
+      {#if cart.createdAt}
+        <button
+          type="button"
+          class="text-[10px] text-[var(--text-3)] underline mt-1"
+          onclick={() => cart.setCreatedAt(null)}
+          aria-label="Reset timestamp to now"
+        >
+          Reset to now
+        </button>
+      {/if}
+    </div>
+
     <!-- Customer -->
     <div>
       <p class="input-label mb-1.5">Customer</p>
