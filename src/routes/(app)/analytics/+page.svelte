@@ -489,10 +489,10 @@
         </div>
       </div>
 
-      <!-- ── §E Sales Calendar + Busiest Times (same row) ───────────────── -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- Calendar (left, square aspect) -->
-        <div class="surface-card p-4 md:p-5 space-y-4">
+      <!-- ── §E Sales Calendar (25%) + Busiest Times (75%) ──────────────── -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <!-- Calendar (left, 25%) -->
+        <div class="surface-card p-4 md:p-5 space-y-4 lg:col-span-1">
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -526,7 +526,7 @@
             {@const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
             {@const cellSlice = calendar.cells.slice(startIdx)}
             {@const maxV = cellSlice.reduce((m: number, c: any) => Math.max(m, c.value), 0) || 1}
-            <div class="w-full max-w-[280px] aspect-square">
+            <div class="w-full aspect-square">
               <div class="flex h-full">
                 <!-- Day-of-week labels -->
                 <div class="flex flex-col justify-between mr-1.5 text-[9px] text-[var(--text-3)] font-medium shrink-0"
@@ -578,8 +578,8 @@
           {/if}
         </div>
 
-        <!-- Busiest Times (right) -->
-        <div class="surface-card p-4 md:p-5 space-y-4">
+        <!-- Busiest Times (right, 75%) -->
+        <div class="surface-card p-4 md:p-5 space-y-4 lg:col-span-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"
