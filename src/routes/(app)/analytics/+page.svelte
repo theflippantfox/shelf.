@@ -513,11 +513,11 @@
           </div>
 
           {#if !calendar}
-            <div class="aspect-square flex items-center justify-center text-[12px] text-[var(--text-3)]">
+            <div class="aspect-[5/3] flex items-center justify-center text-[12px] text-[var(--text-3)]">
               No calendar data available.
             </div>
           {:else if !calendar.hasData}
-            <div class="aspect-square flex items-center justify-center text-[12px] text-[var(--text-3)]">
+            <div class="aspect-[5/3] flex items-center justify-center text-[12px] text-[var(--text-3)]">
               No sales in the last 84 days. Make your first sale to see your activity here.
             </div>
           {:else}
@@ -526,7 +526,7 @@
             {@const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
             {@const cellSlice = calendar.cells.slice(startIdx)}
             {@const maxV = cellSlice.reduce((m: number, c: any) => Math.max(m, c.value), 0) || 1}
-            <div class="w-full aspect-square">
+            <div class="w-full aspect-[5/3]">
               <div class="flex h-full">
                 <!-- Day-of-week labels -->
                 <div class="flex flex-col justify-between mr-1.5 text-[9px] text-[var(--text-3)] font-medium shrink-0"
