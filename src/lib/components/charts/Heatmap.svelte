@@ -70,14 +70,14 @@
         </div>
       {/if}
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-1.5 pr-3">
         {#each days as day, i}
           <div class="flex items-center gap-2">
             <span class="w-7 text-[10px] uppercase font-bold text-[var(--text-3)] shrink-0 tracking-wider">
               {day}
             </span>
             <div class="grid flex-1 gap-1.5"
-                 style="grid-template-columns:repeat(24,minmax(0,1fr))">
+                 style="grid-template-columns:repeat(24,minmax(0,1fr)); max-width: 95%;">
               {#each values[i] ?? [] as cell, j}
                 <div
                   class="rounded-[2px] transition-colors duration-150 cursor-default
