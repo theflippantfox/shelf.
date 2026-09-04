@@ -492,7 +492,7 @@
       <!-- ── §E Sales Calendar (25%) + Busiest Times (75%) ──────────────── -->
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <!-- Calendar (left, 25%) -->
-        <div class="surface-card px-3 py-4 md:px-4 md:py-5 space-y-3 lg:col-span-1">
+        <div class="surface-card px-3 py-4 md:px-4 md:py-5 space-y-3 lg:col-span-1 flex flex-col">
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -543,15 +543,15 @@
                    * past / today  + sales  → highlighted (revenue-tinted)
                    * past / today  + no data → neutral tint (visible but muted)
                    * future                 → faint outline, non-highlighted -->
-            <div class="grid grid-cols-7 gap-1"
+            <div class="grid grid-cols-7 gap-1 flex-1 min-h-0"
                  style="grid-template-rows: repeat({calendar.weeks}, minmax(0, 1fr));">
               {#each calendar.cells as c}
                 {@const v = c.value}
                 {@const intensity = v > 0 ? Math.max(0.18, v / (calendar.max || 1)) : 0}
                 {#if c.date}
                   <div
-                    class="aspect-square rounded-md flex items-center justify-center text-[10px] font-semibold tabular-nums
-                           transition-transform hover:scale-110 relative cursor-default
+                    class="rounded-md flex items-center justify-center text-[11px] font-semibold tabular-nums
+                           transition-transform hover:scale-110 relative cursor-default min-h-0
                            {c.isToday ? 'ring-1 ring-[var(--primary)] ring-offset-1 ring-offset-[var(--surface)]' : ''}"
                     style="background: {c.isFuture
                       ? 'transparent'
@@ -587,27 +587,6 @@
                 {/each}
               </div>
               <span>More</span>
-            </div>
-            <!-- Bottom summary tiles — uses the space the heatmap
-                 card's extra height leaves below the 5-week grid. -->
-            {@const pastCells = calendar.cells.filter((c: any) => c.date && !c.isFuture)}
-            {@const pastTotal = pastCells.reduce((s: number, c: any) => s + c.value, 0)}
-            {@const pastCount = pastCells.reduce((s: number, c: any) => s + c.count, 0)}
-            {@const daysActive = pastCells.filter((c: any) => c.value > 0).length}
-            {@const avgPerActiveDay = daysActive > 0 ? Math.round(pastTotal / daysActive) : 0}
-            <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-[var(--border)]/40">
-              <div class="text-center">
-                <p class="text-[8.5px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Days sold</p>
-                <p class="text-[14px] font-bold tabular-nums text-[var(--text)] mt-0.5">{daysActive}</p>
-              </div>
-              <div class="text-center">
-                <p class="text-[8.5px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Avg / day</p>
-                <p class="text-[14px] font-bold tabular-nums text-[var(--text)] mt-0.5">{formatCurrencyCompact(avgPerActiveDay)}</p>
-              </div>
-              <div class="text-center">
-                <p class="text-[8.5px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Sales MTD</p>
-                <p class="text-[14px] font-bold tabular-nums text-[var(--text)] mt-0.5">{pastCount}</p>
-              </div>
             </div>
           {/if}
         </div>
