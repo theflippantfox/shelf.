@@ -2185,10 +2185,8 @@ grant select on public.outstanding_receivables_total to authenticated;
 
 
 -- Mark as applied (idempotent)
-do $mark$
-begin
-  perform public._shelf_mark_migration('0015_credit_sales');
-end $mark$;
+
+
 
 -- =============================================================================
 -- FINAL: RE-ASSERT GRANTS + REFRESH POSTGREST

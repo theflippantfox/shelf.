@@ -3,36 +3,35 @@
 -- card payment alias). A credit sale is one where the customer owes the
 -- shop money:
 --
---   * credit_status = 'paid'     — full amount received (e.g. they paid
---                                  half now + promised the rest tomorrow
---                                  and we mark it paid because the rest
---                                  was collected offline). Behaves like a
---                                  normal sale from the register's POV.
---   * credit_status = 'partial'  — some amount received, the rest is a
---                                  receivable. The received amount lands
---                                  in the chosen destination (counter/
---                                  bank); the remainder is a 'credit'
---                                  destination entry in the register.
---   * credit_status = 'pending'  — nothing received. Full amount is a
---                                  'credit' destination receivable.
+--   * credit_status = 'paid'     — full amount received at sale time
+--                                  (e.g. they paid half now + promised the
+--                                  rest tomorrow and we mark it paid because
+--                                  the rest was collected offline). Behaves
+--                                  like a normal sale from the register's
+--                                  POV.
+--   * credit_status = 'partial'  — some amount received at sale time, the
+--                                  rest is a receivable. The received amount
+--                                  lands in the chosen destination (counter/
+--                                  bank); the pending portion is NOT in the
+--                                  register.
+--   * credit_status = 'pending'  — nothing received. Nothing in the register.
+--                                  The full amount is a receivable tracked
+--                                  only in customers.outstanding_balance.
 --
 -- Effects at sale creation:
 --   * sales.credit_status, credit_amount_paid, credit_due_date are set
---   * cash_register gets:
---       - 'sale' entry for the received amount in the chosen destination
---         (or ZERO pending-status)
---       - 'credit' entry for the remaining amount in destination='credit'
---         (or the WHOLE amount for pending)
+--   * cash_register gets AT MOST ONE 'sale' entry: the received amount
+--     in the chosen destination (counter/bank). The pending portion is
+--     never written to the register.
 --   * customers.outstanding_balance is bumped by the credit portion
 --     (decremented when the credit is settled later)
 --
 -- Settling a credit later (via the record_credit_payment RPC):
---   * Writes a 'credit_payment' entry in the register (negative in
---     destination='credit' to zero out the receivable, positive in
---     the destination where the money landed — counter/bank)
---   * Updates the sale's credit_status to 'paid' (or 'partial' if
---     a partial payment was made)
---   * Decrements customers.outstanding_balance
+--   * Writes a single positive register entry in the chosen destination
+--     (counter / bank / other) for the paid amount.
+--   * Updates the sale's credit_status to 'paid' (or stays 'partial' if
+--     a partial payment was made).
+--   * Decrements customers.outstanding_balance via the trigger.
 
 -- ── 1. New columns on sales ────────────────────────────────────────────
 alter table public.sales
@@ -185,9 +184,7 @@ declare
   v_line_total numeric;
   v_cost_at_sale numeric;
   v_destination text;
-  v_credit_destination text := 'credit';  -- the dedicated receivable destination
   v_received_amount numeric := 0;
-  v_pending_amount  numeric := 0;
   v_effective_credit_status text;
 begin
   if not public.is_shop_member(p_shop_id) then
@@ -201,7 +198,6 @@ begin
   if p_payment_method <> 'credit' then
     v_effective_credit_status := 'paid';
     v_received_amount := p_total;
-    v_pending_amount := 0;
   else
     -- Validate credit inputs
     if p_credit_status not in ('paid','partial','pending') then
@@ -210,16 +206,13 @@ begin
     v_effective_credit_status := p_credit_status;
     if p_credit_status = 'paid' then
       v_received_amount := p_total;
-      v_pending_amount := 0;
     elsif p_credit_status = 'partial' then
       if p_credit_amount_paid < 0 or p_credit_amount_paid >= p_total then
         raise exception 'partial credit_amount_paid must be > 0 and < total' using errcode = '22023';
       end if;
       v_received_amount := p_credit_amount_paid;
-      v_pending_amount := p_total - p_credit_amount_paid;
     else  -- 'pending'
       v_received_amount := 0;
-      v_pending_amount := p_total;
     end if;
   end if;
 
@@ -243,6 +236,13 @@ begin
   returning * into v_sale;
 
   -- Cash register entry for the RECEIVED amount (if any).
+  -- We only write what was actually paid at sale time. The PENDING
+  -- amount is NOT touched here — it's a receivable, not real money
+  -- in the till. It's tracked via customers.outstanding_balance
+  -- (kept in sync by the trigger) and surfaces on the cash register
+  -- page via the outstanding_receivables views / the customers
+  -- table. When the customer pays later, record_credit_payment()
+  -- writes the positive entry into the chosen destination then.
   if v_received_amount > 0 then
     insert into public.cash_register (
       shop_id, destination, amount, entry_type, source,
@@ -253,22 +253,6 @@ begin
       'Auto: sale ' || v_ref || case when v_effective_credit_status = 'partial'
         then ' (partial — ' || to_char(p_credit_amount_paid, 'FM999990.00') || ' received)'
         else '' end,
-      p_served_by, v_ts
-    );
-  end if;
-
-  -- Cash register entry for the PENDING amount (if any) in the
-  -- 'credit' destination. This is a receivable — not real money in
-  -- the till, but tracked here so the cash register's "credit
-  -- destination" total = total outstanding receivables.
-  if v_pending_amount > 0 then
-    insert into public.cash_register (
-      shop_id, destination, amount, entry_type, source,
-      sale_id, notes, created_by, effective_at
-    ) values (
-      p_shop_id, v_credit_destination, v_pending_amount, 'sale', 'sale',
-      v_sale.id,
-      'Auto: credit receivable from sale ' || v_ref,
       p_served_by, v_ts
     );
   end if;
@@ -399,29 +383,25 @@ begin
   end if;
 
   v_destination := coalesce(p_destination, 'counter');
-  if v_destination not in ('counter','bank','other','credit') then
+  -- The destination must be a real drawer (counter / bank / other).
+  -- 'credit' is not allowed here because credit sale receivables are
+  -- NOT in the register — they're tracked only in customers.outstanding_balance.
+  if v_destination not in ('counter','bank','other') then
     raise exception 'invalid destination';
   end if;
 
-  -- 1. Write the 'credit_payment' cash-register entry: negative in the
-  --    credit destination (reduces the receivable) and positive in the
-  --    real destination where the money landed.
-  insert into public.cash_register (
-    shop_id, destination, amount, entry_type, source,
-    sale_id, notes, created_by, effective_at
-  ) values (
-    v_sale.shop_id, 'credit', -p_amount, 'sale', 'sale',
-    p_sale_id,
-    'Credit payment received for sale ' || v_sale.sale_ref || coalesce(': ' || p_notes, ''),
-    p_actor_id, v_ts
-  );
+  -- 1. Write a single positive register entry in the destination where
+  --    the money actually landed (counter / bank / other). The credit
+  --    was never in the register in the first place — it was only
+  --    tracked in customers.outstanding_balance, which the trigger
+  --    automatically decrements below.
   insert into public.cash_register (
     shop_id, destination, amount, entry_type, source,
     sale_id, notes, created_by, effective_at
   ) values (
     v_sale.shop_id, v_destination, p_amount, 'sale', 'sale',
     p_sale_id,
-    'Credit payment from sale ' || v_sale.sale_ref || coalesce(': ' || p_notes, ''),
+    'Credit payment for sale ' || v_sale.sale_ref || coalesce(': ' || p_notes, ''),
     p_actor_id, v_ts
   );
 
@@ -458,21 +438,26 @@ grant execute on function public.record_credit_payment(
 ) to authenticated;
 
 comment on function public.record_credit_payment is
-  'Settle some or all of a credit sale. Moves the amount from the '
-  'credit (receivable) destination to the chosen real destination. '
-  'Updates credit_status (partial → paid) and customer totals.';
+  'Settle some or all of a credit sale. Writes the paid amount as a '
+  'positive register entry in the chosen destination (counter/bank/other). '
+  'Updates credit_status (partial → paid) and customer totals. '
+  'Note: the credit was never in the register — receivables are tracked '
+  'in customers.outstanding_balance only.';
 
 -- ── 7. Update void_sale() to handle credit reversals ────────────────────
--- When a credit sale is voided, the cash_register entries (sale +
--- credit receivable) get the existing void treatment. But we also
--- need to make sure the customer's outstanding_balance goes back to
--- zero (the trigger handles this since voided_at changes).
--- The existing void_sale() in 0013 already voids the matched 'sale'
--- register entry and writes a negative 'void' entry. For credit sales
--- there are TWO matched entries (one in the chosen destination for the
--- received amount, one in 'credit' for the pending amount). Update
--- void_sale to also void the credit entry and write the appropriate
--- reversal pair.
+-- When a credit sale is voided, the customer's outstanding_balance is
+-- automatically zeroed by the trigger (because voided_at changes).
+-- For any cash that was already received at sale time, the existing
+-- 'sale' register entry needs to be voided + a negative 'void' entry
+-- written to reverse it.
+--
+-- The void_sale() in 0013 already voids the matched 'sale' register
+-- entry and writes a negative 'void' entry. For credit sales under
+-- the new behavior, the only register entry is the received amount
+-- (if partial or paid-credit); the pending portion is NOT in the
+-- register, so the trigger handles it. The existing loop logic
+-- still works: it iterates all 'sale'/'void' entries for the sale_id,
+-- which is now at most one entry for credit sales.
 create or replace function public.void_sale(
   p_sale_id   uuid,
   p_actor_id  uuid,
