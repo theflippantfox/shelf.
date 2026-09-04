@@ -58,6 +58,7 @@ export type Database = {
           last_visit: string | null
           name: string
           notes: string | null
+          outstanding_balance: number
           phone: string | null
           shop_id: string
           total_spent: number
@@ -71,6 +72,7 @@ export type Database = {
           last_visit?: string | null
           name: string
           notes?: string | null
+          outstanding_balance?: number
           phone?: string | null
           shop_id: string
           total_spent?: number
@@ -553,6 +555,10 @@ export type Database = {
       sales: {
         Row: {
           created_at: string
+          credit_amount_paid: number
+          credit_due_date: string | null
+          credit_settled_at: string | null
+          credit_status: string
           customer_id: string | null
           discount_amount: number
           discount_type: string
@@ -572,6 +578,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          credit_amount_paid?: number
+          credit_due_date?: string | null
+          credit_settled_at?: string | null
+          credit_status?: string
           customer_id?: string | null
           discount_amount?: number
           discount_type?: string
@@ -591,6 +601,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credit_amount_paid?: number
+          credit_due_date?: string | null
+          credit_settled_at?: string | null
+          credit_status?: string
           customer_id?: string | null
           discount_amount?: number
           discount_type?: string
@@ -1018,6 +1032,9 @@ export type Database = {
       create_sale: {
         Args: {
           p_created_at?: string
+          p_credit_amount_paid?: number
+          p_credit_due_date?: string
+          p_credit_status?: string
           p_customer_id: string
           p_discount_amount: number
           p_discount_type: string
@@ -1081,6 +1098,17 @@ export type Database = {
           p_adjusts_id?: string
         }
         Returns: { id: string; shop_id: string; destination: string; amount: number; entry_type: string; source: string; sale_id: string | null; transfer_group_id: string | null; notes: string; created_by: string; created_at: string; effective_at: string | null; voided_at: string | null; voided_by: string | null; void_reason: string | null }[]
+      }
+      record_credit_payment: {
+        Args: {
+          p_sale_id: string
+          p_amount: number
+          p_destination: string
+          p_actor_id: string
+          p_notes?: string
+          p_payment_at?: string
+        }
+        Returns: { id: string; shop_id: string; sale_ref: string; customer_id: string | null; served_by: string; subtotal: number; discount_type: string; discount_value: number; discount_amount: number; tax_amount: number; total: number; payment_method: string; notes: string | null; voided_at: string | null; voided_by: string | null; void_reason: string | null; created_at: string; credit_status: string; credit_amount_paid: number; credit_due_date: string | null; credit_settled_at: string | null }[]
       }
       set_sale_timestamp: { Args: { p_sale_id: string; p_created_at: string }; Returns: undefined }
       transfer_register: {

@@ -52,6 +52,11 @@ export async function POST({ cookies, request, locals  }: import('@sveltejs/kit'
     discount_type, discount_value, discount_amount,
     subtotal, total, tax_amount, payment_method, notes,
     created_at,
+    // Optional credit fields. Only relevant when payment_method = 'credit'.
+    // credit_status: 'paid' | 'partial' | 'pending' (default 'paid' for non-credit)
+    // credit_amount_paid: how much was received at sale time (for 'partial')
+    // credit_due_date: when the customer promises to pay (for 'partial'/'pending')
+    credit_status, credit_amount_paid, credit_due_date,
   } = await request.json();
 
   if (!items?.length) return json({ error: 'Cart is empty' }, { status: 400 });
@@ -82,6 +87,10 @@ export async function POST({ cookies, request, locals  }: import('@sveltejs/kit'
     // Optional timestamp override (backdated or corrected sale time).
     // When null, the function uses now(). Server validates + applies.
     p_created_at: created_at ?? null,
+    // Credit fields. The RPC defaults to 'paid' for non-credit payment methods.
+    p_credit_status: credit_status ?? 'paid',
+    p_credit_amount_paid: credit_amount_paid ?? 0,
+    p_credit_due_date: credit_due_date ?? null,
   });
 
   if (error) return json({ error: error.message }, { status: 400 });
