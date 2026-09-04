@@ -12,9 +12,9 @@
     days        = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     showHours   = true,
     format      = 'currency',  // 'currency' | 'number'
-    fillHeight  = false,        // when true, the rows expand to fill the
-                                // parent height (parent must be a flex column
-                                // with a defined height for this to work).
+    fillHeight  = false,        // when true, cells are taller (h-[36px]
+                                // instead of h-[18px]) to match a larger
+                                // sibling card.
   }: {
     values?:      number[][];
     hours?:       string[];
@@ -47,9 +47,9 @@
   );
 </script>
 
-<div class="overflow-x-auto h-full">
+<div class="overflow-x-auto">
   {#if values.length}
-    <div class="min-w-[560px] h-full {fillHeight ? 'flex flex-col' : ''}">
+    <div class="min-w-[560px]">
       {#if showHours}
         <div class="flex items-end gap-2 mb-1.5 pl-9">
           <div class="flex-1 relative" style="height:14px">
@@ -65,18 +65,19 @@
         </div>
       {/if}
 
-      <div class="grid gap-[3px] {fillHeight ? 'flex-1' : ''}">
+      <div class="grid gap-[3px]">
         {#each days as day, i}
-          <div class="flex items-center gap-2 {fillHeight ? 'flex-1' : ''}">
+          <div class="flex items-center gap-2">
             <span class="w-7 text-[10px] uppercase font-bold text-[var(--text-3)] shrink-0 tracking-wider">
               {day}
             </span>
-            <div class="grid flex-1 gap-[3px]" style="grid-template-columns:repeat(24,minmax(0,1fr))">
+            <div class="grid flex-1 gap-[3px]"
+                 style="grid-template-columns:repeat(24,minmax(0,1fr))">
               {#each values[i] ?? [] as cell, j}
                 <div
                   class="rounded-[3px] transition-all duration-200 cursor-default
                          hover:scale-[1.25] hover:z-10 hover:relative hover:shadow-[0_0_0_1.5px_var(--primary)]
-                         {fillHeight ? 'h-full' : 'h-[18px]'}"
+                         {fillHeight ? 'h-[36px]' : 'h-[18px]'}"
                   style="background-color: {cellColor(cell)};"
                   title={tooltip(cell, days[i], hours[j])}
                 ></div>

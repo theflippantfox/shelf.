@@ -592,7 +592,7 @@
         </div>
 
         <!-- Busiest Times (right, 75%) -->
-        <div class="surface-card p-4 md:p-5 space-y-4 lg:col-span-3 h-full flex flex-col">
+        <div class="surface-card p-4 md:p-5 space-y-4 lg:col-span-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -615,9 +615,7 @@
               <span>More</span>
             </div>
           </div>
-          <div class="flex-1 min-h-0">
-            <Heatmap values={heatmapValues} hours={Array.from({ length: 24 }, (_, i) => `${i}`)} fillHeight />
-          </div>
+          <Heatmap values={heatmapValues} hours={Array.from({ length: 24 }, (_, i) => `${i}`)} fillHeight />
         </div>
       </div>
 
