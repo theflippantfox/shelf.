@@ -72,7 +72,7 @@
 
       <div class="grid gap-[3px]">
         {#each days as day, i}
-          <div class="flex items-center gap-2 overflow-hidden">
+          <div class="flex items-center gap-2">
             <span class="w-7 text-[10px] uppercase font-bold text-[var(--text-3)] shrink-0 tracking-wider">
               {day}
             </span>
@@ -80,8 +80,8 @@
                  style="grid-template-columns:repeat(24,minmax(0,1fr))">
               {#each values[i] ?? [] as cell, j}
                 <div
-                  class="rounded-[3px] transition-all duration-200 cursor-default
-                         hover:scale-[1.25] hover:z-10 hover:relative hover:shadow-[0_0_0_1.5px_var(--primary)]
+                  class="rounded-[3px] transition-colors duration-150 cursor-default
+                         hover:ring-1 hover:ring-[var(--primary)]
                          {fillHeight ? 'h-[36px]' : 'h-[18px]'}"
                   style="background-color: {cellColor(cell)};"
                   title={tooltip(cell, days[i], hours[j])}
