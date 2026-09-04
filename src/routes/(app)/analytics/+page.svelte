@@ -526,8 +526,23 @@
             {@const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
             {@const cellSlice = calendar.cells.slice(startIdx)}
             {@const maxV = cellSlice.reduce((m: number, c: any) => Math.max(m, c.value), 0) || 1}
+            {@const lastCell = cellSlice.findLast?.((c: any) => c.date) ?? [...cellSlice].reverse().find((c: any) => c.date)}
+            {@const firstCell = cellSlice.find((c: any) => c.date)}
+            {@const fmtShort = (iso: string) => {
+              if (!iso) return '';
+              const [y, m, d] = iso.split('-').map(Number);
+              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              return `${months[m - 1]} ${d}`;
+            }}
             <div class="w-full aspect-[5/3]">
-              <div class="flex h-full">
+              <!-- Date range above the grid -->
+              {#if firstCell?.date && lastCell?.date}
+                <div class="flex items-center justify-between text-[9px] text-[var(--text-3)] font-medium mb-1 pl-[22px]">
+                  <span>{fmtShort(firstCell.date)}</span>
+                  <span>{fmtShort(lastCell.date)}</span>
+                </div>
+              {/if}
+              <div class="flex h-[calc(100%-14px)]">
                 <!-- Day-of-week labels -->
                 <div class="flex flex-col justify-between mr-1.5 text-[9px] text-[var(--text-3)] font-medium shrink-0"
                      style="width: 18px;">
