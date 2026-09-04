@@ -70,19 +70,19 @@
         </div>
       {/if}
 
-      <div class="grid gap-[3px]">
+      <div class="grid gap-1.5">
         {#each days as day, i}
           <div class="flex items-center gap-2">
             <span class="w-7 text-[10px] uppercase font-bold text-[var(--text-3)] shrink-0 tracking-wider">
               {day}
             </span>
-            <div class="grid flex-1 gap-[3px]"
+            <div class="grid flex-1 gap-1.5"
                  style="grid-template-columns:repeat(24,minmax(0,1fr))">
               {#each values[i] ?? [] as cell, j}
                 <div
-                  class="rounded-[3px] transition-colors duration-150 cursor-default
+                  class="rounded-[2px] transition-colors duration-150 cursor-default
                          hover:ring-1 hover:ring-[var(--primary)]
-                         {fillHeight ? 'h-[36px]' : 'h-[18px]'}"
+                         {fillHeight ? 'h-[24px]' : 'h-[14px]'}"
                   style="background-color: {cellColor(cell)};"
                   title={tooltip(cell, days[i], hours[j])}
                 ></div>
