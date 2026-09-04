@@ -15,6 +15,10 @@
     fillHeight  = false,        // when true, cells are taller (h-[36px]
                                 // instead of h-[18px]) to match a larger
                                 // sibling card.
+    minWidth    = 0,            // set >0 to force a minimum inner width
+                                // (the wrapper will scroll-x if the parent
+                                // is narrower). Default 0 lets the grid
+                                // shrink to fit the parent.
   }: {
     values?:      number[][];
     hours?:       string[];
@@ -22,6 +26,7 @@
     showHours?:   boolean;
     format?:      'currency' | 'number';
     fillHeight?:  boolean;
+    minWidth?:    number;
   } = $props();
 
   const maxVal = $derived(values.flat().reduce((m, v) => Math.max(m, v), 0) || 1);
@@ -47,9 +52,9 @@
   );
 </script>
 
-<div class="overflow-x-auto">
+<div class="overflow-x-auto {minWidth ? 'overflow-y-hidden' : 'overflow-y-visible'}">
   {#if values.length}
-    <div class="min-w-[560px]">
+    <div style="min-width: {minWidth ? `${minWidth}px` : '0'};">
       {#if showHours}
         <div class="flex items-end gap-2 mb-1.5 pl-9">
           <div class="flex-1 relative" style="height:14px">
@@ -67,7 +72,7 @@
 
       <div class="grid gap-[3px]">
         {#each days as day, i}
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 overflow-hidden">
             <span class="w-7 text-[10px] uppercase font-bold text-[var(--text-3)] shrink-0 tracking-wider">
               {day}
             </span>
