@@ -8,6 +8,7 @@ import {
   buildCustomerInsights,
   buildHeatmap,
   buildCalendar,
+  buildMonthCalendar,
   buildSlowMovers,
   parsePeriod,
   type Period,
@@ -251,9 +252,10 @@ export async function load({ cookies, locals, url, setHeaders }: any) {
     currentSales as any[], customers as any[]
   );
   const heatmap = buildHeatmap(currentSales as any[], shopTz);
-  // Calendar is a year-long daily heatmap, independent of the selected
-  // period — it's meant to show the long-term shape of the business.
-  const calendar = buildCalendar(yearSales as any[], shopTz, 365);
+  // Calendar shows the current month (single month view).
+  // The window covers the calendar month ± a few days of buffer for
+  // the bucketing loop, which itself filters by year+month.
+  const calendar = buildMonthCalendar(yearSales as any[], shopTz);
   const slowMovers = buildSlowMovers(saleItems, stockProducts as any[]);
   const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
   const stockValue = buildStockValue(stockProducts as any[]);

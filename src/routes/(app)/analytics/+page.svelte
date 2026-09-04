@@ -501,84 +501,68 @@
               </div>
               <div>
                 <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Sales Calendar</h3>
-                <p class="text-[10px] text-[var(--text-3)]">Daily revenue, last 84 days</p>
+                <p class="text-[10px] text-[var(--text-3)]">This month · daily revenue</p>
               </div>
             </div>
             {#if calendar?.hasData}
               <div class="flex items-center gap-2 text-[10px] text-[var(--text-3)]">
                 <span class="font-semibold text-[var(--text)] tabular-nums">{formatCurrencyCompact(calendar.total)}</span>
-                <span>in this period</span>
+                <span>in {calendar.monthLabel}</span>
               </div>
             {/if}
           </div>
 
           {#if !calendar}
-            <div class="aspect-[5/3] flex items-center justify-center text-[12px] text-[var(--text-3)]">
+            <div class="h-48 flex items-center justify-center text-[12px] text-[var(--text-3)]">
               No calendar data available.
             </div>
           {:else if !calendar.hasData}
-            <div class="aspect-[5/3] flex items-center justify-center text-[12px] text-[var(--text-3)]">
-              No sales in the last 84 days. Make your first sale to see your activity here.
+            <div class="h-48 flex items-center justify-center text-[12px] text-[var(--text-3)]">
+              No sales in {calendar.monthLabel}. Make your first sale to see it here.
             </div>
           {:else}
-            {@const weeks = Math.min(calendar.weeks, 12)}
-            {@const startIdx = (calendar.weeks - weeks) * 7}
-            {@const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
-            {@const cellSlice = calendar.cells.slice(startIdx)}
-            {@const maxV = cellSlice.reduce((m: number, c: any) => Math.max(m, c.value), 0) || 1}
-            {@const lastCell = cellSlice.findLast?.((c: any) => c.date) ?? [...cellSlice].reverse().find((c: any) => c.date)}
-            {@const firstCell = cellSlice.find((c: any) => c.date)}
-            {@const fmtShort = (iso: string) => {
-              if (!iso) return '';
-              const [y, m, d] = iso.split('-').map(Number);
-              const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-              return `${months[m - 1]} ${d}`;
-            }}
-            <div class="w-full aspect-[5/3]">
-              <!-- Date range above the grid -->
-              {#if firstCell?.date && lastCell?.date}
-                <div class="flex items-center justify-between text-[9px] text-[var(--text-3)] font-medium mb-1 pl-[22px]">
-                  <span>{fmtShort(firstCell.date)}</span>
-                  <span>{fmtShort(lastCell.date)}</span>
-                </div>
+            {@const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']}
+            <!-- Month label -->
+            <div class="flex items-center justify-between text-[11px] font-semibold text-[var(--text)]">
+              <span>{calendar.monthLabel}</span>
+              {#if calendar.bestDay}
+                <span class="text-[9px] text-[var(--text-3)] font-normal">
+                  Best: day {calendar.bestDay.date.slice(8)} · {formatCurrencyCompact(calendar.bestDay.value)}
+                </span>
               {/if}
-              <div class="flex h-[calc(100%-14px)]">
-                <!-- Day-of-week labels -->
-                <div class="flex flex-col justify-between mr-1.5 text-[9px] text-[var(--text-3)] font-medium shrink-0"
-                     style="width: 18px;">
-                  {#each dayLabels as l, i}
-                    <div class="leading-none"
-                         style="visibility: {i % 2 === 1 ? 'visible' : 'hidden'};">
-                      {l}
-                    </div>
-                  {/each}
+            </div>
+            <!-- Day-of-week header row -->
+            <div class="grid grid-cols-7 gap-1 text-[9px] text-[var(--text-3)] font-medium text-center">
+              {#each dayLabels as l}
+                <div>{l}</div>
+              {/each}
+            </div>
+            <!-- Month grid: 7 cols × weeks rows -->
+            <div class="grid grid-cols-7 gap-1"
+                 style="grid-template-rows: repeat({calendar.weeks}, minmax(0, 1fr));">
+              {#each calendar.cells as c}
+                {@const v = c.value}
+                {@const intensity = v > 0 ? Math.max(0.18, v / (calendar.max || 1)) : 0}
+                <div
+                  class="aspect-square rounded-md flex items-center justify-center text-[10px] font-semibold tabular-nums
+                         transition-transform hover:scale-110 relative cursor-default
+                         {c.isToday ? 'ring-1 ring-[var(--primary)] ring-offset-1 ring-offset-[var(--surface)]' : ''}
+                         {c.isFuture ? 'opacity-30' : ''}
+                         {!c.date ? 'opacity-0 pointer-events-none' : ''}"
+                  style="background: {!c.date
+                    ? 'transparent'
+                    : v > 0
+                      ? `color-mix(in srgb, var(--teal) ${Math.round(intensity * 100)}%, var(--surface2))`
+                      : 'color-mix(in srgb, var(--surface2) 80%, transparent)'};"
+                  title={c.date
+                    ? `Day ${c.day} · ${c.date}\n${formatCurrency(v)} · ${c.count} sale${c.count === 1 ? '' : 's'}`
+                    : ''}
+                >
+                  {#if c.date}
+                    {c.day}
+                  {/if}
                 </div>
-
-                <!-- Square grid: 12 cols × 7 rows -->
-                <div class="flex-1 grid"
-                     style="grid-template-columns: repeat({weeks}, 1fr); grid-template-rows: repeat(7, 1fr); gap: 2px;">
-                  {#each cellSlice as c, idx}
-                    {#if idx >= weeks * 7}
-                      <!-- skip future padding beyond 12 weeks -->
-                    {:else}
-                      {@const v = c.value}
-                      {@const intensity = v > 0 ? Math.max(0.15, v / maxV) : 0}
-                      {@const dayLabel = dayLabels[c.dow]}
-                      {@const isFuture = !c.date}
-                      <div
-                        class="rounded-[2px] transition-transform hover:scale-150 hover:z-10 relative cursor-default
-                               {isFuture ? 'opacity-30' : ''}"
-                        style="background: {v > 0
-                          ? `color-mix(in srgb, var(--teal) ${Math.round(intensity * 100)}%, var(--surface2))`
-                          : 'color-mix(in srgb, var(--surface2) 80%, transparent)'};"
-                        title={c.date
-                          ? `${dayLabel} ${c.date}\n${formatCurrency(c.value)} · ${c.count} sale${c.count === 1 ? '' : 's'}`
-                          : ''}
-                      ></div>
-                    {/if}
-                  {/each}
-                </div>
-              </div>
+              {/each}
             </div>
             <div class="flex items-center justify-end gap-1.5 text-[10px] text-[var(--text-3)]">
               <span>Less</span>

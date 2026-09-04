@@ -6,7 +6,7 @@ import { json } from '@sveltejs/kit';
 import { userClient, userClientFromCtx } from '$lib/server/supabase';
 import {
   buildKpis, buildTrend, buildPaymentMethods,
-  buildProducts, buildCategories, buildCustomerInsights, buildHeatmap, buildCalendar,
+  buildProducts, buildCategories, buildCustomerInsights, buildHeatmap, buildMonthCalendar,
   buildSlowMovers, parsePeriod,
   type Period,
 } from '$lib/utils/analytics';
@@ -202,7 +202,7 @@ export const GET = async ({ cookies, locals, url, setHeaders  }: import('@svelte
   const categories = buildCategories(saleItems, productCostMap);
   const customerInsights = buildCustomerInsights(currentSales as any[], customers as any[]);
   const heatmap = buildHeatmap(currentSales as any[], shopTz);
-  const calendar = buildCalendar(yearSales as any[], shopTz, 365);
+  const calendar = buildMonthCalendar(yearSales as any[], shopTz);
   const slowMovers = buildSlowMovers(saleItems, stockProducts as any[]);
   const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
   const stockValue = buildStockValue(stockProducts as any[]);

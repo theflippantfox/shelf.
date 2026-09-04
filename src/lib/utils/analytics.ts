@@ -560,6 +560,95 @@ export function buildCalendar(
   };
 }
 
+export interface MonthCell {
+  date:  string;  // ISO yyyy-mm-dd in shop tz ('' for empty placeholders)
+  value: number;  // revenue for the day
+  count: number;  // number of sales
+  dow:   number;  // 0=Sun .. 6=Sat (kept for layout)
+  isFuture: boolean;
+  isToday: boolean;
+  day:   number;  // 1-31 (0 for placeholders)
+}
+export interface MonthCalendar {
+  cells:        MonthCell[];   // flat, length = weeksInMonth * 7, row-major
+  weeks:        number;        // 4-6
+  monthLabel:   string;        // e.g. "September 2026"
+  year:         number;
+  month:        number;        // 1-12
+  total:        number;
+  max:          number;
+  hasData:      boolean;
+  today:        string;        // ISO of the in-month today
+  bestDay?:     { date: string; value: number };
+}
+
+/**
+ * buildMonthCalendar — a single calendar month view (current month by default).
+ *
+ * Output is a flat array of `weeks * 7` cells, ordered row-major. Empty
+ * placeholders (before day 1 and after the last day) have an empty `date`
+ * and `day: 0`, so the UI can render blank cells or skip them.
+ */
+export function buildMonthCalendar(
+  sales: any[],
+  shopTz: string,
+  today: dayjs.Dayjs = dayjs().tz(shopTz),
+): MonthCalendar {
+  const year     = today.year();
+  const month    = today.month() + 1;  // 1-12
+  const firstOf  = today.startOf('month');
+  const lastOf   = today.endOf('month');
+  const daysIn   = lastOf.date();
+  const firstDow = firstOf.day();      // 0=Sun
+
+  const buckets = new Map<string, { value: number; count: number }>();
+  for (const s of sales) {
+    const d = dayjs(s.created_at).tz(shopTz).startOf('day');
+    if (d.year() !== year || d.month() + 1 !== month) continue;
+    const key = d.format('YYYY-MM-DD');
+    const b   = buckets.get(key) ?? { value: 0, count: 0 };
+    b.value += s.total ?? 0;
+    b.count += 1;
+    buckets.set(key, b);
+  }
+
+  const totalCells = firstDow + daysIn;
+  const weeks      = Math.ceil(totalCells / 7);
+
+  const todayIso = today.format('YYYY-MM-DD');
+  const cells: MonthCell[] = [];
+  let total = 0, max = 0, bestDay: { date: string; value: number } | undefined;
+  for (let i = 0; i < weeks * 7; i++) {
+    const dayNum = i - firstDow + 1;   // 1..daysIn, or <=0 / >daysIn for padding
+    if (dayNum < 1 || dayNum > daysIn) {
+      cells.push({ date: '', value: 0, count: 0, dow: i % 7, isFuture: false, isToday: false, day: 0 });
+      continue;
+    }
+    const d   = firstOf.date(dayNum);
+    const key = d.format('YYYY-MM-DD');
+    const b   = buckets.get(key);
+    const v   = b ? Math.round(b.value) : 0;
+    cells.push({
+      date:  key,
+      value: v,
+      count: b?.count ?? 0,
+      dow:   d.day(),
+      isFuture: d.isAfter(today, 'day'),
+      isToday: key === todayIso,
+      day:   dayNum,
+    });
+    if (v > 0) {
+      total += v;
+      if (v > max) { max = v; bestDay = { date: key, value: v }; }
+    }
+  }
+
+  return {
+    cells, weeks, year, month, total, max, hasData: total > 0, today: todayIso, bestDay,
+    monthLabel: firstOf.format('MMMM YYYY'),
+  };
+}
+
 // ── Margin analysis ───────────────────────────────────────────────────────────
 
 export interface MarginData {
