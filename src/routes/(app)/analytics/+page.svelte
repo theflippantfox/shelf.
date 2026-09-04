@@ -537,25 +537,38 @@
                 <div>{l}</div>
               {/each}
             </div>
-            <!-- Month grid: 7 cols × weeks rows, but real days only.
-                 Only the days up to and including today are shown —
-                 future days are skipped so the grid contains just the
-                 past + today. -->
+            <!-- Month grid: 7 cols × weeks rows. All days of the current
+                 month are shown (1 → 30/31). Each day has a distinct
+                 visual state:
+                   * past / today  + sales  → highlighted (revenue-tinted)
+                   * past / today  + no data → neutral tint (visible but muted)
+                   * future                 → faint outline, non-highlighted -->
             <div class="grid grid-cols-7 gap-1"
                  style="grid-template-rows: repeat({calendar.weeks}, minmax(0, 1fr));">
               {#each calendar.cells as c}
                 {@const v = c.value}
                 {@const intensity = v > 0 ? Math.max(0.18, v / (calendar.max || 1)) : 0}
-                {#if c.date && !c.isFuture}
+                {#if c.date}
                   <div
                     class="aspect-square rounded-md flex items-center justify-center text-[10px] font-semibold tabular-nums
                            transition-transform hover:scale-110 relative cursor-default
                            {c.isToday ? 'ring-1 ring-[var(--primary)] ring-offset-1 ring-offset-[var(--surface)]' : ''}"
-                    style="background: {v > 0
-                      ? `color-mix(in srgb, var(--teal) ${Math.round(intensity * 100)}%, var(--surface2))`
-                      : 'color-mix(in srgb, var(--surface2) 80%, transparent)'};
-                           color: {v > 0 ? 'var(--primary-fg)' : 'var(--text-3)'};"
-                    title={`Day ${c.day} · ${c.date}\n${formatCurrency(v)} · ${c.count} sale${c.count === 1 ? '' : 's'}`}
+                    style="background: {c.isFuture
+                      ? 'transparent'
+                      : v > 0
+                        ? `color-mix(in srgb, var(--teal) ${Math.round(intensity * 100)}%, var(--surface2))`
+                        : 'color-mix(in srgb, var(--surface2) 60%, var(--text-3) 8%)'};
+                           border: {c.isFuture
+                             ? '1px dashed color-mix(in srgb, var(--text-3) 35%, transparent)'
+                             : '1px solid transparent'};
+                           color: {c.isFuture
+                             ? 'var(--text-3)'
+                             : v > 0
+                               ? 'var(--primary-fg)'
+                               : 'var(--text-2)'};"
+                    title={c.isFuture
+                      ? `Day ${c.day} · ${c.date}\n(future — not yet)`
+                      : `Day ${c.day} · ${c.date}\n${formatCurrency(v)} · ${c.count} sale${c.count === 1 ? '' : 's'}`}
                   >
                     {c.day}
                   </div>
