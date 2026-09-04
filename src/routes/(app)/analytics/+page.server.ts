@@ -249,6 +249,57 @@ export async function load({ cookies, locals, url, setHeaders }: any) {
   const stockValue = buildStockValue(stockProducts as any[]);
   const grossProfit = buildGrossProfit(saleItems, compareSaleItems, productCostMap);
 
+  // Outstanding receivables (credit sales that are still partial or pending).
+  // Fetched separately so the period filter doesn't exclude the cross-period
+  // receivables — these are always the CURRENT snapshot. The query sums
+  // (total - credit_amount_paid) over all non-voided credit sales that
+  // are still partial or pending, grouped by credit_status and by customer.
+  const [
+    { data: outstandingByStatus = [] },
+    { data: outstandingByCustomer = [] },
+    { data: outstandingTotalRow },
+  ] = await Promise.all([
+    supabase
+      .from('sales')
+      .select('credit_status, total, credit_amount_paid')
+      .eq('shop_id', shopId)
+      .eq('payment_method', 'credit')
+      .in('credit_status', ['partial', 'pending'])
+      .is('voided_at', null),
+    supabase
+      .from('sales')
+      .select('total, credit_amount_paid, customer_id, customers!inner(name)')
+      .eq('shop_id', shopId)
+      .eq('payment_method', 'credit')
+      .in('credit_status', ['partial', 'pending'])
+      .is('voided_at', null)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .rpc('outstanding_receivables_total', { p_shop_id: shopId })
+      .maybeSingle(),
+  ]);
+  const outstandingTotal = Number((outstandingTotalRow as any)?.total_outstanding ?? 0);
+  const outstandingByStatusMap: Record<string, number> = { partial: 0, pending: 0 };
+  for (const r of (outstandingByStatus as any[])) {
+    const o = Number(r.total) - Number(r.credit_amount_paid ?? 0);
+    if (r.credit_status in outstandingByStatusMap) {
+      outstandingByStatusMap[r.credit_status] += o;
+    }
+  }
+  // For the per-customer view, group sales by customer
+  const byCust: Record<string, { name: string; outstanding: number; sales: number }> = {};
+  for (const r of (outstandingByCustomer as any[])) {
+    const cid = r.customer_id;
+    if (!cid) continue;
+    if (!byCust[cid]) byCust[cid] = { name: r.customers?.name ?? 'Unknown', outstanding: 0, sales: 0 };
+    byCust[cid].outstanding += Number(r.total) - Number(r.credit_amount_paid ?? 0);
+    byCust[cid].sales += 1;
+  }
+  const outstandingByCustomerArr = Object.entries(byCust)
+    .map(([id, v]) => ({ id, name: v.name, outstanding: v.outstanding, sales: v.sales }))
+    .sort((a, b) => b.outstanding - a.outstanding);
+
   return {
     analytics: {
       shopTz, currency, period,
@@ -257,6 +308,12 @@ export async function load({ cookies, locals, url, setHeaders }: any) {
       customers: customerInsights,
       heatmap, slowMovers,
       monthlyTrend, stockValue, grossProfit,
+      // Outstanding credit (receivables) — current snapshot, not period-filtered
+      outstanding: {
+        total:         outstandingTotal,
+        byStatus:      outstandingByStatusMap,
+        byCustomer:    outstandingByCustomerArr,
+      },
     },
   };
 }

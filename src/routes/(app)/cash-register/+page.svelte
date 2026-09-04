@@ -11,7 +11,7 @@
   import { formatDateTime } from '$lib/utils/format';
   import {
     Plus, TrendingUp, TrendingDown, ArrowLeftRight, Ban,
-    ShoppingCart, Wallet, Building2, Box,
+    ShoppingCart, Wallet, Building2, Box, Clock,
   } from 'lucide-svelte';
 
   let { data } = $props();
@@ -317,6 +317,48 @@
         </p>
       </div>
     </div>
+
+    <!-- Credit / receivables — separate from the main balance card per
+         the design decision. Shows total outstanding + a per-customer
+         breakdown. Only renders when there's outstanding credit. -->
+    {#if (data.credit?.byCustomer?.length ?? 0) > 0}
+      <div class="surface-card p-3.5 md:p-4">
+        <div class="flex items-center justify-between mb-2.5">
+          <div class="flex items-center gap-1.5">
+            <Clock size={13} strokeWidth={2.2} style="color:var(--gold)" />
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)]">
+              Outstanding credit
+            </p>
+          </div>
+          <p class="text-sm font-bold tabular-nums" style="color:var(--gold)">
+            {formatCurrency(data.credit.total)}
+          </p>
+        </div>
+        <ul class="space-y-1.5">
+          {#each data.credit.byCustomer.slice(0, 5) as c (c.id)}
+            <li>
+              <a href="/customers/{c.id}"
+                 class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md hover:bg-[var(--surface2)] transition-colors">
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold text-[var(--text)] truncate">{c.name}</p>
+                  <p class="text-[10px] text-[var(--text-3)]">
+                    {c.sales} open {c.sales === 1 ? 'sale' : 'sales'}
+                  </p>
+                </div>
+                <p class="text-xs font-bold tabular-nums whitespace-nowrap" style="color:var(--gold)">
+                  {formatCurrency(c.outstanding)}
+                </p>
+              </a>
+            </li>
+          {/each}
+          {#if data.credit.byCustomer.length > 5}
+            <li class="text-[10px] text-[var(--text-3)] text-center pt-1">
+              +{data.credit.byCustomer.length - 5} more
+            </li>
+          {/if}
+        </ul>
+      </div>
+    {/if}
 
     <!-- History grouped by day -->
     {#if groupedByDay.length === 0}

@@ -6,17 +6,26 @@
   import SearchBar  from '$lib/components/ui/SearchBar.svelte';
   import Select     from '$lib/components/ui/Select.svelte';
   import {
-    Banknote, CreditCard, ArrowLeftRight,
+    Banknote, Clock, ArrowLeftRight,
     ChevronLeft, ChevronRight, X,
-  } from 'lucide-svelte';
+  } from "lucide-svelte";
 
   let { data } = $props();
 
   const PAY_META: Record<string, { icon: any; label: string; color: string }> = {
     cash:     { icon: Banknote,        label: 'Cash',     color: 'var(--teal)'    },
-    credit:   { icon: CreditCard,      label: 'Card',     color: 'var(--cobalt)'  },
-    transfer: { icon: ArrowLeftRight,  label: 'Transfer', color: 'var(--primary)' },
+    // 'credit' is now "customer owes money" (not "card" — that was the old alias)
+    credit:   { icon: Clock,           label: 'Credit',   color: 'var(--gold)'    },
+    transfer: { icon: ArrowLeftRight,  label: 'UPI',      color: 'var(--primary)' },
   };
+
+  // Credit status chip on each row. Color-coded so the eye picks them up.
+  function creditChip(credit_status: string) {
+    if (credit_status === 'partial') return { label: 'Partial', tone: 'bg-[var(--gold)] text-[var(--gold-fg)]' };
+    if (credit_status === 'pending') return { label: 'Pending', tone: 'bg-[var(--crimson)] text-white' };
+    if (credit_status === 'paid')    return { label: 'Paid',    tone: 'bg-[var(--teal)] text-[var(--teal-fg)]' };
+    return null;
+  }
 
   // ── Local search state (URL is the source of truth, but we keep a debounced
   //    value locally so typing feels instant without hammering the server) ──
@@ -38,6 +47,7 @@
       q:      (data as any).filters.q,
       method: (data as any).filters.method,
       status: (data as any).filters.status,
+      credit: (data as any).filters.credit,
       range:  (data as any).filters.range,
       page:   String((data as any).page),
     };
@@ -49,6 +59,7 @@
       if ((k === 'q'      && s === '')     ||
           (k === 'method' && s === '')     ||
           (k === 'status' && s === 'all')  ||
+          (k === 'credit' && s === 'all')  ||
           (k === 'range'  && s === 'all')  ||
           (k === 'page'   && s === '1')) continue;
       params.set(k, s);
@@ -181,6 +192,34 @@
 
         <span class="text-[var(--text-3)] mx-1 text-xs">·</span>
 
+        <!-- Credit-status chips (only render if there ARE any credit sales
+             in the dataset — otherwise it's just visual noise) -->
+        {#if (data as any).counts.credit_pending + (data as any).counts.credit_partial + (data as any).counts.credit_paid > 0}
+          <span class="text-[10px] text-[var(--text-3)] font-semibold uppercase tracking-wider mr-1">Credit</span>
+          {#each [
+            { key: 'pending',  label: 'Pending',  count: (data as any).counts.credit_pending, tone: 'crimson' },
+            { key: 'partial',  label: 'Partial',  count: (data as any).counts.credit_partial, tone: 'gold'    },
+            { key: 'paid',     label: 'Paid',     count: (data as any).counts.credit_paid,    tone: 'teal'    },
+          ] as cc}
+            {@const active = (data as any).filters.credit === cc.key}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onclick={() => applyFilters({ credit: active ? 'all' : cc.key, page: 1 })}
+              class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-[var(--radius-pill)] border transition-all {active ? chipActiveCls(cc.tone) : chipInactiveCls}"
+            >
+              {cc.label}
+              <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold
+                {active ? 'bg-white/20 text-white' : 'bg-[var(--surface2)] text-[var(--text-3)]'}">
+                {cc.count}
+              </span>
+            </button>
+          {/each}
+        {/if}
+
+        <span class="text-[var(--text-3)] mx-1 text-xs">·</span>
+
         <!-- Range chips (no counts — date scope is mutually exclusive) -->
         {#each rangeChips as chip}
           {@const active = (data as any).filters.range === chip.key}
@@ -250,6 +289,22 @@
               {/if}
               {#if s.payment_method && meta}
                 <span class="text-[10px] text-[var(--text-3)]">· {meta.label}</span>
+              {/if}
+              {#if !voided && s.payment_method === 'credit' && s.credit_status && s.credit_status !== 'paid'}
+                {@const cc = creditChip(s.credit_status)}
+                {#if cc}
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded {cc.tone}">{cc.label}</span>
+                  {#if s.credit_status === 'partial' && s.credit_amount_paid != null}
+                    <span class="text-[10px] text-[var(--text-3)]">
+                      paid {formatCurrency(s.credit_amount_paid)} of {formatCurrency(s.total)}
+                    </span>
+                  {/if}
+                  {#if s.credit_due_date}
+                    <span class="text-[10px] text-[var(--text-3)]">
+                      due {new Date(s.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </span>
+                  {/if}
+                {/if}
               {/if}
             </div>
             <div class="flex items-center gap-1.5 mt-0.5">

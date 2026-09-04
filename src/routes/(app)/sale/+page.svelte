@@ -26,6 +26,7 @@
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, CreditCard, ArrowLeftRight, X,
     Search, Check, ChevronRight, Package, ScanLine,
+    Clock, AlertCircle, Calendar,
   } from "lucide-svelte";
 
   let { data } = $props();
@@ -149,11 +150,34 @@
   );
 
   /* ── Helpers ───────────────────────────────────────────────────────────── */
-  const PAY_META: Record<PaymentMethod, { icon: any; label: string; tone: 'primary' | 'teal' | 'cobalt' }> = {
+  const PAY_META: Record<PaymentMethod, { icon: any; label: string; tone: 'primary' | 'teal' | 'cobalt' | 'gold' }> = {
     cash:     { icon: Banknote,        label: 'Cash',     tone: 'teal'    },
-    credit:   { icon: CreditCard,      label: 'Card',     tone: 'cobalt'  },
-    transfer: { icon: ArrowLeftRight,  label: 'Transfer', tone: 'primary' },
+    // 'credit' = customer owes money (full or partial). Customer MUST be
+    // picked before the sheet will let you confirm. The status sub-form
+    // appears below the payment chooser.
+    credit:   { icon: Clock,           label: 'Credit',   tone: 'gold'    },
+    transfer: { icon: ArrowLeftRight,  label: 'UPI',      tone: 'primary' },
   };
+
+  /* ── Credit sub-form state ────────────────────────────────────────────
+     When the user picks 'Credit' payment, a sub-form asks:
+       - Status:  paid (full amount received, used for "paid offline" /
+                  "collected at door" cases) | partial (some received) |
+                  pending (nothing received)
+       - Amount paid now: only required for 'partial'
+       - Due date: optional, for tracking when the customer promises to pay
+  */
+  let creditStatus       = $state<'paid' | 'partial' | 'pending'>('pending');
+  let creditAmountPaid   = $state<string>('');
+  let creditDueDate      = $state<string>('');
+  // Reset credit sub-form when the user switches away from credit
+  $effect(() => {
+    if (cart.paymentMethod !== 'credit') {
+      creditStatus = 'pending';
+      creditAmountPaid = '';
+      creditDueDate = '';
+    }
+  });
 
   function setQty(productId: string, qty: number) {
     cart.setQty(productId, qty);
@@ -168,8 +192,23 @@
 
   async function submitSale() {
     if (cart.isEmpty) return;
+    // Credit sales MUST have a customer — we can't track who owes the
+    // money otherwise. Block the submission here (the button is also
+    // disabled below for a clearer signal).
+    if (cart.paymentMethod === 'credit' && !cart.customerId) {
+      toasts.error('Pick a customer for credit sales');
+      return;
+    }
+    // For partial credit, validate the amount is sane.
+    if (cart.paymentMethod === 'credit' && creditStatus === 'partial') {
+      const amt = parseFloat(creditAmountPaid);
+      if (isNaN(amt) || amt <= 0 || amt >= grandTotal) {
+        toasts.error('Partial credit amount must be > 0 and < total');
+        return;
+      }
+    }
     submitting = true;
-    const payload = {
+    const payload: any = {
       items: cart.items,
       customer_id: cart.customerId,
       customer_name: cart.customerName,
@@ -184,6 +223,22 @@
       // Optional backdate / clock-skew correction. Null = use now().
       created_at: cart.createdAt,
     };
+    // Credit fields — only included when the user picked credit. The
+    // server defaults to 'paid' when payment_method is not 'credit',
+    // so we only need to send these in the credit case.
+    if (cart.paymentMethod === 'credit') {
+      payload.credit_status = creditStatus;
+      if (creditStatus === 'partial') {
+        payload.credit_amount_paid = parseFloat(creditAmountPaid);
+      } else if (creditStatus === 'paid') {
+        payload.credit_amount_paid = grandTotal;
+      } else {
+        payload.credit_amount_paid = 0;
+      }
+      if (creditDueDate) {
+        payload.credit_due_date = creditDueDate;
+      }
+    }
 
     // Offline path: queue the sale in IndexedDB and let the SW
     // (or the next page boot) flush it.  We don't have a server
@@ -218,6 +273,11 @@
           // Carry the backdate override through the offline queue so
           // the SW replay preserves the user's chosen timestamp.
           created_at: payload.created_at,
+          // Credit fields — also carry through so the SW replay
+          // preserves the credit status / amount paid / due date.
+          credit_status:       payload.credit_status,
+          credit_amount_paid:  payload.credit_amount_paid,
+          credit_due_date:     payload.credit_due_date,
         };
         await db.put('pending_sales', {
           id,
@@ -720,9 +780,9 @@
               {active
                 ? 'shadow-sm'
                 : 'border-[var(--border)] bg-[var(--surface2)] hover:bg-[var(--surface)] text-[var(--text-2)]'}"
-            style={active ? `border-color:${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : 'var(--cobalt)'};
-                              background:color-mix(in srgb, ${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : 'var(--cobalt)'} 12%, transparent);
-                              color:${meta.tone === 'primary' ? 'var(--primary-fg)' : meta.tone === 'teal' ? 'var(--teal-fg)' : 'var(--cobalt-fg)'}` : ''}
+            style={active ? `border-color:${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'};
+                              background:color-mix(in srgb, ${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'} 12%, transparent);
+                              color:${meta.tone === 'primary' ? 'var(--primary-fg)' : meta.tone === 'teal' ? 'var(--teal-fg)' : meta.tone === 'gold' ? 'var(--gold-fg)' : 'var(--cobalt-fg)'}` : ''}
             onclick={() => cart.setPaymentMethod(key)}
           >
             <meta.icon size={18} strokeWidth={2} />
@@ -732,6 +792,74 @@
         {/each}
       </div>
     </div>
+
+    {#if cart.paymentMethod === 'credit'}
+      <!-- Credit sub-form: pick how much was received, when it's due.
+           Customer must be selected above (or the submit button is disabled). -->
+      <div class="rounded-xl p-3 space-y-3" style="background:var(--gold-dim); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);">
+        <div class="flex items-center gap-2 text-[var(--gold-fg)]">
+          <AlertCircle size={13} strokeWidth={2.2} />
+          <p class="text-[11px] font-semibold">
+            Credit — customer owes {cart.customerId ? cart.customerName : 'no one (pick a customer!)'}
+          </p>
+        </div>
+
+        <!-- Status: paid / partial / pending -->
+        <div>
+          <p class="input-label mb-1.5 text-[var(--gold-fg)]">Status</p>
+          <div class="grid grid-cols-3 gap-1.5">
+            {#each [['paid', 'Paid in full'], ['partial', 'Partial'], ['pending', 'Pending']] as [val, label]}
+              <button
+                type="button"
+                class="px-2 py-1.5 text-[11px] font-semibold rounded-md border transition
+                  {creditStatus === val
+                    ? 'shadow-sm'
+                    : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface2)] text-[var(--text-2)]'}"
+                style={creditStatus === val
+                  ? 'border-color:var(--gold); background:color-mix(in srgb, var(--gold) 12%, transparent); color:var(--gold-fg);'
+                  : ''}
+                onclick={() => creditStatus = val}
+              >
+                {label}
+              </button>
+            {/each}
+          </div>
+        </div>
+
+        {#if creditStatus === 'partial'}
+          <div>
+            <p class="input-label mb-1.5 text-[var(--gold-fg)]">
+              Amount paid now
+              <span class="text-[var(--text-3)] font-normal">
+                (rest will be receivable: {formatCurrency(Math.max(0, grandTotal - (parseFloat(creditAmountPaid) || 0)))})
+              </span>
+            </p>
+            <Input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max={grandTotal - 0.01}
+              bind:value={creditAmountPaid}
+              placeholder={String(grandTotal)}
+            />
+          </div>
+        {/if}
+
+        <div>
+          <p class="input-label mb-1.5 text-[var(--gold-fg)]">
+            Due date
+            <span class="text-[var(--text-3)] font-normal">(optional)</span>
+          </p>
+          <Input type="date" bind:value={creditDueDate} />
+        </div>
+
+        {#if !cart.customerId}
+          <p class="text-[11px] font-semibold" style="color:var(--crimson)">
+            Pick a customer above to enable credit sales.
+          </p>
+        {/if}
+      </div>
+    {/if}
 
     <!-- Summary -->
     <div class="rounded-xl p-3.5 space-y-1.5 text-xs" style="background:var(--surface2)">
@@ -769,6 +897,7 @@
       </Button>
       <Button
         loading={submitting}
+        disabled={submitting || (cart.paymentMethod === 'credit' && !cart.customerId)}
         onclick={submitSale}
         class="flex-1 justify-center"
         size="lg"

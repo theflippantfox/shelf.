@@ -1084,6 +1084,10 @@ export type Database = {
         Returns: { id: string; email: string }[]
         SetofOptions: { from: "*"; to: "auth.users"; isOneToOne: false; isSetofReturn: true }
       }
+      outstanding_receivables_total: {
+        Args: { p_shop_id: string }
+        Returns: { shop_id: string; total_outstanding: number }[]
+      }
       is_shop_member: { Args: { shop: string }; Returns: boolean }
       is_shop_owner: { Args: { shop: string }; Returns: boolean }
       log_register_entry: {

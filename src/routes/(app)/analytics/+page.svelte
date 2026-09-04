@@ -255,6 +255,68 @@
         {/if}
       </div>
 
+      <!-- ── §A.2 Credit / Receivables ────────────────────────────────────
+           Current snapshot of outstanding credit. Not period-filtered —
+           these balances accumulate and persist until settled. Only
+           rendered when the shop has any outstanding credit. -->
+      {#if analytics?.outstanding && analytics.outstanding.total > 0}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <KpiCard
+            label="Outstanding Receivables"
+            icon="Clock"
+            value={formatCurrencyCompact(analytics.outstanding.total)}
+            sub={`${analytics.outstanding.byCustomer.length} ${analytics.outstanding.byCustomer.length === 1 ? 'customer' : 'customers'}`}
+          />
+          <div class="surface-card p-4 md:p-5 space-y-2.5">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)]">By Status</p>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-[var(--text-2)] flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-[var(--crimson)]"></span>
+                Pending (full)
+              </span>
+              <span class="font-semibold tabular-nums">
+                {formatCurrencyCompact(analytics.outstanding.byStatus.pending ?? 0)}
+              </span>
+            </div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-[var(--text-2)] flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-[var(--gold)]"></span>
+                Partial
+              </span>
+              <span class="font-semibold tabular-nums">
+                {formatCurrencyCompact(analytics.outstanding.byStatus.partial ?? 0)}
+              </span>
+            </div>
+            <div class="h-px bg-[var(--border)] my-1.5"></div>
+            <div class="flex items-center justify-between text-[10px] text-[var(--text-3)]">
+              <span>Total outstanding</span>
+              <span class="font-bold tabular-nums" style="color:var(--gold)">
+                {formatCurrencyCompact(analytics.outstanding.total)}
+              </span>
+            </div>
+          </div>
+          <div class="surface-card p-4 md:p-5 space-y-2">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-3)]">Top Customers with Credit</p>
+            {#if analytics.outstanding.byCustomer.length === 0}
+              <p class="text-xs text-[var(--text-3)]">No customers with outstanding credit.</p>
+            {:else}
+              <ul class="space-y-1.5">
+                {#each analytics.outstanding.byCustomer.slice(0, 4) as c (c.id)}
+                  <li class="flex items-center justify-between text-xs">
+                    <a href="/customers/{c.id}" class="font-medium text-[var(--text)] truncate hover:text-[var(--primary)]">
+                      {c.name}
+                    </a>
+                    <span class="font-semibold tabular-nums whitespace-nowrap" style="color:var(--gold)">
+                      {formatCurrencyCompact(c.outstanding)}
+                    </span>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        </div>
+      {/if}
+
       <!-- ── §B Profit · Inventory (paired cards) ──────────────────────── -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         {#if grossProfit}
