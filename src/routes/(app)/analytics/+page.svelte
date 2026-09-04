@@ -526,7 +526,7 @@
             {@const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
             {@const cellSlice = calendar.cells.slice(startIdx)}
             {@const maxV = cellSlice.reduce((m: number, c: any) => Math.max(m, c.value), 0) || 1}
-            <div class="aspect-square w-full">
+            <div class="w-full max-w-[280px] aspect-square">
               <div class="flex h-full">
                 <!-- Day-of-week labels -->
                 <div class="flex flex-col justify-between mr-1.5 text-[9px] text-[var(--text-3)] font-medium shrink-0"
