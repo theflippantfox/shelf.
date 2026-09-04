@@ -537,31 +537,32 @@
                 <div>{l}</div>
               {/each}
             </div>
-            <!-- Month grid: 7 cols × weeks rows -->
+            <!-- Month grid: 7 cols × weeks rows, but real days only.
+                 Only the days up to and including today are shown —
+                 future days are skipped so the grid contains just the
+                 past + today. -->
             <div class="grid grid-cols-7 gap-1"
                  style="grid-template-rows: repeat({calendar.weeks}, minmax(0, 1fr));">
               {#each calendar.cells as c}
                 {@const v = c.value}
                 {@const intensity = v > 0 ? Math.max(0.18, v / (calendar.max || 1)) : 0}
-                <div
-                  class="aspect-square rounded-md flex items-center justify-center text-[10px] font-semibold tabular-nums
-                         transition-transform hover:scale-110 relative cursor-default
-                         {c.isToday ? 'ring-1 ring-[var(--primary)] ring-offset-1 ring-offset-[var(--surface)]' : ''}
-                         {c.isFuture ? 'opacity-30' : ''}
-                         {!c.date ? 'opacity-0 pointer-events-none' : ''}"
-                  style="background: {!c.date
-                    ? 'transparent'
-                    : v > 0
+                {#if c.date && !c.isFuture}
+                  <div
+                    class="aspect-square rounded-md flex items-center justify-center text-[10px] font-semibold tabular-nums
+                           transition-transform hover:scale-110 relative cursor-default
+                           {c.isToday ? 'ring-1 ring-[var(--primary)] ring-offset-1 ring-offset-[var(--surface)]' : ''}"
+                    style="background: {v > 0
                       ? `color-mix(in srgb, var(--teal) ${Math.round(intensity * 100)}%, var(--surface2))`
-                      : 'color-mix(in srgb, var(--surface2) 80%, transparent)'};"
-                  title={c.date
-                    ? `Day ${c.day} · ${c.date}\n${formatCurrency(v)} · ${c.count} sale${c.count === 1 ? '' : 's'}`
-                    : ''}
-                >
-                  {#if c.date}
+                      : 'color-mix(in srgb, var(--surface2) 80%, transparent)'};
+                           color: {v > 0 ? 'var(--primary-fg)' : 'var(--text-3)'};"
+                    title={`Day ${c.day} · ${c.date}\n${formatCurrency(v)} · ${c.count} sale${c.count === 1 ? '' : 's'}`}
+                  >
                     {c.day}
-                  {/if}
-                </div>
+                  </div>
+                {:else}
+                  <!-- Spacer to keep day-of-week alignment -->
+                  <div aria-hidden="true"></div>
+                {/if}
               {/each}
             </div>
             <div class="flex items-center justify-end gap-1.5 text-[10px] text-[var(--text-3)]">
