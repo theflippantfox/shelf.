@@ -492,7 +492,7 @@
       <!-- ── §E Sales Calendar (25%) + Busiest Times (75%) ──────────────── -->
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <!-- Calendar (left, 25%) -->
-        <div class="surface-card p-4 md:p-5 space-y-4 lg:col-span-1">
+        <div class="surface-card px-3 py-4 md:px-4 md:py-5 space-y-3 lg:col-span-1">
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"
@@ -588,11 +588,32 @@
               </div>
               <span>More</span>
             </div>
+            <!-- Bottom summary tiles — uses the space the heatmap
+                 card's extra height leaves below the 5-week grid. -->
+            {@const pastCells = calendar.cells.filter((c: any) => c.date && !c.isFuture)}
+            {@const pastTotal = pastCells.reduce((s: number, c: any) => s + c.value, 0)}
+            {@const pastCount = pastCells.reduce((s: number, c: any) => s + c.count, 0)}
+            {@const daysActive = pastCells.filter((c: any) => c.value > 0).length}
+            {@const avgPerActiveDay = daysActive > 0 ? Math.round(pastTotal / daysActive) : 0}
+            <div class="grid grid-cols-3 gap-1.5 pt-1 border-t border-[var(--border)]/40">
+              <div class="text-center">
+                <p class="text-[8.5px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Days sold</p>
+                <p class="text-[14px] font-bold tabular-nums text-[var(--text)] mt-0.5">{daysActive}</p>
+              </div>
+              <div class="text-center">
+                <p class="text-[8.5px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Avg / day</p>
+                <p class="text-[14px] font-bold tabular-nums text-[var(--text)] mt-0.5">{formatCurrencyCompact(avgPerActiveDay)}</p>
+              </div>
+              <div class="text-center">
+                <p class="text-[8.5px] font-semibold uppercase tracking-wider text-[var(--text-3)]">Sales MTD</p>
+                <p class="text-[14px] font-bold tabular-nums text-[var(--text)] mt-0.5">{pastCount}</p>
+              </div>
+            </div>
           {/if}
         </div>
 
         <!-- Busiest Times (right, 75%) -->
-        <div class="surface-card p-4 md:p-5 space-y-4 lg:col-span-3">
+        <div class="surface-card px-3 py-4 md:px-4 md:py-5 space-y-4 lg:col-span-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg flex items-center justify-center"
