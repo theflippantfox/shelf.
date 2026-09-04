@@ -471,6 +471,95 @@ export function buildHeatmap(sales: any[], shopTz: string): number[][] {
   );
 }
 
+export interface CalendarCell {
+  date:  string;  // ISO yyyy-mm-dd in shop tz
+  value: number;  // revenue for the day
+  count: number;  // number of sales
+  dow:   number;  // 0=Sun .. 6=Sat
+}
+export interface CalendarData {
+  cells:    CalendarCell[];           // flat, length = numberOfWeeks * 7
+  weeks:    number;                   // number of week columns
+  monthLabels: Array<{ week: number; label: string }>; // month label per first-week-of-month
+  total:    number;                   // total revenue across the window
+  max:      number;                   // max single-day revenue
+  hasData:  boolean;                  // false if the whole window is empty
+}
+
+/**
+ * buildCalendar — a GitHub-style contribution calendar of daily revenue.
+ *
+ * Covers the past `days` days (default 365), ending today (shop tz).
+ * Pads the first/last weeks with empty cells so the grid always starts
+ * on Sunday and ends on Saturday.
+ *
+ * The output is shaped for a 7-row × N-col grid:
+ *   row index = day-of-week (0=Sun)
+ *   col index = week (0 = oldest week)
+ * Flatten with `cells[i]` where `i = col * 7 + row`.
+ */
+export function buildCalendar(
+  sales: any[],
+  shopTz: string,
+  days: number = 365,
+  today: dayjs.Dayjs = dayjs().tz(shopTz)
+): CalendarData {
+  const startOfWindow = today.subtract(days - 1, 'day').startOf('day');
+  // Snap to the Sunday of (or before) the start so the first column
+  // always begins on a Sunday.
+  const firstSunday = startOfWindow.subtract(startOfWindow.day(), 'day');
+  const totalDays   = today.diff(firstSunday, 'day') + 1;
+  const weeks       = Math.ceil(totalDays / 7);
+
+  // Per-day aggregation keyed by ISO yyyy-mm-dd
+  const buckets = new Map<string, { value: number; count: number }>();
+  for (const s of sales) {
+    const d = dayjs(s.created_at).tz(shopTz).startOf('day');
+    if (d.isBefore(firstSunday) || d.isAfter(today)) continue;
+    const key = d.format('YYYY-MM-DD');
+    const b   = buckets.get(key) ?? { value: 0, count: 0 };
+    b.value += s.total ?? 0;
+    b.count += 1;
+    buckets.set(key, b);
+  }
+
+  const cells: CalendarCell[] = [];
+  let total = 0, max = 0;
+  for (let i = 0; i < weeks * 7; i++) {
+    const d     = firstSunday.add(i, 'day');
+    const key   = d.format('YYYY-MM-DD');
+    const b     = buckets.get(key);
+    const value = b ? Math.round(b.value) : 0;
+    cells.push({
+      date:  d.isAfter(today) ? '' : key,
+      value,
+      count: b?.count ?? 0,
+      dow:   d.day(),
+    });
+    if (value > 0) total += value;
+    if (value > max) max = value;
+  }
+
+  // Month labels: for each week column, take the first row (Sun). If that
+  // date is the 1st–7th of a month, that's the month label for this column.
+  const monthLabels: Array<{ week: number; label: string }> = [];
+  let lastMonth = -1;
+  for (let w = 0; w < weeks; w++) {
+    const d   = firstSunday.add(w * 7, 'day');
+    const day = d.date();
+    if (day <= 7 && d.month() !== lastMonth) {
+      monthLabels.push({ week: w, label: d.format('MMM') });
+      lastMonth = d.month();
+    }
+  }
+
+  return {
+    cells, weeks, monthLabels,
+    total, max,
+    hasData: total > 0,
+  };
+}
+
 // ── Margin analysis ───────────────────────────────────────────────────────────
 
 export interface MarginData {

@@ -5,8 +5,8 @@
 import { json } from '@sveltejs/kit';
 import { userClient, userClientFromCtx } from '$lib/server/supabase';
 import {
-  buildKpis, buildTrend, buildPaymentMethods, buildHourly, buildWeekday,
-  buildProducts, buildCategories, buildCustomerInsights, buildHeatmap,
+  buildKpis, buildTrend, buildPaymentMethods,
+  buildProducts, buildCategories, buildCustomerInsights, buildHeatmap, buildCalendar,
   buildSlowMovers, parsePeriod,
   type Period,
 } from '$lib/utils/analytics';
@@ -93,12 +93,14 @@ export const GET = async ({ cookies, locals, url, setHeaders  }: import('@svelte
   const monthlyFrom = dayjs().tz(shopTz).subtract(11, 'month').startOf('month').toISOString();
   const monthlyTo = dayjs().tz(shopTz).endOf('month').toISOString();
 
+  const calendarFrom = new Date(Date.now() - 370 * 24 * 60 * 60 * 1000).toISOString();
   const [
     { data: currentSales = [] },
     { data: compareSales = [] },
     { data: customers = [] },
     { data: monthlySales = [] },
     { data: stockProducts = [] },
+    { data: yearSales = [] },
   ] = await Promise.all([
     supabase.from('sales')
       .select('id, total, subtotal, tax_amount, payment_method, created_at, customer_id')
@@ -126,6 +128,12 @@ export const GET = async ({ cookies, locals, url, setHeaders  }: import('@svelte
       .select('id, price, cost_price, qty')
       .eq('shop_id', shopId)
       .is('archived_at', null),
+    supabase.from('sales')
+      .select('total, created_at')
+      .eq('shop_id', shopId)
+      .is('voided_at', null)
+      .gte('created_at', calendarFrom)
+      .order('created_at'),
   ]);
 
   const currentIds = (currentSales as any[]).map((s: any) => s.id);
@@ -190,12 +198,11 @@ export const GET = async ({ cookies, locals, url, setHeaders  }: import('@svelte
   const kpis = buildKpis(currentSales as any[], compareSales as any[], saleItems, compareSaleItems, shopTz, productCostMap);
   const trend = buildTrend(currentSales as any[], period.from, period.to, compareSales as any[], period.cFrom, shopTz);
   const paymentMethods = buildPaymentMethods(currentSales as any[]);
-  const hourly = buildHourly(currentSales as any[], shopTz);
-  const weekday = buildWeekday(currentSales as any[], shopTz);
   const products = buildProducts(saleItems, productCostMap);
   const categories = buildCategories(saleItems, productCostMap);
   const customerInsights = buildCustomerInsights(currentSales as any[], customers as any[]);
   const heatmap = buildHeatmap(currentSales as any[], shopTz);
+  const calendar = buildCalendar(yearSales as any[], shopTz, 365);
   const slowMovers = buildSlowMovers(saleItems, stockProducts as any[]);
   const monthlyTrend = buildMonthlyTrend(monthlySales as any[], shopTz);
   const stockValue = buildStockValue(stockProducts as any[]);
@@ -206,10 +213,10 @@ export const GET = async ({ cookies, locals, url, setHeaders  }: import('@svelte
   return json({
     analytics: {
       shopTz, currency, period,
-      kpis, trend, paymentMethods, hourly, weekday,
+      kpis, trend, paymentMethods,
       products, categories,
       customers: customerInsights,
-      heatmap, slowMovers, monthlyTrend,
+      heatmap, calendar, slowMovers, monthlyTrend,
       stockValue, grossProfit,
     },
   });

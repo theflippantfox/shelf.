@@ -4,7 +4,6 @@
   import KpiCard from "$lib/components/ui/KpiCard.svelte";
   import AreaChart from "$lib/components/charts/AreaChart.svelte";
   import BarChart from "$lib/components/charts/BarChart.svelte";
-  import HBarChart from "$lib/components/charts/HBarChart.svelte";
   import DonutChart from "$lib/components/charts/DonutChart.svelte";
   import Heatmap from "$lib/components/charts/Heatmap.svelte";
   import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
@@ -62,10 +61,10 @@
         }]
   );
 
-  const hourlyLabels = $derived(analytics?.hourly?.map((h: any) => h.label) ?? []);
-  const hourlyData   = $derived(analytics?.hourly?.map((h: any) => h.revenue ?? 0) ?? []);
-  const weekdayLabels = $derived(analytics?.weekday?.map((w: any) => w.label) ?? []);
-  const weekdayData   = $derived(analytics?.weekday?.map((w: any) => w.revenue ?? 0) ?? []);
+  // Calendar (year-long daily revenue heatmap) — shown independent of
+  // the period filter, so it always reflects the long-term shape of
+  // the business.
+  const calendar = $derived(analytics?.calendar ?? null);
   const paymentRows = $derived(analytics?.paymentMethods ?? []);
   const customerTiers = $derived(analytics?.customers?.tiers);
   const leaderboard = $derived(analytics?.customers?.leaderboard ?? []);
@@ -490,51 +489,120 @@
         </div>
       </div>
 
-      <!-- ── §E Time Distribution ───────────────────────────────────────── -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- ── §E Sales Calendar + Busiest Times (same row) ───────────────── -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Calendar (left, square aspect) -->
         <div class="surface-card p-4 md:p-5 space-y-4">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center"
-                 style="background:color-mix(in srgb, var(--teal) 14%, transparent)">
-              <Clock size={14} strokeWidth={2} style="color:var(--teal)" />
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-lg flex items-center justify-center"
+                   style="background:color-mix(in srgb, var(--teal) 14%, transparent)">
+                <Calendar size={14} strokeWidth={2} style="color:var(--teal)" />
+              </div>
+              <div>
+                <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Sales Calendar</h3>
+                <p class="text-[10px] text-[var(--text-3)]">Daily revenue, last 84 days</p>
+              </div>
             </div>
-            <div>
-              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Sales by Hour</h3>
-              <p class="text-[10px] text-[var(--text-3)]">0–23</p>
+            {#if calendar?.hasData}
+              <div class="flex items-center gap-2 text-[10px] text-[var(--text-3)]">
+                <span class="font-semibold text-[var(--text)] tabular-nums">{formatCurrencyCompact(calendar.total)}</span>
+                <span>in this period</span>
+              </div>
+            {/if}
+          </div>
+
+          {#if !calendar}
+            <div class="aspect-square flex items-center justify-center text-[12px] text-[var(--text-3)]">
+              No calendar data available.
             </div>
-          </div>
-          <div class="h-48 w-full">
-            <BarChart
-              labels={hourlyLabels}
-              data={hourlyData}
-              color="var(--teal)"
-              height={192}
-              yFormat="currency"
-              highlightLast={false}
-            />
-          </div>
+          {:else if !calendar.hasData}
+            <div class="aspect-square flex items-center justify-center text-[12px] text-[var(--text-3)]">
+              No sales in the last 84 days. Make your first sale to see your activity here.
+            </div>
+          {:else}
+            {@const weeks = Math.min(calendar.weeks, 12)}
+            {@const startIdx = (calendar.weeks - weeks) * 7}
+            {@const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']}
+            {@const cellSlice = calendar.cells.slice(startIdx)}
+            {@const maxV = cellSlice.reduce((m: number, c: any) => Math.max(m, c.value), 0) || 1}
+            <div class="aspect-square w-full">
+              <div class="flex h-full">
+                <!-- Day-of-week labels -->
+                <div class="flex flex-col justify-between mr-1.5 text-[9px] text-[var(--text-3)] font-medium shrink-0"
+                     style="width: 18px;">
+                  {#each dayLabels as l, i}
+                    <div class="leading-none"
+                         style="visibility: {i % 2 === 1 ? 'visible' : 'hidden'};">
+                      {l}
+                    </div>
+                  {/each}
+                </div>
+
+                <!-- Square grid: 12 cols × 7 rows -->
+                <div class="flex-1 grid"
+                     style="grid-template-columns: repeat({weeks}, 1fr); grid-template-rows: repeat(7, 1fr); gap: 2px;">
+                  {#each cellSlice as c, idx}
+                    {#if idx >= weeks * 7}
+                      <!-- skip future padding beyond 12 weeks -->
+                    {:else}
+                      {@const v = c.value}
+                      {@const intensity = v > 0 ? Math.max(0.15, v / maxV) : 0}
+                      {@const dayLabel = dayLabels[c.dow]}
+                      {@const isFuture = !c.date}
+                      <div
+                        class="rounded-[2px] transition-transform hover:scale-150 hover:z-10 relative cursor-default
+                               {isFuture ? 'opacity-30' : ''}"
+                        style="background: {v > 0
+                          ? `color-mix(in srgb, var(--teal) ${Math.round(intensity * 100)}%, var(--surface2))`
+                          : 'color-mix(in srgb, var(--surface2) 80%, transparent)'};"
+                        title={c.date
+                          ? `${dayLabel} ${c.date}\n${formatCurrency(c.value)} · ${c.count} sale${c.count === 1 ? '' : 's'}`
+                          : ''}
+                      ></div>
+                    {/if}
+                  {/each}
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-1.5 text-[10px] text-[var(--text-3)]">
+              <span>Less</span>
+              <div class="flex gap-0.5">
+                {#each [0, 1, 2, 3, 4] as i}
+                  <div class="w-3 h-3 rounded-sm"
+                       style="background:color-mix(in srgb, var(--teal) {15 + i * 18}%, var(--surface2))"></div>
+                {/each}
+              </div>
+              <span>More</span>
+            </div>
+          {/if}
         </div>
 
+        <!-- Busiest Times (right) -->
         <div class="surface-card p-4 md:p-5 space-y-4">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center"
-                 style="background:color-mix(in srgb, var(--gold) 14%, transparent)">
-              <Calendar size={14} strokeWidth={2} style="color:var(--gold)" />
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-lg flex items-center justify-center"
+                   style="background:color-mix(in srgb, var(--primary) 14%, transparent)">
+                <Activity size={14} strokeWidth={2} style="color:var(--primary)" />
+              </div>
+              <div>
+                <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Busiest Times</h3>
+                <p class="text-[10px] text-[var(--text-3)]">Average revenue by hour-of-day and day-of-week</p>
+              </div>
             </div>
-            <div>
-              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Sales by Day</h3>
-              <p class="text-[10px] text-[var(--text-3)]">Mon–Sun</p>
+            <div class="flex items-center gap-1.5 text-[10px] text-[var(--text-3)]">
+              <span>Less</span>
+              <div class="flex gap-0.5">
+                {#each [0, 1, 2, 3, 4] as i}
+                  <div class="w-3 h-3 rounded-sm"
+                       style="background:color-mix(in srgb, var(--primary) {20 + i * 16}%, var(--surface2))"></div>
+                {/each}
+              </div>
+              <span>More</span>
             </div>
           </div>
-          <div class="h-48 w-full">
-            <HBarChart
-              labels={weekdayLabels}
-              data={weekdayData}
-              color="var(--gold)"
-              height={192}
-              yFormat="currency"
-            />
-          </div>
+          <Heatmap values={heatmapValues} hours={Array.from({ length: 24 }, (_, i) => `${i}`)} />
         </div>
       </div>
 
@@ -719,33 +787,6 @@
             </table>
           </div>
         </div>
-      </div>
-
-      <!-- ── §I Heatmap ─────────────────────────────────────────────────── -->
-      <div class="surface-card p-4 md:p-5 space-y-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center"
-                 style="background:color-mix(in srgb, var(--primary) 14%, transparent)">
-              <Activity size={14} strokeWidth={2} style="color:var(--primary)" />
-            </div>
-            <div>
-              <h3 class="font-semibold text-[13.5px] text-[var(--text)] tracking-tight">Busiest Times</h3>
-              <p class="text-[10px] text-[var(--text-3)]">Average revenue by hour-of-day and day-of-week</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5 text-[10px] text-[var(--text-3)]">
-            <span>Less</span>
-            <div class="flex gap-0.5">
-              {#each [0, 1, 2, 3, 4] as i}
-                <div class="w-3 h-3 rounded-sm"
-                     style="background:color-mix(in srgb, var(--primary) {20 + i * 16}%, var(--surface2))"></div>
-              {/each}
-            </div>
-            <span>More</span>
-          </div>
-        </div>
-        <Heatmap values={heatmapValues} />
       </div>
 
     </div>
