@@ -9,6 +9,7 @@
   } from "$lib/stores/cart.svelte";
   import { toasts } from "$lib/stores/toast.svelte";
   import { formatCurrency, formatCurrencyCompact } from "$lib/utils/format";
+  import { fuzzyFilter } from "$lib/utils/fuzzy";
   import { inview }  from "$lib/utils/inview";
   import { fly } from "svelte/transition";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
@@ -98,11 +99,13 @@
     if (filterCat) {
       list = list.filter(p => (p.category?.id ?? p.category) === filterCat);
     }
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter(p =>
-        p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-      );
+    if (search.trim()) {
+      list = fuzzyFilter(list, search, {
+        fields: [
+          { get: (p: any) => p.name, weight: 2 },
+          { get: (p: any) => p.sku,  weight: 1.5 },
+        ],
+      });
     }
     return list;
   });
@@ -118,8 +121,12 @@
   const filteredCustomers = $derived.by(() => {
     const list = data.customers as any[];
     if (!customerSearch.trim()) return list.slice(0, 8);
-    const q = customerSearch.toLowerCase();
-    return list.filter(c => c.name.toLowerCase().includes(q) || (c.phone ?? '').includes(q));
+    return fuzzyFilter(list, customerSearch, {
+      fields: [
+        { get: (c: any) => c.name,  weight: 2 },
+        { get: (c: any) => c.phone, weight: 1.5 },
+      ],
+    }).slice(0, 8);
   });
 
   /* ── Derived: tax + total ──────────────────────────────────────────────── */

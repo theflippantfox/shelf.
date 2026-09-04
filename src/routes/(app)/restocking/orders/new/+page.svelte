@@ -9,6 +9,7 @@
   import { toasts } from "$lib/stores/toast.svelte";
   import { currentShop } from "$lib/stores/shop.svelte";
   import { formatCurrency, getCurrencySymbol } from "$lib/utils/format";
+  import { fuzzyFilter } from "$lib/utils/fuzzy";
   import { Trash2, Plus, Search, PackagePlus, ArrowLeft } from "lucide-svelte";
 
   let { data } = $props();
@@ -74,22 +75,16 @@
   const matchedProducts = $derived(
     search.length < 1
       ? []
-      : (data.products as any[])
-          .filter(
-            (p) =>
-              p.name.toLowerCase().includes(search.toLowerCase()) ||
-              p.sku.toLowerCase().includes(search.toLowerCase()),
-          )
-          .slice(0, 8),
+      : fuzzyFilter(data.products as any[], search, {
+          fields: [
+            { get: (p: any) => p.name, weight: 2 },
+            { get: (p: any) => p.sku,  weight: 1.5 },
+          ],
+        }).slice(0, 8),
   );
 
   const noMatch = $derived(
-    search.length >= 1 &&
-      !(data.products as any[]).some(
-        (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.sku.toLowerCase().includes(search.toLowerCase()),
-      ),
+    search.length >= 1 && matchedProducts.length === 0,
   );
 
   // Pre-fill product from URL param (?product=id)

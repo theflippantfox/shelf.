@@ -5,6 +5,7 @@
   import { auth }       from '$lib/stores/auth.svelte';
   import { toasts }     from '$lib/stores/toast.svelte';
   import { inventory as invStore } from '$lib/stores/inventory.svelte';
+  import { fuzzyFilter } from '$lib/utils/fuzzy';
   import PageShell   from '$lib/components/layout/PageShell.svelte';
   import SearchBar   from '$lib/components/ui/SearchBar.svelte';
   import Button      from '$lib/components/ui/Button.svelte';
@@ -125,11 +126,14 @@
       });
     }
     if (q) {
-      list = list.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        (p.description || '').toLowerCase().includes(q)
-      );
+      list = fuzzyFilter(list, q, {
+        fields: [
+          { get: (p: any) => p.name,        weight: 2 },
+          { get: (p: any) => p.sku,         weight: 1.5 },
+          { get: (p: any) => p.description, weight: 0.5 },
+          { get: (p: any) => p.category?.name ?? p.category },
+        ],
+      });
     }
     if (stockFilter === 'in')  list = list.filter(p => p.qty >  thresholdOf(p));
     if (stockFilter === 'low') list = list.filter(p => p.qty >  0 && p.qty <= thresholdOf(p));

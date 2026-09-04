@@ -3,6 +3,7 @@
   import { toasts } from '$lib/stores/toast.svelte';
   import { getCustomerTier, TIER_LABELS, TIER_BADGE_CLASS } from '$lib/utils/tiers';
   import { formatCurrency } from '$lib/utils/format';
+  import { fuzzyFilter } from '$lib/utils/fuzzy';
   import PageShell  from '$lib/components/layout/PageShell.svelte';
   import SearchBar  from '$lib/components/ui/SearchBar.svelte';
   import Button     from '$lib/components/ui/Button.svelte';
@@ -22,12 +23,14 @@
 
   const filtered = $derived(() => {
     if (!search) return data.customers as any[];
-    const q = search.toLowerCase();
-    return (data.customers as any[]).filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      (c.phone ?? '').includes(q) ||
-      (c.email ?? '').toLowerCase().includes(q)
-    );
+    return fuzzyFilter(data.customers as any[], search, {
+      fields: [
+        { get: (c: any) => c.name,        weight: 2 },
+        { get: (c: any) => c.phone,       weight: 1.5 },
+        { get: (c: any) => c.email,       weight: 1.5 },
+        { get: (c: any) => c.notes,       weight: 0.4 },
+      ],
+    });
   });
 
   function openAdd() {
