@@ -109,7 +109,7 @@
     let inStock = 0, low = 0, out = 0, value = 0;
     for (const p of list) {
       if (p.qty === 0) out++;
-      else if (p.qty <= thresholdOf(p)) low++;
+      else if (p.track_stock !== false && p.qty <= thresholdOf(p)) low++;
       else inStock++;
       value += (p.price || 0) * (p.qty || 0);
     }
@@ -135,8 +135,16 @@
         ],
       });
     }
-    if (stockFilter === 'in')  list = list.filter(p => p.qty >  thresholdOf(p));
-    if (stockFilter === 'low') list = list.filter(p => p.qty >  0 && p.qty <= thresholdOf(p));
+    // stockFilter semantics:
+    //   'all'  → no stock-based filtering
+    //   'in'   → strictly in stock (qty > threshold). Products with
+    //            track_stock=false are excluded — they don't track.
+    //   'low'  → low (0 < qty <= threshold). Same exclusion.
+    //   'out'  → out of stock (qty === 0). Always matches regardless
+    //            of the track_stock flag (an out-of-stock item is
+    //            still useful to surface, even if uncounted).
+    if (stockFilter === 'in')  list = list.filter(p => p.track_stock !== false && p.qty >  thresholdOf(p));
+    if (stockFilter === 'low') list = list.filter(p => p.track_stock !== false && p.qty >  0 && p.qty <= thresholdOf(p));
     if (stockFilter === 'out') list = list.filter(p => p.qty === 0);
 
     switch (sortKey) {
