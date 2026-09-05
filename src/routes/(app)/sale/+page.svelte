@@ -178,8 +178,14 @@
       creditPromptOpen = true;
     }
   }
-  // Confirm the credit prompt — keep the credit selection and close
-  // the modal. The amount + due date are already bound to state vars.
+  // Confirm the credit prompt. The caller (cart or checkout sheet)
+  // is inferred from whether the cart sheet is still open at confirm
+  // time. If the cart is open, the user came from there and we
+  // submit the sale directly (skipping the checkout sheet — for
+  // credit, the checkout sheet was just a customer picker which the
+  // credit prompt has already replaced). If the cart is closed, the
+  // user came from the checkout sheet (via "Change amount") and we
+  // just close the modal so they can hit Complete Sale.
   function confirmCreditPrompt() {
     if (!cart.customerId) {
       toasts.error('Pick a customer for credit sales first');
@@ -188,6 +194,12 @@
       return;
     }
     creditPromptOpen = false;
+    if (!cartOpen) {
+      // Came from the checkout sheet's "Change amount" — just close.
+      return;
+    }
+    // Came from the cart — submit the sale directly.
+    void submitSale();
   }
   // Cancel the credit prompt — flip back to cash and reset the credit
   // form. The user explicitly chose not to do credit.
@@ -210,6 +222,31 @@
     // Brief delay so the checkout sheet animates out before the
     // credit prompt animates in (avoids two sheets fighting for focus).
     setTimeout(() => { creditPromptOpen = true; }, 150);
+  }
+  // Same as openCreditPrompt but for the cart sheet. Closes the cart
+  // sheet, then opens the credit prompt after the close animation.
+  function openCreditPromptFromCart() {
+    if (!cart.customerId) {
+      toasts.error('Pick a customer for credit sales first');
+      return;
+    }
+    cartOpen = false;
+    setTimeout(() => { creditPromptOpen = true; }, 150);
+  }
+  // The cart's checkout button. For credit, it says "Next" and opens
+  // the credit prompt. For everything else, it goes to the checkout
+  // sheet (where the user picks the customer and confirms).
+  function handleCheckoutClick() {
+    if (cart.paymentMethod === 'credit') {
+      if (!cart.customerId) {
+        toasts.error('Pick a customer for credit sales first');
+        return;
+      }
+      openCreditPromptFromCart();
+    } else {
+      cartOpen = false;
+      showCheckout = true;
+    }
   }
 
   /* ── Credit sub-form state ────────────────────────────────────────────
@@ -653,6 +690,129 @@
 
   {#snippet footer()}
     <div class="space-y-3">
+      <!-- Customer picker — required for credit, optional for everything
+           else. Shown above the payment method so the user picks
+           "who's buying" before "how are they paying". -->
+      <div>
+        <p class="input-label mb-1.5">
+          Customer
+          {#if cart.paymentMethod === 'credit'}
+            <span class="text-[var(--crimson-fg)] ml-1">*</span>
+          {/if}
+        </p>
+        <div class="relative">
+          <button
+            type="button"
+            class="input w-full text-left flex items-center justify-between"
+            onclick={() => (showCustPicker = !showCustPicker)}
+          >
+            <span class={cart.customerName ? 'font-semibold' : 'text-[var(--text-3)]'}>
+              {cart.customerName ?? 'Walk-in (no customer)'}
+            </span>
+            <ChevronDown size={12} strokeWidth={2} class="text-[var(--text-3)]" />
+          </button>
+          {#if showCustPicker}
+            <div class="absolute top-full left-0 right-0 mt-1 card z-10 max-h-48 overflow-y-auto shadow-[var(--shadow)]">
+              <button
+                class="w-full text-left px-3 py-2 text-xs hover:bg-[var(--surface2)] border-b border-[var(--border)] flex items-center justify-between"
+                onclick={() => {
+                  cart.setCustomer(null, '');
+                  showCustPicker = false;
+                }}
+              >
+                <span class="text-[var(--text-3)]">Walk-in (no customer)</span>
+              </button>
+              <input
+                type="text"
+                class="input w-full text-[12px] mb-1"
+                placeholder="Search customers…"
+                value={customerSearch}
+                oninput={(e) => (customerSearch = (e.target as HTMLInputElement).value)}
+              />
+              {#if filteredCustomers.length > 0}
+                {#each filteredCustomers as c}
+                  <button
+                    class="w-full text-left px-3 py-2 text-xs hover:bg-[var(--surface2)] border-b last:border-0 border-[var(--border)] flex items-center justify-between gap-2"
+                    onclick={() => {
+                      cart.setCustomer(c.id, c.name);
+                      customerSearch = '';
+                      showCustPicker = false;
+                    }}
+                  >
+                    <span class="truncate">{c.name}</span>
+                    {#if c.phone}<span class="text-[10px] text-[var(--text-3)]">{c.phone}</span>{/if}
+                  </button>
+                {/each}
+              {:else if customerSearch.trim().length > 0}
+                <p class="text-[10.5px] text-[var(--text-3)] px-3 py-2 italic">No matches</p>
+              {:else}
+                <p class="text-[10.5px] text-[var(--text-3)] px-3 py-2 italic">Type to search…</p>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Payment method picker. For non-credit, tapping Checkout goes
+           straight to the checkout sheet. For credit, the button label
+           changes to "Next" and tapping it opens the credit prompt
+           modal. Either way, picking credit commits the customer choice
+           and the amount received happens before submitSale(). -->
+      <div>
+        <p class="input-label mb-1.5">Payment method</p>
+        <div class="grid grid-cols-3 gap-1.5">
+          {#each ['cash', 'credit', 'transfer'] as m}
+            {@const key    = m as PaymentMethod}
+            {@const meta   = PAY_META[key]}
+            {@const active = cart.paymentMethod === key}
+            <button
+              type="button"
+              class="py-2.5 rounded-lg border-2 flex flex-col items-center gap-0.5 transition-all active:scale-[0.97]
+                {active
+                  ? 'shadow-sm'
+                  : 'border-[var(--border)] bg-[var(--surface2)] hover:bg-[var(--surface)] text-[var(--text-2)]'}"
+              style={active
+                ? `border-color:${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'};
+                   background:color-mix(in srgb, ${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'} 10%, transparent);
+                   color:${meta.tone === 'primary' ? 'var(--primary-fg)' : meta.tone === 'teal' ? 'var(--teal-fg)' : meta.tone === 'gold' ? 'var(--gold-fg)' : 'var(--cobalt-fg)'}`
+                : ''}
+              onclick={() => pickPaymentMethod(key)}
+            >
+              <meta.icon size={15} strokeWidth={2} />
+              <span class="text-[10.5px] font-bold">{meta.label}</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Compact credit summary if credit is selected. Tapping "Edit
+           amount" re-opens the credit prompt modal. -->
+      {#if cart.paymentMethod === 'credit'}
+        <div class="rounded-lg p-2.5 flex items-center justify-between gap-2"
+             style="background:color-mix(in srgb, var(--gold) 10%, var(--surface));">
+          <div class="text-[10.5px]">
+            <span style="color:var(--gold-fg); font-weight:600">
+              {creditStatus === 'paid' ? 'Paid in full'
+                : creditStatus === 'partial' ? 'Partial · due ' + formatCurrency(Math.max(0, grandTotal - creditNumeric))
+                : 'Pending · ' + formatCurrency(grandTotal) + ' due'}
+            </span>
+            {#if cart.customerId}
+              <span class="text-[var(--text-3)] ml-1">· {cart.customerName}</span>
+            {:else}
+              <span class="ml-1" style="color:var(--crimson-fg); font-weight:600">· pick a customer</span>
+            {/if}
+          </div>
+          <button
+            type="button"
+            class="text-[10.5px] font-semibold underline-offset-2 hover:underline"
+            style="color:var(--gold-fg)"
+            onclick={openCreditPromptFromCart}
+          >
+            {creditStatus === 'pending' ? 'Set amount' : 'Edit'}
+          </button>
+        </div>
+      {/if}
+
       <div class="flex flex-col gap-1 text-xs">
         <div class="flex justify-between">
           <span class="text-[var(--text-3)]">Subtotal</span>
@@ -686,11 +846,12 @@
           </button>
         {/if}
         <Button
-          onclick={() => { cartOpen = false; showCheckout = true; }}
+          onclick={handleCheckoutClick}
           class="flex-1 justify-center"
           size="lg"
+          disabled={cart.paymentMethod === 'credit' && !cart.customerId}
         >
-          Checkout
+          {cart.paymentMethod === 'credit' ? 'Next' : 'Checkout'}
           <ChevronRight size={14} strokeWidth={2.5} />
         </Button>
       </div>
@@ -821,30 +982,43 @@
       {/if}
     </div>
 
-    <!-- Payment -->
+    <!-- Payment (read-only here; user picked it in the cart sheet).
+         The icon + label is shown for clarity, plus a 'Change' link
+         that pops them back to the cart to re-select. -->
     <div>
-      <p class="input-label mb-1.5">Payment method</p>
-      <div class="grid grid-cols-3 gap-2">
-        {#each ['cash', 'credit', 'transfer'] as m}
-          {@const key      = m as PaymentMethod}
-          {@const meta     = PAY_META[key]}
-          {@const active   = cart.paymentMethod === key}
-          <button
-            class="py-3 rounded-xl border-2 flex flex-col items-center gap-1.5 transition-all active:scale-[0.97]
-              {active
-                ? 'shadow-sm'
-                : 'border-[var(--border)] bg-[var(--surface2)] hover:bg-[var(--surface)] text-[var(--text-2)]'}"
-            style={active ? `border-color:${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'};
-                              background:color-mix(in srgb, ${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'} 12%, transparent);
-                              color:${meta.tone === 'primary' ? 'var(--primary-fg)' : meta.tone === 'teal' ? 'var(--teal-fg)' : meta.tone === 'gold' ? 'var(--gold-fg)' : 'var(--cobalt-fg)'}` : ''}
-            onclick={() => pickPaymentMethod(key)}
-          >
-            <meta.icon size={18} strokeWidth={2} />
-            <span class="text-xs font-bold">{meta.label}</span>
-            {#if active}<Check size={11} strokeWidth={3} class="opacity-60" />{/if}
-          </button>
-        {/each}
+      <div class="flex items-center justify-between mb-1.5">
+        <p class="input-label">Payment method</p>
+        <button
+          type="button"
+          class="text-[10.5px] font-semibold underline-offset-2 hover:underline"
+          style="color:var(--primary-fg)"
+          onclick={() => { showCheckout = false; cartOpen = true; }}
+        >
+          Change
+        </button>
       </div>
+      {#if true}
+        {@const m = PAY_META[cart.paymentMethod]}
+        <div class="input w-full flex items-center gap-2 py-2.5"
+             style={m ? `border-color:${m.tone === 'primary' ? 'var(--primary)' : m.tone === 'teal' ? 'var(--teal)' : m.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'};` : ''}>
+          {#if m}
+            <m.icon size={15} strokeWidth={2} />
+            <span class="text-[12.5px] font-bold">{m.label}</span>
+          {:else}
+            <span class="text-[12.5px] font-semibold">{cart.paymentMethod}</span>
+          {/if}
+          {#if cart.paymentMethod === 'credit' && creditNumeric > 0 && creditNumeric < grandTotal}
+            <span class="ml-auto text-[10.5px] font-semibold" style="color:var(--gold-fg)">
+              received {formatCurrency(creditNumeric)}
+            </span>
+          {/if}
+          {#if cart.paymentMethod === 'credit' && creditNumeric >= grandTotal}
+            <span class="ml-auto text-[10.5px] font-semibold" style="color:var(--teal-fg)">
+              paid in full
+            </span>
+          {/if}
+        </div>
+      {/if}
     </div>
 
     {#if cart.paymentMethod === 'credit'}
