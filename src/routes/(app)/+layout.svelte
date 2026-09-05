@@ -40,6 +40,20 @@
     if (data.customers)  custStore.replaceAll(data.customers  as any[]);
   });
 
+  // Offline-first hydration: on every page mount, populate the
+  // stores from IndexedDB BEFORE the server payload lands. That
+  // way, when the user opens the app while offline, every page
+  // already has its data. The server payload (in the $effect.pre
+  // above) overlays whatever's in IDB — so the experience is
+  //   1. Page loads → IDB data shows immediately (instant, works offline)
+  //   2. Server data lands → IDB is replaced with fresh data
+  //   3. User makes a write → optimistic update in the store
+  //   4. Network returns → sync engine flushes the queued write
+  $effect(() => {
+    void invStore.hydrateFromCache();
+    void custStore.hydrateFromCache();
+  });
+
   $effect(() => {
     // Warm the offline caches + drain any pending sales left in
     // IndexedDB from a previous session. Both calls are no-ops
@@ -48,7 +62,8 @@
     // the page renders first and the caches update in the
     // background.
     void offlineSync.flushPendingSales();
-    void offlineSync.refreshProductsCache();
+    void offlineSync.flushPendingOps();
+    void offlineSync.refreshAllCaches();
   });
 
   // Command-bar state — opened by Header's search button or ⌘K

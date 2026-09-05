@@ -26,8 +26,7 @@
   import BarcodeScanner from "$lib/components/ui/BarcodeScanner.svelte";
   import { navigating } from '$app/state';
   import { offlineSync } from '$lib/offline/offlineSync.svelte';
-  import { getDb } from '$lib/offline/offlineDb';
-  import { currentShop } from '$lib/stores/shop.svelte';
+  import { offlineFetch } from '$lib/offline/offlineFetch';
   import {
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, ArrowLeftRight, X,
@@ -360,58 +359,61 @@
       }
     }
 
-    // Offline path: queue the sale in IndexedDB and let the SW
-    // (or the next page boot) flush it.  We don't have a server
-    // reference number yet, so we skip the receipt modal.
-    //
-    // The stored payload matches the snake_case shape the
-    // /api/sales endpoint maps to (see `p_items` mapping in that
-    // handler) — so when the SW or page replays it, it just gets
-    // forwarded as-is.
+    // Offline path: queue the sale via offlineFetch, which writes
+    // to the generic pending_ops store. The sync engine flushes
+    // it when the network returns. We still go through the
+    // receipt modal so the cashier has something to show the
+    // customer; the receipt is flagged "Pending sync" so the
+    // user knows it hasn't reached the server yet.
     if (!offlineSync.online) {
-      const id = crypto.randomUUID();
+      const clientId = crypto.randomUUID();
+      const queuePayload = {
+        ...payload,
+        client_id: clientId,
+        items: payload.items.map((i: any) => ({
+          product_id: i.productId,
+          name: i.name,
+          sku: i.sku,
+          qty: i.qty,
+          unit_price: i.unitPrice,
+        })),
+      };
       try {
-        const db = await getDb();
-        const queuePayload = {
-          items: payload.items.map((i: any) => ({
-            product_id: i.productId,
-            name: i.name,
-            sku: i.sku,
-            qty: i.qty,
-            unit_price: i.unitPrice,
-          })),
-          customer_id: payload.customer_id,
-          customer_name: payload.customer_name,
-          discount_type: payload.discount_type,
-          discount_value: payload.discount_value,
-          payment_method: payload.payment_method,
-          notes: payload.notes,
-          subtotal: payload.subtotal,
-          discount_amount: payload.discount_amount,
-          total: payload.total,
-          tax_amount: payload.tax_amount,
-          // Carry the backdate override through the offline queue so
-          // the SW replay preserves the user's chosen timestamp.
-          created_at: payload.created_at,
-          // Credit fields — also carry through so the SW replay
-          // preserves the credit status / amount paid / due date.
-          credit_status:       payload.credit_status,
-          credit_amount_paid:  payload.credit_amount_paid,
-          credit_due_date:     payload.credit_due_date,
-        };
-        await db.put('pending_sales', {
-          id,
-          shop_id: currentShop.data?.id ?? '',
-          created_at: Date.now(),
-          payload: queuePayload,
-          status: 'pending',
-          last_error: null,
-          attempts: 0,
+        const res = await offlineFetch('/api/sales', {
+          method: 'POST',
+          kind: 'sale',
+          headers: { 'Idempotency-Key': clientId },
+          body: queuePayload,
         });
-        toasts.success("Sale saved offline — it'll sync when you're back online");
-        await offlineSync.refreshPendingCount();
-        showCheckout = false;
-        cart.clear();
+        if (res.status === 202) {
+          // Queued offline. Reflect the sale in the local stores so
+          // the dashboard's today-KPIs and the receipt modal both
+          // show the new sale.
+          salesStore.add({
+            id: clientId,
+            sale_ref: `OFFLINE-${Date.now()}`,
+            total: grandTotal,
+            payment_method: cart.paymentMethod,
+            created_at: payload.created_at ?? new Date().toISOString(),
+            customer: cart.customerId ? { id: cart.customerId, name: cart.customerName } : null,
+            _local: true, _pending: true,
+          });
+          for (const item of cart.items) {
+            const p = invStore.getById(item.productId);
+            if (p) invStore.update(item.productId, { qty: Math.max(0, (p.qty ?? 0) - item.qty) });
+          }
+          lastSaleRef      = `OFFLINE-${Date.now()}`;
+          lastSaleTotal    = grandTotal;
+          lastSaleMethod   = cart.paymentMethod;
+          lastSaleCustomer = cart.customerName || 'Walk-in';
+          toasts.info("Sale saved offline — will sync when online");
+          showCheckout = false;
+          showReceipt  = true;
+          cart.clear();
+        } else {
+          const data2 = await res.json().catch(() => ({}));
+          toasts.error(data2.error ?? 'Could not save offline');
+        }
       } catch (e: any) {
         toasts.error(e?.message ?? 'Could not save offline');
       }
@@ -1360,15 +1362,25 @@
 <!-- ─────────────────────────────────────────────────────────────────────────
   RECEIPT MODAL
   ───────────────────────────────────────────────────────────────────────── -->
-<Sheet bind:open={showReceipt} title={isEdit ? 'Sale updated' : 'Sale complete'} maxWidth="max-w-sm">
+<Sheet bind:open={showReceipt} title={isEdit ? 'Sale updated' : (lastSaleRef?.startsWith('OFFLINE-') ? 'Saved offline' : 'Sale complete')} maxWidth="max-w-sm">
   <div class="text-center py-3">
     <div class="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
          style="background:var(--teal-dim)">
       <Check size={28} strokeWidth={3} style="color:var(--teal)" />
     </div>
-    <p class="text-base font-bold mb-0.5">{isEdit ? 'Sale updated' : 'Sale recorded'}</p>
+    <p class="text-base font-bold mb-0.5">
+      {isEdit ? 'Sale updated' :
+        (lastSaleRef?.startsWith('OFFLINE-') ? 'Saved offline' : 'Sale recorded')}
+    </p>
     <p class="text-xs text-[var(--text-3)]">
       Ref: <span class="font-mono font-semibold">{lastSaleRef}</span>
+      {#if lastSaleRef?.startsWith('OFFLINE-')}
+        <span class="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wide"
+              style="background:color-mix(in srgb, var(--warning) 16%, transparent); color:var(--warning)">
+          <span class="w-1.5 h-1.5 rounded-full animate-pulse" style="background:var(--warning)"></span>
+          Pending sync
+        </span>
+      {/if}
     </p>
 
     <!-- Quick recap -->

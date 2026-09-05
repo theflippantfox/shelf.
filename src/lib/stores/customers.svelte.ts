@@ -43,6 +43,24 @@ class CustomersStore {
     this.#items = Array.isArray(items) ? items : [];
   }
 
+  /**
+   * Seed the store from the IndexedDB cache (offline-first). Called
+   * on app boot so the store has data even when the user is offline.
+   * The server payload is layered on top of this via `replaceAll()`
+   * when the layout / page mounts.
+   */
+  async hydrateFromCache(): Promise<void> {
+    if (typeof indexedDB === 'undefined') return;
+    const { readCache } = await import('$lib/offline/offlineFetch');
+    const cached = await readCache<any>('customers', 'name');
+    if (cached.length > 0) {
+      this.#items = cached.map(c => {
+        const { _cached_at, ...rest } = c;
+        return rest;
+      });
+    }
+  }
+
   setSearch(q: string) { this.#search = q; }
 
   getById(id: string) {

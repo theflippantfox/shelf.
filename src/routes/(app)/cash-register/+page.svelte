@@ -4,6 +4,7 @@
   import { toasts } from '$lib/stores/toast.svelte';
   import { formatCurrency } from '$lib/utils/format';
   import { register as regStore } from '$lib/stores/register.svelte';
+  import { offlineFetch } from '$lib/offline/offlineFetch';
   import PageShell  from '$lib/components/layout/PageShell.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import Button     from '$lib/components/ui/Button.svelte';
@@ -108,15 +109,15 @@
           effective_at: new Date().toISOString(),
           _pending: true,
         });
-        const res = await fetch('/api/cash-register/transfer', {
+        const res = await offlineFetch('/api/cash-register/transfer', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          kind: 'register',
+          body: {
             from: sheetDestination,
             to: sheetTransferTo,
             amount: signed,
             notes: sheetNotes,
-          }),
+          },
         });
         const data = await res.json();
         if (!res.ok) {
@@ -128,6 +129,15 @@
             (data.entries ?? []) as any[],
             (data.credit?.total ?? 0) as number,
           );
+          return;
+        }
+        // 202 = queued offline. Optimistic rows stay _pending; the
+        // sync engine will drain the queue and the next page load
+        // picks up the real server rows.
+        if (res.status === 202) {
+          toasts.info('Transfer saved offline — will sync when online');
+          showSheet = false;
+          sheetSubmitting = false;
           return;
         }
         toasts.success(`Transferred ${formatCurrency(signed)}`);
@@ -150,15 +160,15 @@
           effective_at: new Date().toISOString(),
           _pending: true,
         });
-        const res = await fetch('/api/cash-register', {
+        const res = await offlineFetch('/api/cash-register', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          kind: 'register',
+          body: {
             destination: sheetDestination,
             amount: signed,
             entry_type: sheetTab,
             notes: sheetNotes,
-          }),
+          },
         });
         const data = await res.json();
         if (!res.ok) {
@@ -169,6 +179,15 @@
             (data.entries ?? []) as any[],
             (data.credit?.total ?? 0) as number,
           );
+          return;
+        }
+        // 202 = queued offline (no real server row yet). The optimistic
+        // entry stays in the store with _pending until the sync engine
+        // drains the queue and the page is invalidated.
+        if (res.status === 202) {
+          toasts.info('Entry saved offline — will sync when online');
+          showSheet = false;
+          sheetSubmitting = false;
           return;
         }
         // Reconcile: replace the temp row with the real server row.
@@ -197,10 +216,10 @@
   async function doVoid() {
     if (voiding || !voidTarget || !voidReason.trim()) return;
     voiding = true;
-    const res = await fetch(`/api/cash-register/${voidTarget.id}`, {
+    const res = await offlineFetch(`/api/cash-register/${voidTarget.id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ void_reason: voidReason }),
+      kind: 'register',
+      body: { void_reason: voidReason },
     });
     if (res.ok) {
       toasts.success('Entry voided');

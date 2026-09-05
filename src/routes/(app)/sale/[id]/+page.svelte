@@ -3,6 +3,7 @@
   import { toasts } from '$lib/stores/toast.svelte';
   import { inventory as invStore } from '$lib/stores/inventory.svelte';
   import { returns as retStore, type ReturnItem, type SaleReturn } from '$lib/stores/returns.svelte';
+  import { offlineFetch } from '$lib/offline/offlineFetch';
   import { formatCurrency, formatDateTime } from '$lib/utils/format';
   import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button from '$lib/components/ui/Button.svelte';
@@ -165,10 +166,10 @@
     showReturn = false;
 
     try {
-      const res = await fetch(`/api/sales/${sale.id}/returns`, {
+      const res = await offlineFetch(`/api/sales/${sale.id}/returns`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        kind: 'return',
+        body: {
           reason:         returnReason,
           notes:          returnNotes || undefined,
           refund_method:  returnMethod,
@@ -177,7 +178,7 @@
             qty:         returnLines[it.id].qty,
             condition:   returnLines[it.id].condition,
           })),
-        }),
+        },
       });
       const result = await res.json();
       if (!res.ok) {
@@ -321,14 +322,14 @@
     }
     paying = true;
     try {
-      const res = await fetch(`/api/sales/${sale.id}/credit-payment`, {
+      const res = await offlineFetch(`/api/sales/${sale.id}/credit-payment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        kind: 'credit_payment',
+        body: {
           amount,
           destination: payMethod,
           notes:       payNotes || undefined,
-        }),
+        },
       });
       const result = await res.json();
       if (!res.ok) {
