@@ -211,6 +211,78 @@ export type Database = {
         }
         Relationships: []
       }
+      sale_returns: {
+        Row: {
+          id: string
+          sale_id: string
+          shop_id: string
+          processed_by: string
+          reason: Database['public']['Enums']['return_reason']
+          notes: string | null
+          total_refund: number
+          refund_method: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          sale_id: string
+          shop_id: string
+          processed_by: string
+          reason: Database['public']['Enums']['return_reason']
+          notes?: string | null
+          total_refund?: number
+          refund_method?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          sale_id?: string
+          shop_id?: string
+          processed_by?: string
+          reason?: Database['public']['Enums']['return_reason']
+          notes?: string | null
+          total_refund?: number
+          refund_method?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      sale_return_items: {
+        Row: {
+          id: string
+          return_id: string
+          product_id: string
+          product_name: string
+          product_sku: string | null
+          qty: number
+          unit_price: number
+          line_refund: number
+          condition: Database['public']['Enums']['return_condition']
+        }
+        Insert: {
+          id?: string
+          return_id: string
+          product_id: string
+          product_name: string
+          product_sku?: string | null
+          qty: number
+          unit_price: number
+          line_refund: number
+          condition: Database['public']['Enums']['return_condition']
+        }
+        Update: {
+          id?: string
+          return_id?: string
+          product_id?: string
+          product_name?: string
+          product_sku?: string | null
+          qty?: number
+          unit_price?: number
+          line_refund?: number
+          condition?: Database['public']['Enums']['return_condition']
+        }
+        Relationships: []
+      }
       product_tags: {
         Row: {
           product_id: string
@@ -1143,7 +1215,8 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      return_reason: ['defective', 'wrong_size', 'changed_mind', 'overcharge', 'duplicate_purchase', 'other'],
+      return_condition: ['resellable', 'damaged', 'expired'],
     }
     CompositeTypes: {
       [_ in never]: never

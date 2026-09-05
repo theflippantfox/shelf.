@@ -1,0 +1,574 @@
+<script lang="ts">
+  import { goto } from '$app/navigation';
+  import { toasts } from '$lib/stores/toast.svelte';
+  import { inventory as invStore } from '$lib/stores/inventory.svelte';
+  import { sales as salesStore } from '$lib/stores/sales.svelte';
+  import { register as regStore } from '$lib/stores/register.svelte';
+  import { customers as custStore } from '$lib/stores/customers.svelte';
+  import { returns as retStore, type ReturnItem, type SaleReturn } from '$lib/stores/returns.svelte';
+  import { formatCurrency, formatCurrencyCompact, formatDateTime } from '$lib/utils/format';
+  import PageShell from '$lib/components/layout/PageShell.svelte';
+  import Button from '$lib/components/ui/Button.svelte';
+  import Sheet from '$lib/components/ui/Sheet.svelte';
+  import Input from '$lib/components/ui/Input.svelte';
+  import {
+    ArrowLeft, Printer, Share2, RotateCcw, Check,
+    AlertCircle, Package, X,
+  } from 'lucide-svelte';
+
+  let { data } = $props();
+
+  // Reactive view of this sale. The store is the source of truth so
+  // edits / returns anywhere flow back here.
+  const sale = $derived((data.sale as any));
+  const items = $derived((sale?.items ?? []) as any[]);
+  const returns = $derived(retStore.for(sale?.id ?? ''));
+  const returnCount = $derived(returns.length);
+  const totalReturned = $derived(
+    returns.reduce((s, r) => s + (r.total_refund ?? 0), 0)
+  );
+
+  // Per-product already-returned qty. Live from the store.
+  const returnedQty = $derived.by(() => {
+    const out: Record<string, number> = {};
+    for (const r of returns) {
+      for (const it of r.items ?? []) {
+        out[it.product_id] = (out[it.product_id] ?? 0) + it.qty;
+      }
+    }
+    return out;
+  });
+
+  // ── Return sheet state ─────────────────────────────────────────────
+  let showReturn = $state(false);
+  let saving     = $state(false);
+  let returnReason = $state<'defective' | 'wrong_size' | 'changed_mind' | 'overcharge' | 'duplicate_purchase' | 'other'>('changed_mind');
+  let returnMethod = $state<'cash' | 'bank' | 'credit_note' | 'none'>('cash');
+  let returnNotes  = $state('');
+  // Per-line return state: { [line_id]: { qty, condition } }
+  // We key by line_id (sale_items.id) so editing a line doesn't mix
+  // with a different line for the same product.
+  type ReturnLine = { qty: number; condition: 'resellable' | 'damaged' | 'expired' };
+  let returnLines: Record<string, ReturnLine> = $state({});
+  // Whether each line is included in the return at all (default: false;
+  // user checks the boxes for the items they want to return).
+  let returnIncluded: Record<string, boolean> = $state({});
+
+  const PAYMENT_LABEL: Record<string, string> = {
+    cash: 'Cash', upi: 'UPI', card: 'Card', online: 'Online', other: 'Other', credit: 'On credit',
+  };
+  const REASON_LABEL: Record<string, string> = {
+    defective:          'Defective product',
+    wrong_size:         'Wrong size',
+    changed_mind:       'Customer changed mind',
+    overcharge:         'Overcharged',
+    duplicate_purchase: 'Duplicate purchase',
+    other:              'Other',
+  };
+  const CONDITION_LABEL: Record<string, string> = {
+    resellable: 'Resellable',
+    damaged:    'Damaged (trash)',
+    expired:    'Expired',
+  };
+  const REFUND_LABEL: Record<string, string> = {
+    cash:        'Cash',
+    bank:        'UPI / Card',
+    credit_note: 'Store credit',
+    none:        'No refund',
+  };
+
+  // Totals
+  const refundTotal = $derived(
+    items
+      .filter((it) => returnIncluded[it.id])
+      .reduce((s, it) => s + (returnLines[it.id]?.qty ?? 0) * (it.unit_price ?? 0), 0)
+  );
+  const refundItemCount = $derived(
+    Object.values(returnIncluded).filter(Boolean).length
+  );
+
+  function openReturnSheet() {
+    // Reset the form. Default: no items included, all qty 0.
+    returnReason = 'changed_mind';
+    returnMethod = 'cash';
+    returnNotes  = '';
+    returnLines  = {};
+    returnIncluded = {};
+    for (const it of items) {
+      returnLines[it.id] = {
+        qty: 0,
+        condition: 'resellable',
+      };
+      returnIncluded[it.id] = false;
+    }
+    showReturn = true;
+  }
+
+  async function submitReturn() {
+    if (!sale || sale.voided_at) {
+      toasts.error('Cannot return a voided sale');
+      return;
+    }
+    const includedItems = items.filter((it) => {
+      const inc = returnIncluded[it.id];
+      const line = returnLines[it.id];
+      return inc && line && line.qty > 0;
+    });
+    if (includedItems.length === 0) {
+      toasts.error('Pick at least one item to return');
+      return;
+    }
+    for (const it of includedItems) {
+      const line = returnLines[it.id];
+      const sold = it.qty ?? 0;
+      const already = returnedQty[it.product_id] ?? 0;
+      const remain = sold - already;
+      if (line.qty > remain) {
+        toasts.error(`Can only return ${remain} of ${it.product_name}`);
+        return;
+      }
+      if (!['resellable','damaged','expired'].includes(line.condition)) {
+        toasts.error('Pick a condition for every returned item');
+        return;
+      }
+    }
+    if (refundTotal <= 0 && returnMethod !== 'none') {
+      toasts.error('Refund total is 0 — pick "No refund" instead');
+      return;
+    }
+
+    saving = true;
+    const clientId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const tempReturn: SaleReturn = {
+      id:           clientId,
+      client_id:    clientId,
+      sale_id:      sale.id,
+      shop_id:      sale.shop_id,
+      processed_by: 'pending',
+      reason:       returnReason,
+      notes:        returnNotes || null,
+      total_refund: refundTotal,
+      refund_method: returnMethod,
+      created_at:   now,
+      items: includedItems.map((it) => ({
+        id: crypto.randomUUID(),
+        product_id: it.product_id,
+        product_name: it.product_name,
+        product_sku: it.product_sku,
+        qty: returnLines[it.id].qty,
+        unit_price: it.unit_price,
+        line_refund: returnLines[it.id].qty * it.unit_price,
+        condition: returnLines[it.id].condition,
+      })),
+    };
+    // Optimistic: show the return immediately, then reconcile.
+    retStore.add(sale.id, tempReturn);
+    toasts.success(`Return recorded: ${formatCurrency(refundTotal)} ${REFUND_LABEL[returnMethod]}`);
+    showReturn = false;
+
+    try {
+      const res = await fetch(`/api/sales/${sale.id}/returns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason:         returnReason,
+          notes:          returnNotes || undefined,
+          refund_method:  returnMethod,
+          items: includedItems.map((it) => ({
+            product_id: it.product_id,
+            qty:         returnLines[it.id].qty,
+            condition:   returnLines[it.id].condition,
+          })),
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        retStore.rollback(sale.id, clientId);
+        toasts.error(result.error ?? 'Return failed');
+        return;
+      }
+      // Reconcile: replace the temp return with the real one.
+      const real: SaleReturn = {
+        ...result.return,
+        items: result.return.items,
+      };
+      retStore.reconcile(sale.id, clientId, real);
+      // The server also restocked resellable items. Pull the latest
+      // product list from the server so inventory KPIs update.
+      // (Lightweight: only the affected products would be ideal, but
+      // refreshing the whole list is acceptable for this volume.)
+      const r = await fetch('/api/products');
+      if (r.ok) {
+        const products = await r.json();
+        invStore.replaceAll(products);
+      }
+    } finally {
+      saving = false;
+    }
+  }
+
+  function printReceipt() {
+    window.print();
+  }
+  function shareReceipt() {
+    const text =
+      `${sale.shop_id ? '' : ''}` +
+      `Receipt ${sale.sale_ref ?? ''}\n` +
+      `Total: ${formatCurrency(sale.total)}\n` +
+      (sale.customer?.name ? `Customer: ${sale.customer.name}\n` : '') +
+      (sale.payment_method ? `Payment: ${PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method}\n` : '');
+    if (navigator.share) {
+      navigator.share({ text, title: `Receipt ${sale.sale_ref}` }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(text);
+      toasts.success('Copied to clipboard');
+    }
+  }
+</script>
+
+<svelte:head><title>Receipt {sale?.sale_ref ?? ''} · Shëlf</title></svelte:head>
+
+<PageShell title="Receipt" maxWidth="max-w-2xl">
+  <button
+    onclick={() => goto('/history')}
+    class="text-[12px] font-semibold mb-3 inline-flex items-center gap-1 text-[var(--text-2)] hover:text-[var(--text)] no-print"
+  >
+    <ArrowLeft size={13} strokeWidth={2} /> Back to history
+  </button>
+
+  {#if !sale}
+    <div class="surface-card p-6 text-center text-[var(--text-3)]">Sale not found</div>
+  {:else}
+    <!-- Receipt card -->
+    <div class="surface-card p-5 md:p-6">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-3)]">Sale</p>
+          <p class="text-[20px] font-bold tabular-nums tracking-tight">{sale.sale_ref ?? '—'}</p>
+          <p class="text-[11px] text-[var(--text-3)] mt-0.5">{formatDateTime(sale.created_at)}</p>
+        </div>
+        <div class="flex items-center gap-1.5 no-print">
+          {#if !sale.voided_at}
+            <span class="badge badge-teal text-[10px]">Complete</span>
+          {:else}
+            <span class="badge badge-crimson text-[10px]">Voided</span>
+          {/if}
+          {#if sale.credit_status}
+            <span class="text-[9.5px] font-bold px-1.5 py-0.5 rounded {sale.credit_status === 'paid' ? 'bg-[var(--teal)] text-[var(--teal-fg)]' : sale.credit_status === 'partial' ? 'bg-[var(--gold)] text-[var(--gold-fg)]' : 'bg-[var(--crimson)] text-white'}">
+              {sale.credit_status === 'paid' ? 'Paid' : sale.credit_status === 'partial' ? 'Partial' : 'Pending'}
+            </span>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Customer / payment / served-by summary -->
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px] mb-4">
+        <div>
+          <p class="text-[var(--text-3)] uppercase tracking-wider text-[9.5px] font-bold">Customer</p>
+          <p class="font-semibold mt-0.5 truncate">{sale.customer?.name ?? 'Walk-in'}</p>
+          {#if sale.customer?.phone}<p class="text-[var(--text-3)]">{sale.customer.phone}</p>{/if}
+        </div>
+        <div>
+          <p class="text-[var(--text-3)] uppercase tracking-wider text-[9.5px] font-bold">Payment</p>
+          <p class="font-semibold mt-0.5">{PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method}</p>
+          {#if sale.credit_amount_paid != null && sale.credit_amount_paid > 0}
+            <p class="text-[var(--text-3)]">received {formatCurrency(sale.credit_amount_paid)}</p>
+          {/if}
+        </div>
+        <div>
+          <p class="text-[var(--text-3)] uppercase tracking-wider text-[9.5px] font-bold">Served by</p>
+          <p class="font-semibold mt-0.5 truncate">
+            {sale.served_by ? `${sale.served_by.first_name ?? ''} ${sale.served_by.last_name ?? ''}`.trim() || '—' : '—'}
+          </p>
+        </div>
+      </div>
+
+      <!-- Items -->
+      <div class="border-t border-[var(--border)] pt-3">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-[var(--text-3)] mb-2">Items</p>
+        <div class="divide-y divide-[var(--border)]">
+          {#each items as it (it.id)}
+            {@const already = returnedQty[it.product_id] ?? 0}
+            {@const remain = (it.qty ?? 0) - already}
+            <div class="py-2 flex items-start gap-3">
+              <div class="flex-1 min-w-0">
+                <p class="text-[13px] font-semibold truncate">{it.product_name}</p>
+                {#if it.product_sku}<p class="text-[10px] text-[var(--text-3)] font-mono">{it.product_sku}</p>{/if}
+                <p class="text-[10.5px] text-[var(--text-3)] tabular-nums">
+                  {formatCurrency(it.unit_price)} × {it.qty}
+                  {#if already > 0}
+                    <span class="text-[var(--crimson-fg)]">· {already} returned</span>
+                  {/if}
+                </p>
+              </div>
+              <p class="text-[13px] font-bold tabular-nums shrink-0">{formatCurrency(it.line_total)}</p>
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Totals -->
+      <div class="border-t border-[var(--border)] pt-3 mt-2 space-y-1 text-[12px]">
+        <div class="flex justify-between">
+          <span class="text-[var(--text-3)]">Subtotal</span>
+          <span class="tabular-nums">{formatCurrency(sale.subtotal)}</span>
+        </div>
+        {#if sale.discount_amount > 0}
+          <div class="flex justify-between" style="color:var(--teal-fg)">
+            <span>Discount</span>
+            <span class="tabular-nums">– {formatCurrency(sale.discount_amount)}</span>
+          </div>
+        {/if}
+        {#if sale.tax_amount > 0}
+          <div class="flex justify-between">
+            <span class="text-[var(--text-3)]">Tax</span>
+            <span class="tabular-nums">{formatCurrency(sale.tax_amount)}</span>
+          </div>
+        {/if}
+        {#if totalReturned > 0}
+          <div class="flex justify-between" style="color:var(--crimson-fg)">
+            <span>Refunded</span>
+            <span class="tabular-nums">– {formatCurrency(totalReturned)}</span>
+          </div>
+        {/if}
+        <div class="flex justify-between font-bold text-[15px] pt-1.5 border-t border-[var(--border)] mt-1">
+          <span>Total</span>
+          <span class="tabular-nums">{formatCurrency(sale.total)}</span>
+        </div>
+      </div>
+
+      <!-- Action row -->
+      {#if !sale.voided_at}
+        <div class="flex gap-2 mt-4 no-print">
+          <Button variant="primary" onclick={openReturnSheet} class="flex-1" disabled={sale.voided_at}>
+            <RotateCcw size={14} strokeWidth={2} /> Process return
+          </Button>
+          <Button variant="secondary" onclick={printReceipt}>
+            <Printer size={14} strokeWidth={2} /> Print
+          </Button>
+          <Button variant="secondary" onclick={shareReceipt}>
+            <Share2 size={14} strokeWidth={2} /> Share
+          </Button>
+        </div>
+      {/if}
+    </div>
+
+    <!-- Returns history -->
+    {#if returnCount > 0}
+      <div class="surface-card p-5 mt-3 no-print">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <RotateCcw size={14} strokeWidth={2.2} style="color:var(--crimson)" />
+            <h2 class="font-semibold text-[14px]">Returns</h2>
+            <span class="text-[10px] text-[var(--text-3)] font-semibold uppercase tracking-wider">· {returnCount} processed</span>
+          </div>
+          <span class="text-[12px] font-bold tabular-nums" style="color:var(--crimson-fg)">
+            –{formatCurrency(totalReturned)}
+          </span>
+        </div>
+        <div class="space-y-2.5">
+          {#each returns as r (r.id)}
+            <div class="rounded-lg p-3" style="background:var(--surface2)">
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <div>
+                  <p class="text-[12px] font-semibold">{REASON_LABEL[r.reason] ?? r.reason}</p>
+                  <p class="text-[10.5px] text-[var(--text-3)]">
+                    {formatDateTime(r.created_at)} · {REFUND_LABEL[r.refund_method] ?? r.refund_method}
+                  </p>
+                </div>
+                <p class="text-[12.5px] font-bold tabular-nums" style="color:var(--crimson-fg)">
+                  –{formatCurrency(r.total_refund)}
+                </p>
+              </div>
+              {#if r.notes}
+                <p class="text-[11px] text-[var(--text-2)] italic mb-1.5">"{r.notes}"</p>
+              {/if}
+              <div class="flex flex-wrap gap-1.5">
+                {#each r.items as it}
+                  <span class="text-[10px] px-1.5 py-0.5 rounded-md"
+                        style="background:color-mix(in srgb, {it.condition === 'resellable' ? 'var(--teal)' : it.condition === 'expired' ? 'var(--gold)' : 'var(--crimson)'} 12%, var(--surface)); color:var(--text-2);">
+                    {it.qty}× {it.product_name}
+                    <span class="text-[var(--text-3)]">· {CONDITION_LABEL[it.condition]}</span>
+                  </span>
+                {/each}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+  {/if}
+</PageShell>
+
+<!-- ──────────────────────────────────────────────────────────────────────
+  RETURN SHEET
+  Bottom-anchored sheet that lets the cashier pick which items were
+  returned, how many of each, what condition they're in (resellable
+  / damaged / expired), and how the customer is being refunded
+  (cash / bank / store credit / no refund).
+  ────────────────────────────────────────────────────────────────────── -->
+<Sheet bind:open={showReturn} title="Process return" maxWidth="max-w-md">
+  <div class="space-y-4">
+    <div class="rounded-xl p-3 flex items-start gap-2.5"
+         style="background:color-mix(in srgb, var(--crimson) 8%, var(--surface)); border:1px solid color-mix(in srgb, var(--crimson) 22%, transparent);">
+      <AlertCircle size={14} strokeWidth={2.2} class="mt-0.5 shrink-0" style="color:var(--crimson)" />
+      <p class="text-[11.5px] leading-relaxed" style="color:var(--text-2)">
+        Returns are <strong>separate events</strong> — the original sale stays
+        in the record. Stock is restocked for resellable items,
+        money flows back out for cash / bank refunds, and the
+        customer balance is adjusted for credit notes.
+      </p>
+    </div>
+
+    <!-- Reason -->
+    <div>
+      <p class="input-label mb-1.5">Reason</p>
+      <div class="grid grid-cols-2 gap-1.5">
+        {#each Object.entries(REASON_LABEL) as [val, label]}
+          <button type="button"
+                  class="px-2 py-1.5 text-[11px] font-semibold rounded-md border transition
+                         {returnReason === val
+                           ? 'shadow-sm'
+                           : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface2)] text-[var(--text-2)]'}"
+                  style={returnReason === val
+                    ? 'border-color:var(--crimson); background:color-mix(in srgb, var(--crimson) 10%, transparent); color:var(--crimson-fg);'
+                    : ''}
+                  onclick={() => returnReason = val}>
+            {label}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    <!-- Items: checkbox + qty + condition per line -->
+    <div>
+      <p class="input-label mb-1.5">Items being returned</p>
+      <div class="space-y-1.5">
+        {#each items as it (it.id)}
+          {@const already = returnedQty[it.product_id] ?? 0}
+          {@const remain = (it.qty ?? 0) - already}
+          {@const inc = returnIncluded[it.id] ?? false}
+          {@const line = returnLines[it.id] ?? { qty: 0, condition: 'resellable' }}
+          <div class="rounded-lg p-2.5 border"
+               style={inc
+                 ? 'border-color:var(--crimson); background:color-mix(in srgb, var(--crimson) 4%, var(--surface));'
+                 : 'border-color:var(--border); background:var(--surface2);'}>
+            <div class="flex items-start gap-2">
+              <input
+                type="checkbox"
+                class="mt-0.5"
+                checked={inc}
+                onchange={(e) => {
+                  returnIncluded[it.id] = (e.currentTarget as HTMLInputElement).checked;
+                  if (returnIncluded[it.id] && (returnLines[it.id]?.qty ?? 0) === 0) {
+                    returnLines[it.id] = { ...returnLines[it.id], qty: remain };
+                  }
+                }}
+                disabled={remain <= 0}
+              />
+              <div class="flex-1 min-w-0">
+                <p class="text-[12.5px] font-semibold truncate">{it.product_name}</p>
+                <p class="text-[10px] text-[var(--text-3)] tabular-nums">
+                  sold {it.qty}
+                  {#if already > 0} · {already} already returned{/if}
+                  {#if remain <= 0} · fully returned{/if}
+                </p>
+              </div>
+            </div>
+            {#if inc}
+              <div class="flex items-center gap-2 mt-2 ml-5">
+                <div class="flex items-center gap-1">
+                  <button type="button" class="btn btn-ghost btn-icon btn-sm"
+                          onclick={() => returnLines[it.id] = { ...line, qty: Math.max(0, line.qty - 1) }}>
+                    <X size={11} />
+                  </button>
+                  <input
+                    type="number"
+                    class="input w-14 text-center text-[12px] tabular-nums"
+                    min="1"
+                    max={remain}
+                    bind:value={returnLines[it.id].qty}
+                  />
+                  <button type="button" class="btn btn-ghost btn-icon btn-sm"
+                          onclick={() => returnLines[it.id] = { ...line, qty: Math.min(remain, line.qty + 1) }}>
+                    +
+                  </button>
+                </div>
+                <select
+                  class="input text-[11px] py-1 flex-1"
+                  bind:value={returnLines[it.id].condition}
+                >
+                  <option value="resellable">Resellable</option>
+                  <option value="damaged">Damaged (trash)</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </div>
+
+    <!-- Refund method -->
+    <div>
+      <p class="input-label mb-1.5">Refund method</p>
+      <div class="grid grid-cols-4 gap-1.5">
+        {#each Object.entries(REFUND_LABEL) as [val, label]}
+          <button type="button"
+                  class="px-2 py-2 text-[10.5px] font-semibold rounded-md border transition
+                         {returnMethod === val
+                           ? 'shadow-sm'
+                           : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface2)] text-[var(--text-2)]'}"
+                  style={returnMethod === val
+                    ? 'border-color:var(--primary); background:color-mix(in srgb, var(--primary) 10%, transparent); color:var(--primary-fg);'
+                    : ''}
+                  onclick={() => returnMethod = val}>
+            {label}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div>
+      <p class="input-label mb-1.5">Notes <span class="text-[var(--text-3)] font-normal">(optional)</span></p>
+      <textarea
+        bind:value={returnNotes}
+        placeholder="Any context the audit trail should capture…"
+        rows="2"
+        class="input text-sm resize-y min-h-[56px]"
+      ></textarea>
+    </div>
+
+    <!-- Live summary -->
+    <div class="rounded-lg p-3 flex items-center justify-between"
+         style="background:var(--surface2)">
+      <div>
+        <p class="text-[9.5px] font-bold uppercase tracking-wider text-[var(--text-3)]">Refund</p>
+        <p class="text-[18px] font-bold tabular-nums mt-0.5" style={refundTotal > 0 ? 'color:var(--crimson-fg)' : ''}>
+          {formatCurrency(refundTotal)}
+        </p>
+        <p class="text-[10.5px] text-[var(--text-3)]">
+          {refundItemCount} item{refundItemCount === 1 ? '' : 's'} via {REFUND_LABEL[returnMethod]}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {#snippet footer()}
+    <div class="flex gap-2">
+      <Button variant="secondary" onclick={() => (showReturn = false)} class="flex-1">Cancel</Button>
+      <Button variant="primary" onclick={submitReturn} loading={saving} class="flex-1">
+        <Check size={14} strokeWidth={2.2} /> Record return
+      </Button>
+    </div>
+  {/snippet}
+</Sheet>
+
+<style>
+  /* Hide the action row + return history when printing */
+  @media print {
+    .no-print { display: none !important; }
+  }
+</style>

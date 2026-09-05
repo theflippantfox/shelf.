@@ -264,12 +264,12 @@
         {@const meta    = PAY_META[s.payment_method]}
         {@const voided  = !!s.voided_at}
         <a
-          href="/history/{s.id}"
+          href="/sale/{s.id}"
           class="surface-card p-3 md:p-4 flex items-center gap-3 hover:border-[color-mix(in_srgb,var(--primary)_30%,var(--border))] hover:-translate-y-0.5 hover:shadow-[var(--shadow-sm)] transition-all
                  {voided ? 'opacity-60' : ''}"
         >
-          <!-- Payment-method icon -->
-          <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+          <!-- Method icon -->
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
                style="background:color-mix(in srgb, {meta?.color ?? 'var(--text-3)'} 14%, transparent)">
             {#if meta}
               <meta.icon size={16} strokeWidth={2} style="color:{meta.color}" />
@@ -281,7 +281,7 @@
           <!-- Main info -->
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
-              <p class="font-mono text-[11px] font-semibold text-[var(--primary)]">{s.sale_ref}</p>
+              <p class="font-mono text-[11px] font-semibold text-[var(--primary)] underline-offset-2 group-hover:underline">{s.sale_ref}</p>
               {#if voided}
                 <span class="badge badge-crimson text-[9px]">Voided</span>
               {:else}

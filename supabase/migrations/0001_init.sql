@@ -277,7 +277,7 @@ create table public.stock_log (
   shop_id           uuid not null references public.shops(id) on delete cascade,
   product_id        uuid not null references public.products(id) on delete cascade,
   delta             integer not null,
-  reason            text not null check (reason in ('sale','restock','adjustment','void')),
+  reason            text not null check (reason in ('sale','restock','adjustment','void','return','damage','expiry')),
   reference         text,
   purchase_order_id uuid references public.purchase_orders(id) on delete set null,
   created_by        uuid not null references public.profiles(id),
