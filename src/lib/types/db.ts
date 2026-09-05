@@ -491,6 +491,60 @@ export type Database = {
           },
         ]
       }
+      purchase_order_payments: {
+        Row: {
+          id: string
+          purchase_order_id: string
+          shop_id: string
+          amount: number
+          method: 'cash' | 'bank' | 'credit' | 'adjustment'
+          notes: string | null
+          paid_at: string
+          paid_by: string
+          register_entry_id: string | null
+          client_request_id: string | null
+        }
+        Insert: {
+          id?: string
+          purchase_order_id: string
+          shop_id: string
+          amount: number
+          method: 'cash' | 'bank' | 'credit' | 'adjustment'
+          notes?: string | null
+          paid_at?: string
+          paid_by: string
+          register_entry_id?: string | null
+          client_request_id?: string | null
+        }
+        Update: {
+          id?: string
+          purchase_order_id?: string
+          shop_id?: string
+          amount?: number
+          method?: 'cash' | 'bank' | 'credit' | 'adjustment'
+          notes?: string | null
+          paid_at?: string
+          paid_by?: string
+          register_entry_id?: string | null
+          client_request_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_payments_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_payments_register_entry_id_fkey"
+            columns: ["register_entry_id"]
+            isOneToOne: false
+            referencedRelation: "cash_register"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_orders: {
         Row: {
           bill_image_url: string | null
@@ -1104,7 +1158,30 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      sale_share_view: {
+        Row: {
+          created_at: string | null
+          customer_name: string | null
+          discount_amount: number | null
+          id: string | null
+          notes: string | null
+          payment_method: string | null
+          sale_ref: string | null
+          share_token: string | null
+          shop_name: string | null
+          subtotal: number | null
+          tax_amount: number | null
+          total: number | null
+          voided_at: string | null
+        }
+      }
+      supplier_outstanding: {
+        Row: {
+          outstanding: number | null
+          supplier_id: string | null
+          supplier_name: string | null
+        }
+      }
     }
     Functions: {
       create_sale: {

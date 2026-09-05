@@ -39,8 +39,24 @@
   ];
 
   onMount(async () => {
-    await loadSuppliers();
+    await Promise.all([loadSuppliers(), loadOutstandings()]);
   });
+
+  let outstandings: Record<string, number> = $state({});
+
+  async function loadOutstandings() {
+    try {
+      // The supplier_outstanding view is a SECURITY DEFINER function-like
+      // view, accessible via PostgREST as a select. We use the view name.
+      const res = await fetch("/api/supplier-outstandings");
+      if (res.ok) {
+        const rows = await res.json();
+        for (const r of rows) {
+          outstandings[r.supplier_id] = Number(r.outstanding ?? 0);
+        }
+      }
+    } catch { /* non-fatal — list still renders */ }
+  }
 
   async function loadSuppliers() {
     loading = true;
@@ -276,7 +292,7 @@
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-sm font-semibold truncate">{s.name}</p>
-            <div class="flex items-center gap-2 mt-2">
+            <div class="flex items-center gap-2 mt-2 flex-wrap">
               <span class="badge badge-neutral text-[9px]"
                 >{TERM_LABELS[s.payment_terms] ?? s.payment_terms}</span
               >
@@ -284,6 +300,13 @@
                 <span class="text-[10px] text-[var(--text-3)]"
                   >{s.lead_time_days}d lead time</span
                 >
+              {/if}
+              {#if outstandings[s.id] > 0}
+                <span class="text-[9.5px] font-bold px-1.5 py-0.5 rounded-full"
+                      title="We owe this supplier"
+                      style="background:color-mix(in srgb, var(--warning) 16%, transparent); color:var(--warning)">
+                  Owes ₹{outstandings[s.id].toFixed(0)}
+                </span>
               {/if}
             </div>
           </div>

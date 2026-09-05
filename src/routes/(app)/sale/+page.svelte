@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { browser } from "$app/environment";
   import {
@@ -32,7 +33,7 @@
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, CreditCard, ArrowLeftRight, X,
     Search, Check, ChevronRight, ChevronDown, Package, ScanLine,
-    Clock, AlertCircle, Calendar,
+    Clock, AlertCircle, Calendar, Pause, Play, Trash,
   } from "lucide-svelte";
 
   let { data } = $props();
@@ -52,6 +53,25 @@
   let lastSaleCustomer = $state<string>('');
   let discountStr   = $state("");
   let customerSearch = $state("");
+  // Held-cart sheet
+  let showHeld = $state(false);
+
+  // Reactive count of held carts so the "Held (N)" pill updates live.
+  // We snapshot from the cart store into a $state value on mount +
+  // whenever the held sheet opens, since the cart store's getters
+  // read from localStorage and aren't reactive on their own.
+  let heldCount = $state(0);
+  let heldList: any[] = $state([]);
+  function refreshHeld() {
+    heldCount = cart.heldCount;
+    heldList  = cart.heldCarts;
+  }
+  // Re-read on mount and whenever the page becomes visible again
+  // (covers "user came back to the tab after a long break").
+  onMount(refreshHeld);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', refreshHeld);
+  }
 
   // Tracks which product ids are currently in (or near) the viewport — only
   // those render real card DOM; everything else renders a cheap skeleton.
@@ -448,6 +468,67 @@
     if (!confirm('Clear cart?')) return;
     cart.clear();
     discountStr = '';
+  }
+
+  // ── Hold / resume / discard parked carts ───────────────────
+  // The cart store persists held carts to localStorage so a page
+  // refresh doesn't lose them. The cashier can resume any held
+  // cart from the "Held orders" sheet.
+  function holdCart() {
+    if (cart.isEmpty) return;
+    // Require confirmation so the cashier doesn't accidentally
+    // park a cart the customer is still adding to.
+    const itemsLabel = cart.count === 1 ? '1 item' : `${cart.count} items`;
+    const totalLabel = formatCurrency(cart.total);
+    if (!confirm(`Hold this cart (${itemsLabel}, ${totalLabel}) for later? The cart will be cleared and you can resume it from the Held orders sheet.`)) return;
+    cart.hold();
+    cartOpen = false;          // close the cart sheet
+    refreshHeld();
+    toasts.info('Cart held. Tap "Held" to resume later.');
+  }
+  function openHeldSheet() {
+    refreshHeld();
+    showHeld = true;
+  }
+  function resumeHeld(id: string) {
+    const ok = cart.resume(id);
+    if (!ok) {
+      toasts.error('Could not resume — cart not found');
+      return;
+    }
+    showHeld = false;
+    cartOpen = true;            // open the cart sheet so the cashier can see what's loaded
+    refreshHeld();
+    toasts.success('Cart resumed');
+  }
+  function discardHeld(id: string) {
+    if (!confirm('Discard this held cart? This cannot be undone.')) return;
+    cart.discardHeld(id);
+    refreshHeld();
+  }
+
+  // Held-cart summary helpers
+  function heldSubtotal(h: any): number {
+    return h.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
+  }
+  function heldDiscount(h: any): number {
+    if (h.discountType === 'percent') {
+      return Math.round(heldSubtotal(h) * h.discountValue / 100);
+    }
+    return h.discountValue ?? 0;
+  }
+  function heldTotal(h: any): number {
+    return Math.max(0, heldSubtotal(h) - heldDiscount(h));
+  }
+  function heldAge(h: any): string {
+    const ms = Date.now() - new Date(h.heldAt).getTime();
+    const min = Math.floor(ms / 60_000);
+    if (min < 1)  return 'just now';
+    if (min < 60) return `${min} min ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24)  return `${hr} hr ago`;
+    const d = Math.floor(hr / 24);
+    return `${d} day${d === 1 ? '' : 's'} ago`;
   }
 
   /**
@@ -874,6 +955,14 @@
           >
             <Trash2 size={14} strokeWidth={1.75} />
           </button>
+          <button
+            onclick={holdCart}
+            class="btn btn-secondary justify-center px-3"
+            aria-label="Hold cart"
+            title="Hold cart for later"
+          >
+            <Pause size={14} strokeWidth={1.75} />
+          </button>
         {/if}
         <Button
           onclick={handleCheckoutClick}
@@ -901,6 +990,28 @@
       <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(grandTotal)}</span>
     </button>
   </div>
+{/if}
+
+<!-- Held-carts pill (visible when there are held carts in storage,
+     shown above the floating cart pill on both desktop and mobile) -->
+{#if heldCount > 0}
+  <button
+    onclick={openHeldSheet}
+    class="fixed right-4 md:right-6 px-3 py-1.5 rounded-full shadow-[var(--shadow-md)] flex items-center gap-1.5 active:scale-95 transition-transform"
+    style="bottom: {cart.count > 0 ? (browser ? 'calc(5.5rem + env(safe-area-inset-bottom))' : '5.5rem') : '1.5rem'};
+           z-index: 45;
+           background:var(--surface);
+           border:1px solid var(--border);
+           color:var(--text)"
+    title="Resume a held cart"
+  >
+    <Pause size={13} strokeWidth={2.2} class="text-[var(--warning)]" />
+    <span class="text-[11px] font-semibold">Held</span>
+    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums"
+          style="background:var(--warning); color:var(--warning-fg, white)">
+      {heldCount}
+    </span>
+  </button>
 {/if}
 
 <!-- Floating cart pill (mobile, bottom-right, above bottom nav) -->
@@ -1295,6 +1406,79 @@
       </Button>
     </div>
   {/snippet}
+</Sheet>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+  HELD-CARTS SHEET
+  Shows the carts that were parked via the "Hold" button on the
+  cart sheet. The cashier can resume any of them (replaces the
+  current cart) or discard them.
+  ───────────────────────────────────────────────────────────────────────── -->
+<Sheet bind:open={showHeld} title="Held carts" maxWidth="max-w-md">
+  <div class="space-y-3">
+    <p class="text-[11.5px] text-[var(--text-3)]">
+      Cart you held to come back to. Tap <strong>Resume</strong> to load it back into the cart, or <strong>Discard</strong> to throw it away.
+    </p>
+
+    {#if heldList.length === 0}
+      <div class="rounded-xl p-8 text-center" style="background:var(--surface2)">
+        <Pause size={28} strokeWidth={1.5} class="mx-auto mb-2" style="color:var(--text-3)" />
+        <p class="text-[12.5px] font-semibold mb-1">No held carts</p>
+        <p class="text-[11px] text-[var(--text-3)]">
+          When a customer has to step aside, hold their cart. It'll show up here.
+        </p>
+      </div>
+    {:else}
+      <ul class="space-y-2">
+        {#each heldList as h (h.id)}
+          {@const itemsLabel = h.items.length === 1 ? '1 item' : `${h.items.length} items`}
+          <li class="rounded-xl p-3 space-y-2"
+              style="background:var(--surface2)">
+            <div class="flex items-center gap-2">
+              <Pause size={14} strokeWidth={2} class="shrink-0" style="color:var(--warning)" />
+              <div class="flex-1 min-w-0">
+                <p class="text-[12.5px] font-semibold">
+                  {h.customerName || 'Walk-in customer'}
+                </p>
+                <p class="text-[10.5px] text-[var(--text-3)]">
+                  {itemsLabel} · held {heldAge(h)}
+                  {#if h.paymentMethod !== 'cash'}
+                    · {h.paymentMethod}
+                  {/if}
+                </p>
+              </div>
+              <p class="text-[13px] font-bold tabular-nums">{formatCurrency(heldTotal(h))}</p>
+            </div>
+            <ul class="text-[10.5px] text-[var(--text-2)] space-y-0.5 pl-5">
+              {#each h.items as it}
+                <li>· {it.qty}× {it.name}</li>
+              {/each}
+              {#if heldDiscount(h) > 0}
+                <li class="italic text-[var(--text-3)]">discount {formatCurrency(heldDiscount(h))}</li>
+              {/if}
+            </ul>
+            <div class="flex gap-1.5 pt-1">
+              <button
+                onclick={() => resumeHeld(h.id)}
+                class="btn btn-primary flex-1 justify-center"
+                style="padding:0.4rem 0.75rem; font-size:11px"
+              >
+                <Play size={12} strokeWidth={2.2} /> Resume
+              </button>
+              <button
+                onclick={() => discardHeld(h.id)}
+                class="btn btn-secondary justify-center"
+                style="padding:0.4rem 0.6rem; font-size:11px"
+                aria-label="Discard held cart"
+              >
+                <Trash size={12} strokeWidth={1.75} />
+              </button>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
 </Sheet>
 
 <!-- ─────────────────────────────────────────────────────────────────────────
