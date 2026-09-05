@@ -10,6 +10,8 @@
   import { toasts } from "$lib/stores/toast.svelte";
   import { formatCurrency, formatCurrencyCompact } from "$lib/utils/format";
   import { fuzzyFilter } from "$lib/utils/fuzzy";
+  import { inventory as invStore } from "$lib/stores/inventory.svelte";
+  import { customers as custStore } from "$lib/stores/customers.svelte";
   import { inview }  from "$lib/utils/inview";
   import { fly } from "svelte/transition";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
@@ -96,8 +98,12 @@
    * function whose inner body never re-executed (same bug as inventory). Use
    * `$derived.by` so the body actually runs reactively.
    */
+  // Source of truth: the inventory store. The server data is only
+  // used to seed the store on first load (handled in the layout /
+  // +page.server.ts). Mutations elsewhere (e.g. inventory page)
+  // propagate here automatically via the shared store.
   const products = $derived.by(() => {
-    let list = data.products as any[];
+    let list = invStore.all as any[];
     if (filterCat) {
       list = list.filter(p => (p.category?.id ?? p.category) === filterCat);
     }
@@ -120,8 +126,9 @@
   });
 
   /* ── Derived: filtered customers ───────────────────────────────────────── */
+  // Source of truth: the customers store. See products block above.
   const filteredCustomers = $derived.by(() => {
-    const list = data.customers as any[];
+    const list = custStore.all as any[];
     if (!customerSearch.trim()) return list.slice(0, 8);
     return fuzzyFilter(list, customerSearch, {
       fields: [

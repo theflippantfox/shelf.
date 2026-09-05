@@ -4,6 +4,7 @@
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import { formatCurrency, formatCurrencyCompact } from '$lib/utils/format';
+  import { inventory as invStore } from '$lib/stores/inventory.svelte';
   import {
     Wallet, TrendingUp, ShoppingBag, AlertTriangle, Package,
     ShoppingCart, Users, BarChart3, ArrowRight,
@@ -11,6 +12,11 @@
   } from 'lucide-svelte';
 
   let { data } = $props();
+
+  // Sync the store so the low-stock / out-of-stock sections update
+  // reactively when a product is added / edited / archived anywhere
+  // else in the app.
+  $effect(() => { invStore.replaceAll(data.allProducts as any[] ?? []); });
 
   function formatTime(dateStr: string) {
     return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -27,7 +33,11 @@
   };
 
   const avgSale = $derived(data.todayCount > 0 ? Math.round(data.todayRevenue / data.todayCount) : 0);
-  const totalAlerts = $derived(data.outOfStock.length + data.lowStock.length);
+  // Stock alerts come from the store so they update instantly when
+  // the user adds/edits/deletes a product anywhere in the app.
+  const outOfStock = $derived(invStore.outOfStock);
+  const lowStock   = $derived(invStore.lowStock);
+  const totalAlerts = $derived(outOfStock.length + lowStock.length);
   const hasSales = $derived(data.todayCount > 0);
 
   // Stock bar for each alert product

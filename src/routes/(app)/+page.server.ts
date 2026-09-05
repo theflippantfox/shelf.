@@ -187,10 +187,12 @@ export async function load({ cookies,  locals  }: RequestEvent) {
     txnsDelta,
     profitDelta,
     paymentBreakdown,
-    outOfStock,
-    lowStock,
+    // outOfStock / lowStock are now derived client-side from the
+    // inventory store (so they update reactively). The store is
+    // seeded from `allProducts` (also returned below).
     topProducts,
     topCategories,
+    allProducts,
     distinctCustomers,
     avgBasket,
     stockValueRetail,

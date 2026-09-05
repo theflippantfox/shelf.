@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
   import { toasts } from '$lib/stores/toast.svelte';
+  import { customers as custStore } from '$lib/stores/customers.svelte';
   import { getCustomerTier, TIER_LABELS, TIER_BADGE_CLASS } from '$lib/utils/tiers';
   import { formatCurrency } from '$lib/utils/format';
   import { fuzzyFilter } from '$lib/utils/fuzzy';
@@ -21,9 +22,14 @@
   let saving  = $state(false);
   let form    = $state({ name: '', phone: '', email: '', notes: '' });
 
-  const filtered = $derived(() => {
-    if (!search) return data.customers as any[];
-    return fuzzyFilter(data.customers as any[], search, {
+  // Sync the store with the server data on first mount. After this,
+  // all reads come from the store so optimistic updates flow through.
+  $effect(() => { custStore.replaceAll(data.customers as any[]); });
+  $effect(() => { custStore.setSearch(search); });
+
+  const filtered = $derived.by(() => {
+    if (!search) return custStore.all;
+    return fuzzyFilter(custStore.all, search, {
       fields: [
         { get: (c: any) => c.name,        weight: 2 },
         { get: (c: any) => c.phone,       weight: 1.5 },
@@ -46,25 +52,63 @@
 
   async function save() {
     saving = true;
+    const clientId = crypto.randomUUID();
     const url    = editing ? `/api/customers/${editing.id}` : '/api/customers';
     const method = editing ? 'PATCH' : 'POST';
-    const res    = await fetch(url, {
+
+    // Optimistic: the new/edited row appears immediately.
+    if (editing) {
+      custStore.update(editing.id, form);
+    } else {
+      custStore.add({
+        id:         clientId,
+        client_id:  clientId,
+        ...form,
+        visit_count: 0,
+        total_spent: 0,
+        outstanding_balance: 0,
+        last_visit:  null,
+      });
+    }
+    showAdd = false;
+    toasts.success(editing ? 'Customer updated' : 'Customer added');
+
+    const res = await fetch(url, {
       method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
     });
-    if (res.ok) {
-      toasts.success(editing ? 'Customer updated' : 'Customer added');
-      showAdd = false;
-      await invalidateAll();
-    } else toasts.error('Failed to save customer');
     saving = false;
+    if (!res.ok) {
+      toasts.error(editing ? 'Update failed — reverted' : 'Add failed — reverted');
+      if (editing) {
+        await invalidateAll();
+        custStore.replaceAll(data.customers as any[]);
+      } else {
+        custStore.rollback(clientId);
+      }
+      return;
+    }
+    const real = await res.json();
+    if (editing) {
+      custStore.markSynced(editing.id);
+      custStore.update(editing.id, real);
+    } else {
+      custStore.reconcile(clientId, real);
+    }
   }
 
   async function remove(e: MouseEvent, c: any) {
     e.preventDefault();
     if (!confirm(`Delete ${c.name}?`)) return;
-    const res = await fetch(`/api/customers/${c.id}`, { method: 'DELETE' });
-    if (res.ok) { toasts.success('Customer removed'); await invalidateAll(); }
-    else toasts.error('Failed to delete');
+    const id = c.id;
+    // Optimistic remove.
+    custStore.remove(id);
+    toasts.success('Customer removed');
+    const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      toasts.error('Failed to delete — reverted');
+      await invalidateAll();
+      custStore.replaceAll(data.customers as any[]);
+    }
   }
 </script>
 
@@ -79,7 +123,7 @@
 
   <SearchBar bind:value={search} placeholder="Search by name or phone…" class="mb-4" />
 
-  {#if filtered().length === 0}
+  {#if filtered.length === 0}
     <EmptyState icon="Users" title="No customers yet" message="Add your first customer to start tracking visits.">
       {#snippet action()}
         <Button size="sm" onclick={openAdd}><Plus size={14} strokeWidth={2} /> Add customer</Button>
@@ -87,7 +131,7 @@
     </EmptyState>
   {:else}
     <div class="surface-card overflow-hidden">
-      {#each filtered() as c}
+      {#each filtered as c}
         {@const tier = getCustomerTier(c)}
         <a
           href="/customers/{(c as any).id}"

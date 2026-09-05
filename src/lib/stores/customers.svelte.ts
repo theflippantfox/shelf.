@@ -1,4 +1,12 @@
-
+/**
+ * Customers store — single source of truth for the customer list.
+ * Svelte 5 runes-based, so any component reading `customers.all`
+ * re-renders automatically when the array changes.
+ *
+ * Seeded from `data.customers` on mount. After that, all reads come
+ * from the store, NOT from data. Writes are optimistic — UI updates
+ * instantly, then the server is hit in the background.
+ */
 
 class CustomersStore {
   #items  = $state<any[]>([]);
@@ -6,6 +14,8 @@ class CustomersStore {
 
   get all()    { return this.#items; }
   get search() { return this.#search; }
+
+  get count()  { return this.#items.length; }
 
   get filtered() {
     if (!this.#search) return this.#items;
@@ -17,23 +27,56 @@ class CustomersStore {
     );
   }
 
-  init(items: any[]) { this.#items = items; }
+  get byOutstanding() {
+    return [...this.#items].sort((a, b) =>
+      (b.outstanding_balance ?? 0) - (a.outstanding_balance ?? 0)
+    );
+  }
+
+  init(items: any[]) {
+    if (this.#items.length === 0 && Array.isArray(items) && items.length) {
+      this.#items = items;
+    }
+  }
+  replaceAll(items: any[]) {
+    this.#items = Array.isArray(items) ? items : [];
+  }
+
   setSearch(q: string) { this.#search = q; }
-
-  add(customer: any) {
-    this.#items = [...this.#items, customer];
-  }
-
-  update(customer: any) {
-    this.#items = this.#items.map(c => c.id === customer.id ? customer : c);
-  }
-
-  remove(id: string) {
-    this.#items = this.#items.filter(c => c.id !== id);
-  }
 
   getById(id: string) {
     return this.#items.find(c => c.id === id);
+  }
+
+  // ── Optimistic mutations ────────────────────────────────────────────
+  add(customer: any) {
+    const temp = { ...customer, _local: true, _pending: true };
+    this.#items = [temp, ...this.#items];
+    return temp;
+  }
+  update(id: string, patch: any) {
+    let updated: any = null;
+    this.#items = this.#items.map(c => {
+      if (c.id !== id) return c;
+      updated = { ...c, ...patch, _pending: true };
+      return updated;
+    });
+    return updated;
+  }
+  remove(id: string) {
+    this.#items = this.#items.filter(c => c.id !== id);
+  }
+  reconcile(clientId: string, real: any) {
+    this.#items = this.#items.map(c => c.client_id === clientId ? real : c);
+  }
+  markSynced(id: string) {
+    this.#items = this.#items.map(c => c.id === id
+      ? (() => { const { _pending, _local, ...rest } = c; return rest; })()
+      : c
+    );
+  }
+  rollback(clientId: string) {
+    this.#items = this.#items.filter(c => c.client_id !== clientId);
   }
 }
 

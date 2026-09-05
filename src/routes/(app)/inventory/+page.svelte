@@ -25,8 +25,16 @@
 
   let { data } = $props();
 
-  // Sync the inventory store when server data changes (after invalidation).
-  $effect(() => { invStore.init(data.products as any[]); });
+  // Sync the inventory store when server data changes (e.g. after a
+  // hard navigation). Once the store is hydrated, ALL reads come from
+  // the store, NOT from data.products — so writes via store mutations
+  // appear instantly across the app without a server round-trip.
+  $effect(() => { invStore.replaceAll(data.products as any[]); });
+
+  // Mirror local search/category state into the store so the dashboard
+  // (which reads from the same store) can pick them up later.
+  $effect(() => { invStore.setSearch(search); });
+  $effect(() => { invStore.setCategory(filterCat); });
 
   /* ── Filter & sort state ────────────────────────────────── */
   let search     = $state('');
@@ -105,26 +113,24 @@
    * invalidation. Fixed: derive the object.
    */
   const stockStats = $derived.by(() => {
-    const list = data.products as any[];
-    let inStock = 0, low = 0, out = 0, value = 0;
-    for (const p of list) {
-      if (p.qty === 0) out++;
-      else if (p.track_stock !== false && p.qty <= thresholdOf(p)) low++;
-      else inStock++;
-      value += (p.price || 0) * (p.qty || 0);
-    }
-    return { total: list.length, inStock, low, out, value };
+    // Read from the store so the counts update instantly when a
+    // product is added / edited / deleted anywhere in the app.
+    return {
+      total:   invStore.count,
+      inStock: invStore.inStock.length,
+      low:     invStore.lowStock.length,
+      out:     invStore.outOfStock.length,
+      value:   invStore.all.reduce(
+        (s: number, p: any) => s + (p.price || 0) * (p.qty || 0), 0
+      ),
+    };
   });
 
   const filtered = $derived.by(() => {
-    let list = (data.products as any[]).slice();
-    const q = search.toLowerCase().trim();
-    if (filterCat) {
-      list = list.filter(p => {
-        const catId = typeof p.category === 'string' ? p.category : p.category?.id;
-        return catId === filterCat;
-      });
-    }
+    // The store is the source of truth. Start from the store's already-
+    // category-filtered list, then layer on search, stock filter, sort.
+    let list = invStore.filtered.slice();
+    const q = search.trim();
     if (q) {
       list = fuzzyFilter(list, q, {
         fields: [
@@ -135,14 +141,6 @@
         ],
       });
     }
-    // stockFilter semantics:
-    //   'all'  → no stock-based filtering
-    //   'in'   → strictly in stock (qty > threshold). Products with
-    //            track_stock=false are excluded — they don't track.
-    //   'low'  → low (0 < qty <= threshold). Same exclusion.
-    //   'out'  → out of stock (qty === 0). Always matches regardless
-    //            of the track_stock flag (an out-of-stock item is
-    //            still useful to surface, even if uncounted).
     if (stockFilter === 'in')  list = list.filter(p => p.track_stock !== false && p.qty >  thresholdOf(p));
     if (stockFilter === 'low') list = list.filter(p => p.track_stock !== false && p.qty >  0 && p.qty <= thresholdOf(p));
     if (stockFilter === 'out') list = list.filter(p => p.qty === 0);
@@ -245,6 +243,7 @@
 
   async function saveProduct() {
     saving = true;
+    const clientId = crypto.randomUUID();
     const payload = {
       name:                form.name,
       sku:                 form.sku,
@@ -266,26 +265,71 @@
     };
     const url    = editTarget ? `/api/products/${editTarget.id}` : '/api/products';
     const method = editTarget ? 'PATCH' : 'POST';
-    const res    = await fetch(url, {
+
+    // Optimistic update — the row appears instantly. We use a
+    // client_id so we can replace the temp row with the server's
+    // response (which has the real UUID and any server-computed fields).
+    if (editTarget) {
+      invStore.update(editTarget.id, payload);
+    } else {
+      invStore.add({
+        id:           clientId,
+        client_id:    clientId,
+        archived_at:  null,
+        image_url:    null,
+        ...payload,
+      });
+    }
+    // Close the sheet immediately — the user is done.
+    showAdd = false;
+    toasts.success(editTarget ? 'Product updated' : 'Product added');
+
+    // Fire the server write in the background. On success, mark
+    // synced. On failure, roll back the optimistic change and toast.
+    const res = await fetch(url, {
       method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      toasts.success(editTarget ? 'Product updated' : 'Product added');
-      showAdd = false;
-      await invalidateAll();
-    } else toasts.error('Failed to save product');
     saving = false;
+    if (!res.ok) {
+      toasts.error(editTarget ? 'Update failed — reverted' : 'Add failed — reverted');
+      if (editTarget) {
+        await invalidateAll();
+        invStore.replaceAll(data.products as any[]);
+      } else {
+        invStore.rollback(clientId);
+      }
+      return;
+    }
+    const real = await res.json();
+    if (editTarget) {
+      invStore.markSynced(editTarget.id);
+      // Refresh the row with any server-computed fields (e.g. created_at,
+      // category join, image_url, etc.).
+      invStore.update(editTarget.id, real);
+    } else {
+      invStore.reconcile(clientId, real);
+    }
   }
 
   async function doDelete() {
     if (!deleteTarget) return;
-    const res = await fetch(`/api/products/${deleteTarget.id}`, { method: 'DELETE' });
-    if (res.ok) {
-      toasts.success('Product archived');
-      showDelete = false;
-      deleteTarget = null;
+    const id = deleteTarget.id;
+    // Optimistic: mark archived in the local store immediately.
+    invStore.archive(id);
+    showDelete = false;
+    toasts.success('Product archived');
+    deleteTarget = null;
+
+    const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      toasts.error('Failed to archive — reverted');
+      // Refresh from server to roll back.
       await invalidateAll();
-    } else toasts.error('Failed to archive');
+      invStore.replaceAll(data.products as any[]);
+      return;
+    }
+    // Remove the row from the visible list (it was archived).
+    invStore.remove(id);
   }
 
   const catOptions = $derived([
