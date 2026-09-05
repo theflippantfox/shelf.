@@ -39,10 +39,11 @@ export async function load({ cookies,  locals  }: RequestEvent) {
       .lt('created_at', yEnd.toISOString())
       .limit(1000),
     supabase.from('products')
-      .select('id, name, qty, low_stock_threshold, unit')
+      .select('id, name, qty, low_stock_threshold, unit, track_stock')
       .eq('shop_id', shopId)
       .is('archived_at', null)
-      .or('qty.eq.0,qty.lte.' + threshold)
+      .neq('track_stock', false)
+      .or(`qty.eq.0,qty.lte.${threshold}`)
       .limit(20),
     supabase.from('sale_items')
       .select('unit_price, qty, line_total, cost_at_sale, sale:sales!inner(shop_id, voided_at, created_at), product:products(id, name, cost_price, category:categories(id, name, color, icon))')
