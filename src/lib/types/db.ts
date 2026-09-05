@@ -640,6 +640,8 @@ export type Database = {
           payment_method: string
           sale_ref: string
           served_by: string
+          share_token: string | null
+          sharing_enabled: boolean
           shop_id: string
           subtotal: number
           tax_amount: number
@@ -662,7 +664,9 @@ export type Database = {
           notes?: string | null
           payment_method: string
           sale_ref: string
-          served_by: string
+          served_by?: string | null
+          share_token?: string | null
+          sharing_enabled?: boolean
           shop_id: string
           subtotal?: number
           tax_amount?: number
@@ -685,7 +689,9 @@ export type Database = {
           notes?: string | null
           payment_method?: string
           sale_ref?: string
-          served_by?: string
+          served_by?: string | null
+          share_token?: string | null
+          sharing_enabled?: boolean
           shop_id?: string
           subtotal?: number
           tax_amount?: number

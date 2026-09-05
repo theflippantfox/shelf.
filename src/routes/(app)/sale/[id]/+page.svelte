@@ -211,18 +211,83 @@
   function printReceipt() {
     window.print();
   }
-  function shareReceipt() {
-    const text =
-      `${sale.shop_id ? '' : ''}` +
-      `Receipt ${sale.sale_ref ?? ''}\n` +
-      `Total: ${formatCurrency(sale.total)}\n` +
-      (sale.customer?.name ? `Customer: ${sale.customer.name}\n` : '') +
-      (sale.payment_method ? `Payment: ${PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method}\n` : '');
+  // ── Share-link sheet (copies / shares the public receipt URL) ────
+  let showShare = $state(false);
+  let shareUrl  = $state<string | null>(null);
+  let shareEnabled = $state(false);
+  let sharing  = $state(false);
+
+  async function openShare() {
+    showShare = true;
+    sharing = true;
+    try {
+      const res = await fetch(`/api/sales/${sale.id}/share`);
+      if (res.ok) {
+        const data = await res.json();
+        shareEnabled = !!data.enabled;
+        shareUrl     = data.url ?? null;
+      }
+    } finally {
+      sharing = false;
+    }
+  }
+  async function enableShare() {
+    sharing = true;
+    try {
+      const res = await fetch(`/api/sales/${sale.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        shareEnabled = data.enabled;
+        shareUrl     = data.url;
+        toasts.success('Share link ready');
+      } else {
+        toasts.error('Could not enable sharing');
+      }
+    } finally {
+      sharing = false;
+    }
+  }
+  async function disableShare() {
+    sharing = true;
+    try {
+      const res = await fetch(`/api/sales/${sale.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        shareEnabled = data.enabled;
+        shareUrl     = data.url;
+        toasts.success('Sharing disabled');
+      }
+    } finally {
+      sharing = false;
+    }
+  }
+  async function copyShareLink() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toasts.success('Link copied to clipboard');
+    } catch {
+      // Fallback: select the input
+      const el = document.getElementById('share-link-input') as HTMLInputElement | null;
+      el?.select();
+    }
+  }
+  async function nativeShare() {
+    if (!shareUrl) return;
+    const text = `Receipt ${sale.sale_ref} — Total: ${formatCurrency(sale.total)}`;
     if (navigator.share) {
-      navigator.share({ text, title: `Receipt ${sale.sale_ref}` }).catch(() => {});
+      try { await navigator.share({ title: `Receipt ${sale.sale_ref}`, text, url: shareUrl }); }
+      catch { /* user cancelled */ }
     } else {
-      navigator.clipboard?.writeText(text);
-      toasts.success('Copied to clipboard');
+      await copyShareLink();
     }
   }
 
@@ -484,7 +549,7 @@
           <Button variant="secondary" onclick={printReceipt}>
             <Printer size={14} strokeWidth={2} /> Print
           </Button>
-          <Button variant="secondary" onclick={shareReceipt}>
+          <Button variant="secondary" onclick={openShare}>
             <Share2 size={14} strokeWidth={2} /> Share
           </Button>
         </div>
@@ -701,6 +766,90 @@
       </Button>
     </div>
   {/snippet}
+</Sheet>
+
+<!-- ──────────────────────────────────────────────────────────────────────
+  SHARE-LINK SHEET
+  Triggered by the "Share" button. Mints a public, unauthenticated
+  link to a slimmed-down version of the receipt (no cost prices, no
+  internal notes, no returns history). The link can be disabled at
+  any time, which also rotates the token.
+  ────────────────────────────────────────────────────────────────────── -->
+<Sheet bind:open={showShare} title="Share receipt" maxWidth="max-w-md">
+  <div class="space-y-4">
+    <div class="rounded-xl p-3 flex items-start gap-2.5"
+         style="background:color-mix(in srgb, var(--primary) 8%, var(--surface)); border:1px solid color-mix(in srgb, var(--primary) 22%, transparent);">
+      <Share2 size={14} strokeWidth={2.2} class="mt-0.5 shrink-0" style="color:var(--primary)" />
+      <div class="text-[11.5px] leading-relaxed" style="color:var(--text-2)">
+        <p>
+          Anyone with the link can view this receipt. It shows items, totals, and
+          payment method — <strong>not</strong> cost prices, profit, internal
+          notes, or your customer's contact details.
+        </p>
+        <p class="text-[10.5px] text-[var(--text-3)] mt-1.5">
+          You can disable sharing at any time, which also invalidates the link.
+        </p>
+      </div>
+    </div>
+
+    {#if sharing}
+      <div class="h-24 flex items-center justify-center text-[var(--text-3)] text-[12px]">
+        Loading…
+      </div>
+    {:else if !shareEnabled}
+      <div class="rounded-xl p-6 text-center" style="background:var(--surface2)">
+        <Share2 size={28} strokeWidth={1.5} class="mx-auto mb-2" style="color:var(--text-3)" />
+        <p class="text-[12.5px] font-semibold mb-1">Sharing is off</p>
+        <p class="text-[11px] text-[var(--text-3)] mb-3">
+          Generate a link to share this receipt with the customer.
+        </p>
+        <Button variant="primary" onclick={enableShare} loading={sharing}>
+          <Share2 size={14} strokeWidth={2} /> Generate link
+        </Button>
+      </div>
+    {:else if shareUrl}
+      <div>
+        <p class="input-label mb-1.5">Public link</p>
+        <div class="flex gap-1.5">
+          <input
+            id="share-link-input"
+            type="text"
+            readonly
+            value={shareUrl}
+            class="input flex-1 text-[12px] font-mono truncate"
+            onclick={(e) => (e.currentTarget as HTMLInputElement).select()}
+          />
+          <Button variant="secondary" onclick={copyShareLink} size="sm">
+            Copy
+          </Button>
+        </div>
+      </div>
+
+      <div class="rounded-xl p-3 text-[11.5px] text-[var(--text-2)]"
+           style="background:var(--surface2)">
+        <p class="font-semibold text-[var(--text)] mb-1">What they see</p>
+        <ul class="space-y-0.5 list-disc pl-4">
+          <li>Receipt reference, date, items + line totals</li>
+          <li>Subtotal, discount, tax, total</li>
+          <li>Payment method + the public note (if you set one)</li>
+          <li>A "voided" banner if the sale is later voided</li>
+        </ul>
+        <p class="text-[10.5px] text-[var(--text-3)] mt-2 italic">
+          They do <strong>not</strong> see cost prices, profit, returns history,
+          or your customer's phone / email.
+        </p>
+      </div>
+
+      <div class="flex gap-2">
+        <Button variant="secondary" onclick={disableShare} loading={sharing} class="flex-1">
+          Disable link
+        </Button>
+        <Button variant="primary" onclick={nativeShare} class="flex-1">
+          <Share2 size={14} strokeWidth={2} /> Share
+        </Button>
+      </div>
+    {/if}
+  </div>
 </Sheet>
 
 <!-- ──────────────────────────────────────────────────────────────────────
