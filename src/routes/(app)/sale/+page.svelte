@@ -162,25 +162,33 @@
     // 'credit' = customer owes money (full or partial). Customer MUST be
     // picked before the sheet will let you confirm. The status sub-form
     // appears below the payment chooser.
-    credit:   { icon: Clock,           label: 'Credit',   tone: 'gold'    },
+    credit:   { icon: Clock,           label: 'On credit', tone: 'gold'    },
     transfer: { icon: ArrowLeftRight,  label: 'UPI',      tone: 'primary' },
   };
 
   /* ── Credit sub-form state ────────────────────────────────────────────
-     When the user picks 'Credit' payment, a sub-form asks:
-       - Status:  paid (full amount received, used for "paid offline" /
-                  "collected at door" cases) | partial (some received) |
-                  pending (nothing received)
-       - Amount paid now: only required for 'partial'
+     When the user picks 'On credit' payment, a sub-form asks:
+       - Amount received now: 0 for full pending, the total for full paid,
+         anything in between for partial
        - Due date: optional, for tracking when the customer promises to pay
-  */
-  let creditStatus       = $state<'paid' | 'partial' | 'pending'>('pending');
-  let creditAmountPaid   = $state<string>('');
-  let creditDueDate      = $state<string>('');
+     Status is derived from the amount received. */
+  let creditAmountPaid = $state<string>('');
+  let creditDueDate    = $state<string>('');
+  // Derive credit_status from the amount received. This replaces the
+  // old 3-button "Status" picker — the user just types the amount and
+  // we figure out the status. 0 = pending, full = paid, anything in
+  // between = partial.
+  const creditStatus = $derived.by(() => {
+    if (cart.paymentMethod !== 'credit') return 'pending';
+    const amt = parseFloat(creditAmountPaid);
+    if (isNaN(amt) || amt <= 0)             return 'pending';
+    if (amt >= grandTotal - 0.005)         return 'paid';
+    return 'partial';
+  });
+  const creditNumeric = $derived(parseFloat(creditAmountPaid) || 0);
   // Reset credit sub-form when the user switches away from credit
   $effect(() => {
     if (cart.paymentMethod !== 'credit') {
-      creditStatus = 'pending';
       creditAmountPaid = '';
       creditDueDate = '';
     }
@@ -208,8 +216,7 @@
     }
     // For partial credit, validate the amount is sane.
     if (cart.paymentMethod === 'credit' && creditStatus === 'partial') {
-      const amt = parseFloat(creditAmountPaid);
-      if (isNaN(amt) || amt <= 0 || amt >= grandTotal) {
+      if (creditNumeric <= 0 || creditNumeric >= grandTotal) {
         toasts.error('Partial credit amount must be > 0 and < total');
         return;
       }
@@ -230,18 +237,12 @@
       // Optional backdate / clock-skew correction. Null = use now().
       created_at: cart.createdAt,
     };
-    // Credit fields — only included when the user picked credit. The
-    // server defaults to 'paid' when payment_method is not 'credit',
-    // so we only need to send these in the credit case.
+    // Credit fields — only included when the user picked credit.
+    // creditStatus is derived from creditAmountPaid, so we don't need
+    // a separate picker; we just send the amount we received.
     if (cart.paymentMethod === 'credit') {
       payload.credit_status = creditStatus;
-      if (creditStatus === 'partial') {
-        payload.credit_amount_paid = parseFloat(creditAmountPaid);
-      } else if (creditStatus === 'paid') {
-        payload.credit_amount_paid = grandTotal;
-      } else {
-        payload.credit_amount_paid = 0;
-      }
+      payload.credit_amount_paid = creditNumeric;
       if (creditDueDate) {
         payload.credit_due_date = creditDueDate;
       }
@@ -801,57 +802,49 @@
     </div>
 
     {#if cart.paymentMethod === 'credit'}
-      <!-- Credit sub-form: pick how much was received, when it's due.
-           Customer must be selected above (or the submit button is disabled). -->
+      <!-- On-credit sub-form. Customer must be selected above. The
+           form asks "how much did you receive right now" — 0 by default
+           for the common "walk out the door owing us" case. The rest
+           of the bill becomes the amount due, shown prominently. -->
       <div class="rounded-xl p-3 space-y-3" style="background:var(--gold-dim); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);">
         <div class="flex items-center gap-2 text-[var(--gold-fg)]">
           <AlertCircle size={13} strokeWidth={2.2} />
           <p class="text-[11px] font-semibold">
-            Credit — customer owes {cart.customerId ? cart.customerName : 'no one (pick a customer!)'}
+            On credit — {cart.customerId ? `owing ${cart.customerName}` : 'pick a customer above'}
           </p>
         </div>
 
-        <!-- Status: paid / partial / pending -->
-        <div>
-          <p class="input-label mb-1.5 text-[var(--gold-fg)]">Status</p>
-          <div class="grid grid-cols-3 gap-1.5">
-            {#each [['paid', 'Paid in full'], ['partial', 'Partial'], ['pending', 'Pending']] as [val, label]}
-              <button
-                type="button"
-                class="px-2 py-1.5 text-[11px] font-semibold rounded-md border transition
-                  {creditStatus === val
-                    ? 'shadow-sm'
-                    : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface2)] text-[var(--text-2)]'}"
-                style={creditStatus === val
-                  ? 'border-color:var(--gold); background:color-mix(in srgb, var(--gold) 12%, transparent); color:var(--gold-fg);'
-                  : ''}
-                onclick={() => creditStatus = val}
-              >
-                {label}
-              </button>
-            {/each}
+        <!-- Total + amount-due summary -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="rounded-lg p-2.5" style="background:color-mix(in srgb, var(--gold) 8%, var(--surface))">
+            <p class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Total bill</p>
+            <p class="text-[16px] font-bold tabular-nums text-[var(--text)] mt-0.5">{formatCurrency(grandTotal)}</p>
+          </div>
+          <div class="rounded-lg p-2.5" style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface))">
+            <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--crimson-fg)">Amount due</p>
+            <p class="text-[16px] font-bold tabular-nums mt-0.5" style="color:var(--crimson-fg)">
+              {formatCurrency(Math.max(0, grandTotal - (parseFloat(creditAmountPaid) || 0)))}
+            </p>
           </div>
         </div>
 
-        {#if creditStatus === 'partial'}
-          <div>
-            <p class="input-label mb-1.5 text-[var(--gold-fg)]">
-              Amount paid now
-              <span class="text-[var(--text-3)] font-normal">
-                (rest will be receivable: {formatCurrency(Math.max(0, grandTotal - (parseFloat(creditAmountPaid) || 0)))})
-              </span>
-            </p>
-            <Input
-              type="number"
-              step="0.01"
-              min="0.01"
-              max={grandTotal - 0.01}
-              bind:value={creditAmountPaid}
-              placeholder={String(grandTotal)}
-            />
-          </div>
-        {/if}
+        <!-- Amount received now (defaults to 0 = full pending) -->
+        <div>
+          <p class="input-label mb-1.5 text-[var(--gold-fg)]">
+            Amount received now
+            <span class="text-[var(--text-3)] font-normal">(0 = full pending)</span>
+          </p>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            max={grandTotal}
+            bind:value={creditAmountPaid}
+            placeholder="0"
+          />
+        </div>
 
+        <!-- Due date (optional) -->
         <div>
           <p class="input-label mb-1.5 text-[var(--gold-fg)]">
             Due date

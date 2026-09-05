@@ -15,7 +15,7 @@
   const PAY_META: Record<string, { icon: any; label: string; color: string }> = {
     cash:     { icon: Banknote,        label: 'Cash',     color: 'var(--teal)'    },
     // 'credit' is now "customer owes money" (not "card" — that was the old alias)
-    credit:   { icon: Clock,           label: 'Credit',   color: 'var(--gold)'    },
+    credit:   { icon: Clock,           label: 'On credit', color: 'var(--gold)'    },
     transfer: { icon: ArrowLeftRight,  label: 'UPI',      color: 'var(--primary)' },
   };
 
@@ -98,7 +98,7 @@
   const methodOptions = [
     { value: '',         label: 'All methods' },
     { value: 'cash',     label: 'Cash' },
-    { value: 'credit',   label: 'Card' },
+    { value: 'credit',   label: 'On credit' },
     { value: 'transfer', label: 'Transfer' },
   ];
 
@@ -290,18 +290,23 @@
               {#if s.payment_method && meta}
                 <span class="text-[10px] text-[var(--text-3)]">· {meta.label}</span>
               {/if}
-              {#if !voided && s.payment_method === 'credit' && s.credit_status && s.credit_status !== 'paid'}
+              {#if !voided && s.payment_method === 'credit' && s.credit_status}
                 {@const cc = creditChip(s.credit_status)}
                 {#if cc}
                   <span class="text-[9px] font-bold px-1.5 py-0.5 rounded {cc.tone}">{cc.label}</span>
-                  {#if s.credit_status === 'partial' && s.credit_amount_paid != null}
+                  {#if s.credit_amount_paid != null && s.credit_amount_paid > 0}
                     <span class="text-[10px] text-[var(--text-3)]">
                       paid {formatCurrency(s.credit_amount_paid)} of {formatCurrency(s.total)}
                     </span>
                   {/if}
+                  {#if s.credit_status !== 'paid' && s.total - (s.credit_amount_paid ?? 0) > 0}
+                    <span class="text-[10px] font-semibold" style="color:var(--crimson-fg)">
+                      due {formatCurrency(s.total - (s.credit_amount_paid ?? 0))}
+                    </span>
+                  {/if}
                   {#if s.credit_due_date}
                     <span class="text-[10px] text-[var(--text-3)]">
-                      due {new Date(s.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      by {new Date(s.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                     </span>
                   {/if}
                 {/if}
