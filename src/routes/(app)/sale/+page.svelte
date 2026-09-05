@@ -26,7 +26,7 @@
   import {
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, CreditCard, ArrowLeftRight, X,
-    Search, Check, ChevronRight, Package, ScanLine,
+    Search, Check, ChevronRight, ChevronDown, Package, ScanLine,
     Clock, AlertCircle, Calendar,
   } from "lucide-svelte";
 
