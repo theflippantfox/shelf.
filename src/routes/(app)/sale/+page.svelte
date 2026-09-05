@@ -12,6 +12,8 @@
   import { fuzzyFilter } from "$lib/utils/fuzzy";
   import { inventory as invStore } from "$lib/stores/inventory.svelte";
   import { customers as custStore } from "$lib/stores/customers.svelte";
+  import { sales as salesStore } from "$lib/stores/sales.svelte";
+  import { register as regStore } from "$lib/stores/register.svelte";
   import { inview }  from "$lib/utils/inview";
   import { fly } from "svelte/transition";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
@@ -411,6 +413,26 @@
       lastSaleTotal    = grandTotal;
       lastSaleMethod   = cart.paymentMethod;
       lastSaleCustomer = cart.customerName || 'Walk-in';
+
+      // Push the new/edited sale into the sales store so the
+      // dashboard's today's revenue / count / list update
+      // instantly without a server round-trip.
+      salesStore.add({
+        ...data2,
+        total:        grandTotal,
+        payment_method: cart.paymentMethod,
+        created_at:   cart.createdAt ?? data2.created_at ?? new Date().toISOString(),
+        customer:     cart.customerId ? { id: cart.customerId, name: cart.customerName } : null,
+      });
+
+      // Decrement stock for each cart line in the inventory store
+      // so the inventory page's KPIs and the sale page's product
+      // list reflect the new stock immediately.
+      for (const item of cart.items) {
+        const p = invStore.getById(item.productId);
+        if (p) invStore.update(item.productId, { qty: Math.max(0, (p.qty ?? 0) - item.qty) });
+      }
+
       toasts.success(isEdit ? 'Sale updated' : 'Sale recorded');
       showCheckout = false;
       showReceipt  = true;

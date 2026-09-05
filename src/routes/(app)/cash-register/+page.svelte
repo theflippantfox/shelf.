@@ -3,6 +3,7 @@
   import { auth } from '$lib/stores/auth.svelte';
   import { toasts } from '$lib/stores/toast.svelte';
   import { formatCurrency } from '$lib/utils/format';
+  import { register as regStore } from '$lib/stores/register.svelte';
   import PageShell  from '$lib/components/layout/PageShell.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import Button     from '$lib/components/ui/Button.svelte';
@@ -15,6 +16,15 @@
   } from 'lucide-svelte';
 
   let { data } = $props();
+
+  // Seed the register store from the server data. After that, all
+  // reads (balance, grouped history, outstanding credit) come from
+  // the store so manual entries, transfers, and voids show up
+  // instantly without a server round-trip.
+  $effect(() => { regStore.replaceAll(
+    (data.entries ?? []) as any[],
+    (data.credit?.total ?? 0) as number,
+  ); });
 
   type Entry = {
     id: string;
@@ -60,23 +70,86 @@
     }
 
     sheetSubmitting = true;
+    const clientId = crypto.randomUUID();
     try {
+      // Optimistic: push the entry into the local store immediately
+      // so the balance + history update without a server round-trip.
+      // The server response (with the real id) replaces the temp row.
       if (sheetTab === 'transfer') {
+        const transferGroupId = crypto.randomUUID();
+        const signed = Math.abs(amt);
+        regStore.add({
+          id: clientId,
+          client_id: clientId,
+          destination: sheetDestination,
+          amount: -signed,
+          entry_type: 'transfer',
+          source: 'manual',
+          sale_id: null,
+          voided_entry_id: null,
+          transfer_group_id: transferGroupId,
+          notes: sheetNotes,
+          created_at: new Date().toISOString(),
+          effective_at: new Date().toISOString(),
+          _pending: true,
+        });
+        regStore.add({
+          id: crypto.randomUUID(),
+          client_id: crypto.randomUUID(),
+          destination: sheetTransferTo,
+          amount: signed,
+          entry_type: 'transfer',
+          source: 'manual',
+          sale_id: null,
+          voided_entry_id: null,
+          transfer_group_id: transferGroupId,
+          notes: sheetNotes,
+          created_at: new Date().toISOString(),
+          effective_at: new Date().toISOString(),
+          _pending: true,
+        });
         const res = await fetch('/api/cash-register/transfer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             from: sheetDestination,
             to: sheetTransferTo,
-            amount: Math.abs(amt),
+            amount: signed,
             notes: sheetNotes,
           }),
         });
         const data = await res.json();
-        if (!res.ok) { toasts.error(data.error ?? 'Transfer failed'); return; }
-        toasts.success(`Transferred ${formatCurrency(Math.abs(amt))}`);
+        if (!res.ok) {
+          toasts.error(data.error ?? 'Transfer failed');
+          // Rollback: remove the optimistic rows by their client_id.
+          regStore.replaceAll((regStore.all as any[]).filter(e => !(e as any)._pending));
+          await invalidateAll();
+          regStore.replaceAll(
+            (data.entries ?? []) as any[],
+            (data.credit?.total ?? 0) as number,
+          );
+          return;
+        }
+        toasts.success(`Transferred ${formatCurrency(signed)}`);
+        // Re-sync from server to get the real ids + per-pair rows.
+        await invalidateAll();
       } else {
         const signed = sheetTab === 'expense' ? -Math.abs(amt) : Math.abs(amt);
+        regStore.add({
+          id: clientId,
+          client_id: clientId,
+          destination: sheetDestination,
+          amount: signed,
+          entry_type: sheetTab,
+          source: 'manual',
+          sale_id: null,
+          voided_entry_id: null,
+          transfer_group_id: null,
+          notes: sheetNotes,
+          created_at: new Date().toISOString(),
+          effective_at: new Date().toISOString(),
+          _pending: true,
+        });
         const res = await fetch('/api/cash-register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -88,13 +161,23 @@
           }),
         });
         const data = await res.json();
-        if (!res.ok) { toasts.error(data.error ?? 'Entry failed'); return; }
+        if (!res.ok) {
+          toasts.error(data.error ?? 'Entry failed');
+          regStore.replaceAll((regStore.all as any[]).filter(e => !(e as any)._pending));
+          await invalidateAll();
+          regStore.replaceAll(
+            (data.entries ?? []) as any[],
+            (data.credit?.total ?? 0) as number,
+          );
+          return;
+        }
+        // Reconcile: replace the temp row with the real server row.
+        regStore.reconcile(clientId, data);
         toasts.success(
           sheetTab === 'expense' ? `Logged ${formatCurrency(signed)} expense` : `Logged ${formatCurrency(signed)} injection`,
         );
       }
       showSheet = false;
-      await invalidateAll();
     } finally {
       sheetSubmitting = false;
     }
@@ -196,8 +279,8 @@
 
   // Group entries by day (newest first within each day)
   const groupedByDay = $derived.by(() => {
-    const groups: Record<string, Entry[]> = {};
-    for (const e of (data.entries ?? []) as Entry[]) {
+    const groups: Record<string, any[]> = {};
+    for (const e of regStore.all as any[]) {
       const day = (e.effective_at ?? e.created_at).slice(0, 10);
       if (!groups[day]) groups[day] = [];
       groups[day].push(e);
@@ -209,21 +292,25 @@
   const todayIso = new Date().toISOString().slice(0, 10);
   const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
   const todayTotal = $derived(
-    ((data.entries ?? []) as Entry[])
+    (regStore.all as any[])
       .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) === todayIso)
-      .reduce((s, e) => s + e.amount, 0),
+      .reduce((s, e) => s + (e.amount ?? 0), 0),
   );
   const weekTotal = $derived(
-    ((data.entries ?? []) as Entry[])
+    (regStore.all as any[])
       .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) >= sevenDaysAgoIso)
-      .reduce((s, e) => s + e.amount, 0),
+      .reduce((s, e) => s + (e.amount ?? 0), 0),
   );
+  // Balance is derived from the entries. Same numbers as the server's
+  // get_register_balance RPC, but always live (any manual entry shows
+  // up here without a refresh).
   const counterBal = $derived(
-    (data.balance?.destinations ?? []).find((d: any) => d.destination === 'counter')?.balance ?? 0,
+    (regStore.balance.destinations ?? []).find((d: any) => d.destination === 'counter')?.balance ?? 0,
   );
   const bankBal = $derived(
-    (data.balance?.destinations ?? []).find((d: any) => d.destination === 'bank')?.balance ?? 0,
+    (regStore.balance.destinations ?? []).find((d: any) => d.destination === 'bank')?.balance ?? 0,
   );
+  const totalBalance = $derived(regStore.balance.total);
 
   // Role gates
   const role = $derived((auth as any).role as 'owner' | 'manager' | 'cashier' | undefined);
@@ -272,7 +359,7 @@
     <div class="surface-card p-4">
       <p class="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-3)]">Total balance</p>
       <p class="text-3xl md:text-4xl font-bold tabular-nums text-[var(--text)] mt-1 leading-none">
-        {formatCurrency(data.balance?.total ?? 0)}
+        {formatCurrency(totalBalance)}
       </p>
 
       <!-- Per-destination split — inline on mobile, side-by-side on md+ -->

@@ -5,6 +5,9 @@
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import { formatCurrency, formatCurrencyCompact } from '$lib/utils/format';
   import { inventory as invStore } from '$lib/stores/inventory.svelte';
+  import { sales as salesStore } from '$lib/stores/sales.svelte';
+  import { register as registerStore } from '$lib/stores/register.svelte';
+  import { customers as custStore } from '$lib/stores/customers.svelte';
   import {
     Wallet, TrendingUp, ShoppingBag, AlertTriangle, Package,
     ShoppingCart, Users, BarChart3, ArrowRight,
@@ -13,10 +16,18 @@
 
   let { data } = $props();
 
-  // Sync the store so the low-stock / out-of-stock sections update
-  // reactively when a product is added / edited / archived anywhere
-  // else in the app.
+  // ── Sync stores from server data ──────────────────────────────────
+  // Every page that visits the dashboard seeds the shared stores from
+  // its server payload. After that, ALL pages that read from these
+  // stores see updates instantly when something changes anywhere in
+  // the app.
   $effect(() => { invStore.replaceAll(data.allProducts as any[] ?? []); });
+  $effect(() => { salesStore.replaceAll(data.todaySales as any[] ?? []); });
+  $effect(() => { registerStore.replaceAll(
+    data.register?.entries as any[] ?? [],
+    data.register?.outstanding ?? 0,
+  ); });
+  $effect(() => { custStore.replaceAll(data.customers as any[] ?? []); });
 
   function formatTime(dateStr: string) {
     return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -32,13 +43,37 @@
     transfer: { label: 'Transfer', icon: ArrowLeftRight, color: 'var(--primary)' },
   };
 
-  const avgSale = $derived(data.todayCount > 0 ? Math.round(data.todayRevenue / data.todayCount) : 0);
+  // Today's KPIs come from the sales store so they update the
+  // moment a sale is recorded anywhere in the app (e.g. on /sale).
+  // The cross-day comparisons (vs yesterday, deltas) still come
+  // from the server because they're too expensive to redo on the
+  // client for every change.
+  const todayCount    = $derived(salesStore.count);
+  const todayRevenue  = $derived(salesStore.totalRevenue);
+  const todayProfit   = $derived(salesStore.totalProfit);
+  const avgSale       = $derived(todayCount > 0 ? Math.round(todayRevenue / todayCount) : 0);
+  const paymentBreakdown = $derived(salesStore.paymentBreakdown);
+  const distinctCustomers = $derived(salesStore.distinctCustomers);
+  const hasSales = $derived(todayCount > 0);
   // Stock alerts come from the store so they update instantly when
   // the user adds/edits/deletes a product anywhere in the app.
   const outOfStock = $derived(invStore.outOfStock);
   const lowStock   = $derived(invStore.lowStock);
   const totalAlerts = $derived(outOfStock.length + lowStock.length);
-  const hasSales = $derived(data.todayCount > 0);
+  // Stock value (cost vs retail) is derived from the inventory
+  // store. Recomputes instantly when products are added or their
+  // qty changes.
+  const stockValueRetail = $derived(
+    invStore.all.reduce((s, p) => s + (p.price || 0) * (p.qty || 0), 0)
+  );
+  const stockValueCost = $derived(
+    invStore.all.reduce((s, p) => s + (p.cost_price || 0) * (p.qty || 0), 0)
+  );
+  const stockValuePotentialMargin = $derived(
+    stockValueRetail > 0
+      ? Math.round(((stockValueRetail - stockValueCost) / stockValueRetail) * 1000) / 10
+      : 0
+  );
 
   // Stock bar for each alert product
   function stockPct(qty: number, threshold: number) {
@@ -123,15 +158,15 @@
     />
     <StatTile
       label="Customers"
-      value={String(data.distinctCustomers)}
+      value={String(distinctCustomers)}
       sub="distinct today"
       icon={Users}
       tone="primary"
     />
     <StatTile
       label="Stock value"
-      value={formatCurrencyCompact(data.stockValueRetail)}
-      sub={`cost ${formatCurrencyCompact(data.stockValueCost)}`}
+      value={formatCurrencyCompact(stockValueRetail)}
+      sub={`cost ${formatCurrencyCompact(stockValueCost)} · ${stockValuePotentialMargin}% margin`}
       icon={Package}
       tone="teal"
     />
@@ -193,7 +228,7 @@
         />
       {:else}
         <div class="divide-y divide-[var(--border)]">
-          {#each data.todaySales as sale}
+          {#each salesStore.recent as sale}
             {@const meta = paymentMeta[sale.payment_method]}
             <div class="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
               <div class="flex items-center gap-2.5 min-w-0 flex-1">
