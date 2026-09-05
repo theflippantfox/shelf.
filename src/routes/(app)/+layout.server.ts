@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { setFormatLocale } from '$lib/utils/format';
+import { userClientFromCtx } from '$lib/server/supabase';
 
 const ONBOARDING_STEPS: Record<string, string> = {
   account:    '/onboarding/account',
@@ -11,7 +12,7 @@ const ONBOARDING_STEPS: Record<string, string> = {
   complete:   '/onboarding/complete',
 };
 
-export async function load({ locals, url }) {
+export async function load({ cookies, locals, url }) {
   if (!locals.user) {
     throw redirect(302, `/login?next=${encodeURIComponent(url.pathname)}`);
   }
@@ -51,5 +52,31 @@ export async function load({ locals, url }) {
       role:        locals.shopMember!.role,
       permissions: (locals.shopMember as any).permissions ?? {},
     },
+    // Pre-fetch the products so the inventory store can be
+    // hydrated at the layout level (the dashboard and any other
+    // page that derives from invStore.outOfStock / lowStock
+    // depends on this; without the layout-level seed those
+    // derived values would be empty on first render and only
+    // populate after the user navigated to /inventory).
+    allProducts: (await (async () => {
+      const supabase = userClientFromCtx({ cookies } as any);
+      const { data } = await supabase
+        .from('products')
+        .select('id, name, sku, price, cost_price, qty, low_stock_threshold, track_stock, track_barcode, barcode, image_url, archived_at, category_id, category:categories(id, name, color, icon)')
+        .eq('shop_id', shop!.id)
+        .is('archived_at', null)
+        .limit(1000);
+      return data ?? [];
+    })()),
+    customers: (await (async () => {
+      const supabase = userClientFromCtx({ cookies } as any);
+      const { data } = await supabase
+        .from('customers')
+        .select('id, name, phone, email, outstanding_balance')
+        .eq('shop_id', shop!.id)
+        .order('name', { ascending: true })
+        .limit(1000);
+      return data ?? [];
+    })()),
   };
 }

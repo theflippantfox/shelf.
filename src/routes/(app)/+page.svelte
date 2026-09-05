@@ -21,7 +21,12 @@
   // its server payload. After that, ALL pages that read from these
   // stores see updates instantly when something changes anywhere in
   // the app.
-  $effect(() => { invStore.replaceAll(data.allProducts as any[] ?? []); });
+  // Note: inventory + customers stores are hydrated at the layout
+  // level (see (app)/+layout.svelte + +layout.server.ts) so the
+  // dashboard's "Inventory alerts" KPI and "Out of stock" / "Low
+  // stock" lists are correct on first render without depending on
+  // a round-trip to /inventory. We still seed salesStore + the
+  // register here because those are page-specific.
   $effect(() => { salesStore.replaceAll(data.todaySales as any[] ?? []); });
   $effect(() => { registerStore.replaceAll(
     data.register?.entries as any[] ?? [],
@@ -143,7 +148,7 @@
       icon="AlertTriangle"
       iconColor={totalAlerts > 0 ? 'var(--crimson)' : 'var(--teal)'}
       sub={totalAlerts > 0
-        ? `${data.outOfStock.length} out · ${data.lowStock.length} low`
+        ? `${outOfStock.length} out · ${lowStock.length} low`
         : 'All stocked up'}
     />
   </div>
@@ -379,42 +384,42 @@
         </div>
       {:else}
         <!-- Out-of-stock section -->
-        {#if data.outOfStock.length > 0}
+        {#if outOfStock.length > 0}
           <div class="mb-4">
             <div class="flex items-center gap-1.5 mb-2">
               <span class="w-1.5 h-1.5 rounded-full" style="background:var(--crimson)"></span>
               <p class="text-[10px] font-bold uppercase tracking-wide" style="color:var(--crimson-fg)">
                 Out of stock
               </p>
-              <span class="text-[10px] text-[var(--text-3)]">· {data.outOfStock.length}</span>
+              <span class="text-[10px] text-[var(--text-3)]">· {outOfStock.length}</span>
             </div>
             <div class="space-y-1">
-              {#each data.outOfStock.slice(0, 4) as product}
+              {#each outOfStock.slice(0, 4) as product}
                 <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-md"
                      style="background:color-mix(in srgb, var(--crimson) 6%, transparent)">
                   <p class="text-[12.5px] font-medium text-[var(--text)] truncate min-w-0 flex-1">{product.name}</p>
                   <span class="text-[10px] font-bold tabular-nums whitespace-nowrap" style="color:var(--crimson-fg)">0</span>
                 </div>
               {/each}
-              {#if data.outOfStock.length > 4}
-                <p class="text-[10px] text-[var(--text-3)] text-center pt-0.5">+{data.outOfStock.length - 4} more</p>
+              {#if outOfStock.length > 4}
+                <p class="text-[10px] text-[var(--text-3)] text-center pt-0.5">+{outOfStock.length - 4} more</p>
               {/if}
             </div>
           </div>
         {/if}
 
         <!-- Low-stock section -->
-        {#if data.lowStock.length > 0}
+        {#if lowStock.length > 0}
           <div>
             <div class="flex items-center gap-1.5 mb-2">
               <span class="w-1.5 h-1.5 rounded-full" style="background:var(--gold)"></span>
               <p class="text-[10px] font-bold uppercase tracking-wide" style="color:var(--gold-fg)">
                 Low stock
               </p>
-              <span class="text-[10px] text-[var(--text-3)]">· {data.lowStock.length}</span>
+              <span class="text-[10px] text-[var(--text-3)]">· {lowStock.length}</span>
             </div>
             <div class="space-y-1.5">
-              {#each data.lowStock.slice(0, 4) as product}
+              {#each lowStock.slice(0, 4) as product}
                 {@const threshold = product.low_stock_threshold ?? 10}
                 {@const pct = stockPct(product.qty, threshold)}
                 <div class="py-1 px-2 rounded-md"
@@ -432,8 +437,8 @@
                   </div>
                 </div>
               {/each}
-              {#if data.lowStock.length > 4}
-                <p class="text-[10px] text-[var(--text-3)] text-center pt-0.5">+{data.lowStock.length - 4} more</p>
+              {#if lowStock.length > 4}
+                <p class="text-[10px] text-[var(--text-3)] text-center pt-0.5">+{lowStock.length - 4} more</p>
               {/if}
             </div>
           </div>

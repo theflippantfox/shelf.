@@ -14,15 +14,12 @@ export async function load({ cookies,  locals  }: RequestEvent) {
   const yStart = new Date(todayStart);
   yStart.setDate(yStart.getDate() - 1);
   const yEnd = todayStart;
-  const threshold = locals.currentShop!.low_stock_threshold ?? 10;
 
   const [
     { data: todaySales = [] },
     { data: yestSales = [] },
-    { data: allLowStock = [] },
     { data: saleItemsToday = [] },
     { data: saleItemsYest = [] },
-    { data: allProducts = [] },
   ] = await Promise.all([
     supabase.from('sales')
       .select('id, total, payment_method, created_at, customer:customers(id, name)')
@@ -38,13 +35,6 @@ export async function load({ cookies,  locals  }: RequestEvent) {
       .gte('created_at', yStart.toISOString())
       .lt('created_at', yEnd.toISOString())
       .limit(1000),
-    supabase.from('products')
-      .select('id, name, qty, low_stock_threshold, unit, track_stock')
-      .eq('shop_id', shopId)
-      .is('archived_at', null)
-      .neq('track_stock', false)
-      .or(`qty.eq.0,qty.lte.${threshold}`)
-      .limit(20),
     supabase.from('sale_items')
       .select('unit_price, qty, line_total, cost_at_sale, sale:sales!inner(shop_id, voided_at, created_at), product:products(id, name, cost_price, category:categories(id, name, color, icon))')
       .eq('sale.shop_id', shopId)
@@ -101,9 +91,6 @@ export async function load({ cookies,  locals  }: RequestEvent) {
     acc[sale.payment_method] = (acc[sale.payment_method] ?? 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-
-  const outOfStock = ((allLowStock as any[]) ?? []).filter(p => p.qty === 0);
-  const lowStock   = ((allLowStock as any[]) ?? []).filter(p => p.qty > 0);
 
   const productAgg = new Map<string, { id: string; name: string; qty: number; revenue: number; category: any }>();
   for (const item of (saleItemsToday as any[]) ?? []) {
@@ -162,12 +149,9 @@ export async function load({ cookies,  locals  }: RequestEvent) {
   const totalItemsToday = ((saleItemsToday as any[]) ?? []).reduce((s, x) => s + x.qty, 0);
   const avgBasket       = todayCount > 0 ? +(totalItemsToday / todayCount).toFixed(1) : 0;
 
-  let stockValueRetail = 0;
-  let stockValueCost   = 0;
-  for (const p of allProducts as any[]) {
-    stockValueRetail += (p.price ?? 0)      * (p.qty ?? 0);
-    stockValueCost   += (p.cost_price ?? 0) * (p.qty ?? 0);
-  }
+  // (stockValueRetail / stockValueCost are derived client-side from
+  // the inventory store; they update instantly when products are
+  // added or their qty changes)
 
   const hour = now.getHours();
   const greeting = hour < 5  ? 'Working late'
@@ -192,11 +176,8 @@ export async function load({ cookies,  locals  }: RequestEvent) {
     // seeded from `allProducts` (also returned below).
     topProducts,
     topCategories,
-    allProducts,
     distinctCustomers,
     avgBasket,
-    stockValueRetail,
-    stockValueCost,
     greeting,
     firstName,
   };

@@ -2,6 +2,8 @@
   import { auth }        from '$lib/stores/auth.svelte';
   import { currentShop } from '$lib/stores/shop.svelte';
   import { theme }       from '$lib/stores/theme.svelte';
+  import { inventory as invStore } from '$lib/stores/inventory.svelte';
+  import { customers as custStore } from '$lib/stores/customers.svelte';
   import { offlineSync } from '$lib/offline/offlineSync.svelte';
   import Sidebar           from '$lib/components/layout/Sidebar.svelte';
   import BottomNav         from '$lib/components/layout/BottomNav.svelte';
@@ -24,11 +26,34 @@
         (data.currentShop as any).palette_id ?? undefined,
       );
     }
+  });
 
+  // Hydrate the inventory + customers stores from the layout's
+  // server-loaded data. We do this OUTSIDE of $effect (in the
+  // script body) so it runs during SSR too — that way the
+  // dashboard's "Inventory alerts" KPI and "Out of stock" / "Low
+  // stock" lists are correct on the very first render, not just
+  // after hydration. $effect.pre / $effect don't run on the
+  // server, so the stores would otherwise be empty during SSR
+  // and the alerts would briefly flash "All stocked up" before
+  // the client hydrates.
+  // Hydrate the inventory + customers stores from the layout's
+  // server-loaded data. $effect.pre runs both on the server and
+  // on the client (it runs before the page renders), so the
+  // dashboard's "Inventory alerts" KPI and "Out of stock" / "Low
+  // stock" lists are correct on the very first render AND they
+  // stay in sync with the latest server payload on client-side
+  // navigation between pages.
+  $effect.pre(() => {
+    if (data.allProducts) invStore.replaceAll(data.allProducts as any[]);
+    if (data.customers)  custStore.replaceAll(data.customers  as any[]);
+  });
+
+  $effect(() => {
     // Warm the offline caches + drain any pending sales left in
-    // IndexedDB from a previous session.  Both calls are no-ops
-    // when offline (they short-circuit on _online).  They also
-    // gracefully no-op on SSR (browser-only).  We don't await —
+    // IndexedDB from a previous session. Both calls are no-ops
+    // when offline (they short-circuit on _online). They also
+    // gracefully no-op on SSR (browser-only). We don't await —
     // the page renders first and the caches update in the
     // background.
     void offlineSync.flushPendingSales();
