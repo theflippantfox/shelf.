@@ -1,6 +1,5 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-  import { currentShop }   from '$lib/stores/shop.svelte';
   import { toasts }        from '$lib/stores/toast.svelte';
   import Input     from '$lib/components/ui/Input.svelte';
   import Button    from '$lib/components/ui/Button.svelte';

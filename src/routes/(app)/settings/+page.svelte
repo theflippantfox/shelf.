@@ -1,6 +1,5 @@
 <script lang="ts">
   import { auth } from '$lib/stores/auth.svelte';
-  import { page } from '$app/stores';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import { Store, Palette, Globe, Percent, Receipt, Tag, Users, ArrowRight } from 'lucide-svelte';
 

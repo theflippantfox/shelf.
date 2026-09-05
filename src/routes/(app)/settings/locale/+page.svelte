@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
   import { toasts }    from '$lib/stores/toast.svelte';
-  import { COUNTRIES } from '$lib/config/countries';
+  ;
   import { TIMEZONES } from '$lib/config/timezones';
   import { CURRENCIES, getCurrency } from '$lib/config/currencies';
   import Select    from '$lib/components/ui/Select.svelte';

@@ -6,8 +6,6 @@
   import { formatCurrency, formatCurrencyCompact } from '$lib/utils/format';
   import { inventory as invStore } from '$lib/stores/inventory.svelte';
   import { sales as salesStore } from '$lib/stores/sales.svelte';
-  import { register as registerStore } from '$lib/stores/register.svelte';
-  import { customers as custStore } from '$lib/stores/customers.svelte';
   import {
     Wallet, TrendingUp, ShoppingBag, AlertTriangle, Package,
     ShoppingCart, Users, BarChart3, ArrowRight,
@@ -16,23 +14,15 @@
 
   let { data } = $props();
 
-  // ── Sync stores from server data ──────────────────────────────────
-  // Every page that visits the dashboard seeds the shared stores from
-  // its server payload. After that, ALL pages that read from these
-  // stores see updates instantly when something changes anywhere in
-  // the app.
-  // Note: inventory + customers stores are hydrated at the layout
-  // level (see (app)/+layout.svelte + +layout.server.ts) so the
-  // dashboard's "Inventory alerts" KPI and "Out of stock" / "Low
-  // stock" lists are correct on first render without depending on
-  // a round-trip to /inventory. We still seed salesStore + the
-  // register here because those are page-specific.
-  $effect(() => { salesStore.replaceAll(data.todaySales as any[] ?? []); });
-  $effect(() => { registerStore.replaceAll(
-    data.register?.entries as any[] ?? [],
-    data.register?.outstanding ?? 0,
-  ); });
-  $effect(() => { custStore.replaceAll(data.customers as any[] ?? []); });
+  // ── Sync sales store from server payload ──────────────────────────
+  // Seed the store synchronously (in the script body, not in an
+  // effect) so the today-KPIs are correct on the very first render
+  // — before $effect runs. Without this, the rendered values for
+  // todayCount / todayRevenue / todayProfit come from data.X (server
+  // values), but the hasSales / avgSale locals come from the store
+  // (empty until the effect runs), giving a brief inconsistent flash.
+  // svelte-ignore state_referenced_locally
+  salesStore.replaceAll(data.todaySales as any[] ?? []);
 
   function formatTime(dateStr: string) {
     return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

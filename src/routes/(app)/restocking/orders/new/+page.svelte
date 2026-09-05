@@ -10,7 +10,7 @@
   import { currentShop } from "$lib/stores/shop.svelte";
   import { formatCurrency, getCurrencySymbol } from "$lib/utils/format";
   import { fuzzyFilter } from "$lib/utils/fuzzy";
-  import { Trash2, Plus, Search, PackagePlus, ArrowLeft } from "lucide-svelte";
+  import { Trash2, Plus, Search, PackagePlus } from "lucide-svelte";
 
   let { data } = $props();
 

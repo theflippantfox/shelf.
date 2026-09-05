@@ -5,7 +5,8 @@
  *
  * Svelte 5 runes-based, so any component reading `sales.all` (or any
  * of the derived getters) re-renders automatically when the array
- * changes. Seeded from `data.todaySales` (today only) on first mount.
+ * changes. Seeded via `sales.replaceAll(...)` from the dashboard
+ * when it mounts, so the today-KPIs are correct on first render.
  *
  * Note: this store is intentionally scoped to the current shop. When
  * the shop changes, the page must call `sales.replaceAll([])` and

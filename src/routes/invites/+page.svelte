@@ -5,7 +5,7 @@
   import { currentShop } from '$lib/stores/shop.svelte';
   import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { Mail, Check, X, Store, Inbox } from 'lucide-svelte';
+  import { Check, X, Store, Inbox } from 'lucide-svelte';
 
   let { data } = $props();
   let busyId = $state<string | null>(null);

@@ -4,7 +4,6 @@
   import { navItems } from "$lib/config/nav";
   import { ICONS } from "$lib/config/icons";
   import { auth } from "$lib/stores/auth.svelte";
-  import { currentShop } from "$lib/stores/shop.svelte";
   import { inventory } from "$lib/stores/inventory.svelte";
   import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
   import Avatar from "$lib/components/ui/Avatar.svelte";

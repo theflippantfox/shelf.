@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatCurrency } from '$lib/utils/format';
+  ;
   import { auth } from '$lib/stores/auth.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { PackagePlus, Users, BarChart3 } from 'lucide-svelte';

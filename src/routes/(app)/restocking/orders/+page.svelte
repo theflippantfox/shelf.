@@ -1,13 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { formatCurrency, formatCurrencyCompact, formatDate, formatRelative } from '$lib/utils/format';
+  import { formatCurrency, formatCurrencyCompact, formatDate } from '$lib/utils/format';
   import SearchBar from '$lib/components/ui/SearchBar.svelte';
   import Select    from '$lib/components/ui/Select.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
-  import {
-    PackagePlus, ChevronLeft, ChevronRight, X,
-    Truck, CheckCircle2, Clock, AlertCircle, Ban, FileEdit,
-  } from 'lucide-svelte';
+  import { PackagePlus, ChevronLeft, ChevronRight, X, Truck, CheckCircle2, AlertCircle, Ban, FileEdit } from 'lucide-svelte';
   import { auth } from '$lib/stores/auth.svelte';
 
   let { data } = $props();

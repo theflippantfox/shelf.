@@ -140,12 +140,6 @@ export async function load({ cookies,  locals  }: RequestEvent) {
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 4);
 
-  const distinctCustomers = new Set(
-    (todaySales as any[])
-      .map((s: any) => s.customer?.id ?? s.customer)
-      .filter(Boolean),
-  ).size;
-
   const totalItemsToday = ((saleItemsToday as any[]) ?? []).reduce((s, x) => s + x.qty, 0);
   const avgBasket       = todayCount > 0 ? +(totalItemsToday / todayCount).toFixed(1) : 0;
 
@@ -171,12 +165,8 @@ export async function load({ cookies,  locals  }: RequestEvent) {
     txnsDelta,
     profitDelta,
     paymentBreakdown,
-    // outOfStock / lowStock are now derived client-side from the
-    // inventory store (so they update reactively). The store is
-    // seeded from `allProducts` (also returned below).
     topProducts,
     topCategories,
-    distinctCustomers,
     avgBasket,
     greeting,
     firstName,

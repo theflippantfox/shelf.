@@ -3,8 +3,9 @@
  * Svelte 5 runes-based, so any component reading `customers.all`
  * re-renders automatically when the array changes.
  *
- * Seeded from `data.customers` on mount. After that, all reads come
- * from the store, NOT from data. Writes are optimistic — UI updates
+ * Seeded via `customers.replaceAll(...)` from each page that needs
+ * the list (typically the layout). After that, all reads come from
+ * the store, NOT from data. Writes are optimistic — UI updates
  * instantly, then the server is hit in the background.
  */
 

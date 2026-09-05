@@ -10,8 +10,8 @@
   import Select    from '$lib/components/ui/Select.svelte';
   import Toggle    from '$lib/components/ui/Toggle.svelte';
   import Avatar    from '$lib/components/ui/Avatar.svelte';
-  import { ArrowLeft, Plus, Pencil, UserMinus, Crown, ShieldCheck, UserCheck, Mail, X } from 'lucide-svelte';
-  import { goto } from '$app/navigation';
+  import { Plus, Pencil, UserMinus, Crown, ShieldCheck, UserCheck, Mail, X } from 'lucide-svelte';
+  ;
 
   let { data } = $props();
 

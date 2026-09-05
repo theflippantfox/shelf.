@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { fly, fade } from 'svelte/transition';
-  import { Search, Plus, BarChart3, Package, Users, Truck, History, Settings, Home, LogOut, Sun, Moon, ArrowRight } from 'lucide-svelte';
+  import { Search, Plus, BarChart3, Package, Users, Truck, History, Settings, LogOut, Sun, Moon, ArrowRight } from 'lucide-svelte';
   import DynamicIcon from './ui/DynamicIcon.svelte';
   import { formatCurrency } from '$lib/utils/format';
 

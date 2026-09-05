@@ -2,11 +2,11 @@
  * Cash register store — single source of truth for register entries,
  * balance, and outstanding credit summary. Svelte 5 runes-based.
  *
- * Seeded from `data.entries` + `data.balance` + `data.credit` on
- * first mount. After that, reads come from the store and writes
- * (manual entries, transfers, voids, credit payments) are
- * optimistic — the UI updates instantly, then the server is hit
- * in the background.
+ * Seeded via `register.replaceAll(entries, outstanding)` from the
+ * cash-register page when it mounts. After that, reads come from
+ * the store and writes (manual entries, transfers, voids, credit
+ * payments) are optimistic — the UI updates instantly, then the
+ * server is hit in the background.
  *
  * Why we keep balance derived: the balance is just `sum(amount)`
  * per destination. Storing it as a column would be a denormalised

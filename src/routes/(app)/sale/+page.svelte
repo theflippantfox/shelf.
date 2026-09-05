@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { browser } from "$app/environment";
   import {
@@ -14,7 +14,6 @@
   import { inventory as invStore } from "$lib/stores/inventory.svelte";
   import { customers as custStore } from "$lib/stores/customers.svelte";
   import { sales as salesStore } from "$lib/stores/sales.svelte";
-  import { register as regStore } from "$lib/stores/register.svelte";
   import { inview }  from "$lib/utils/inview";
   import { fly } from "svelte/transition";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
@@ -31,9 +30,9 @@
   import { currentShop } from '$lib/stores/shop.svelte';
   import {
     ShoppingCart, Trash2, User, Plus, Minus,
-    Banknote, CreditCard, ArrowLeftRight, X,
+    Banknote, ArrowLeftRight, X,
     Search, Check, ChevronRight, ChevronDown, Package, ScanLine,
-    Clock, AlertCircle, Calendar, Pause, Play, Trash,
+    Clock, AlertCircle, Pause, Play, Trash,
   } from "lucide-svelte";
 
   let { data } = $props();

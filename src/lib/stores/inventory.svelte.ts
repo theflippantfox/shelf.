@@ -4,11 +4,12 @@
  * `inventory.all` re-renders automatically when the array changes.
  *
  * The store is seeded from `data.products` (server `+page.server.ts`)
- * on first mount via `inventory.init(...)`. After that, all reads
- * should come from the store, not from `data.products`. Writes
- * (`add`, `update`, `remove`) happen optimistically — the UI updates
- * immediately, and the server is hit in the background. If the
- * server fails, the optimistic change is rolled back.
+ * via `inventory.replaceAll(...)` from each page that needs it
+ * (typically the layout). After that, all reads should come from
+ * the store, not from `data.products`. Writes (`add`, `update`,
+ * `remove`) happen optimistically — the UI updates immediately, and
+ * the server is hit in the background. If the server fails, the
+ * optimistic change is rolled back.
  *
  * The same store is used by:
  *   - /inventory      (list, KPI counts, filter chips)
@@ -76,11 +77,9 @@ class InventoryStore {
   // ── Setup ───────────────────────────────────────────────────────────
   /** Seed the store from the server-rendered `data.products`. Idempotent. */
   init(items: any[]) {
-    // Only replace if the new array is different from what we have, to
-    // avoid wiping optimistic updates when the parent page re-mounts.
+    // Only seed when the store is empty so we don't wipe optimistic
+    // updates that happened between page navigations.
     if (this.#items.length === 0 && Array.isArray(items) && items.length) {
-      this.#items = items;
-    } else if (items && items.length && this.#items.length === 0) {
       this.#items = items;
     }
   }

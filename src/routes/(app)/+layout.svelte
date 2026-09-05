@@ -29,15 +29,6 @@
   });
 
   // Hydrate the inventory + customers stores from the layout's
-  // server-loaded data. We do this OUTSIDE of $effect (in the
-  // script body) so it runs during SSR too — that way the
-  // dashboard's "Inventory alerts" KPI and "Out of stock" / "Low
-  // stock" lists are correct on the very first render, not just
-  // after hydration. $effect.pre / $effect don't run on the
-  // server, so the stores would otherwise be empty during SSR
-  // and the alerts would briefly flash "All stocked up" before
-  // the client hydrates.
-  // Hydrate the inventory + customers stores from the layout's
   // server-loaded data. $effect.pre runs both on the server and
   // on the client (it runs before the page renders), so the
   // dashboard's "Inventory alerts" KPI and "Out of stock" / "Low

@@ -2,18 +2,15 @@
   import { goto } from '$app/navigation';
   import { toasts } from '$lib/stores/toast.svelte';
   import { inventory as invStore } from '$lib/stores/inventory.svelte';
-  import { sales as salesStore } from '$lib/stores/sales.svelte';
-  import { register as regStore } from '$lib/stores/register.svelte';
-  import { customers as custStore } from '$lib/stores/customers.svelte';
   import { returns as retStore, type ReturnItem, type SaleReturn } from '$lib/stores/returns.svelte';
-  import { formatCurrency, formatCurrencyCompact, formatDateTime } from '$lib/utils/format';
+  import { formatCurrency, formatDateTime } from '$lib/utils/format';
   import PageShell from '$lib/components/layout/PageShell.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Sheet from '$lib/components/ui/Sheet.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import {
     ArrowLeft, Printer, Share2, RotateCcw, Check,
-    AlertCircle, Package, X, Clock, Calendar,
+    AlertCircle, X, Clock, Calendar,
   } from 'lucide-svelte';
 
   let { data } = $props();

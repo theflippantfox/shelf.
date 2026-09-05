@@ -10,7 +10,7 @@
   import IconPicker  from '$lib/components/ui/IconPicker.svelte';
   import DynamicIcon from '$lib/components/ui/DynamicIcon.svelte';
   import EmptyState  from '$lib/components/ui/EmptyState.svelte';
-  import { ArrowLeft, Plus, Pencil, Trash2, Grip } from 'lucide-svelte';
+  import { Plus, Pencil, Trash2 } from 'lucide-svelte';
 
   let { data } = $props();
 
