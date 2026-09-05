@@ -197,6 +197,20 @@
     creditAmountPaid = '';
     creditDueDate = '';
   }
+  // Open the credit prompt from inside the checkout sheet. The checkout
+  // sheet is closed first because Svelte/SvelteKit's nested-modal UX is
+  // fiddly — opening a fresh sheet from the cart screen gives a cleaner
+  // result (and the checkout state is preserved on the cart).
+  function openCreditPrompt() {
+    if (!cart.customerId) {
+      toasts.error('Pick a customer before changing the credit amount');
+      return;
+    }
+    showCheckout = false;
+    // Brief delay so the checkout sheet animates out before the
+    // credit prompt animates in (avoids two sheets fighting for focus).
+    setTimeout(() => { creditPromptOpen = true; }, 150);
+  }
 
   /* ── Credit sub-form state ────────────────────────────────────────────
      When the user picks 'On credit' payment, a sub-form asks:
@@ -857,7 +871,7 @@
           type="button"
           class="text-[11px] font-semibold underline-offset-2 hover:underline"
           style="color:var(--gold-fg)"
-          onclick={() => creditPromptOpen = true}
+          onclick={openCreditPrompt}
         >
           Change amount
         </button>
