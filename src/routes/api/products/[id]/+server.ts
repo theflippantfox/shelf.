@@ -36,8 +36,19 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
   if ('qty'                 in body) allowed.qty = body.qty;
   if ('unit'                in body) allowed.unit = body.unit;
   if ('description'         in body) allowed.description = clean(body.description);
-  if ('low_stock_threshold' in body) allowed.low_stock_threshold = body.low_stock_threshold === '' ? 5 : body.low_stock_threshold;
-  if ('track_stock'         in body) allowed.track_stock = body.track_stock !== false;
+  if ('low_stock_threshold' in body) {
+    // null / undefined / '' all mean "use the default of 5". The DB
+    // column is NOT NULL so we can't write null directly.
+    const v = body.low_stock_threshold;
+    allowed.low_stock_threshold = (v === null || v === undefined || v === '' || Number.isNaN(v)) ? 5 : v;
+  }
+  if ('track_stock'         in body) {
+    allowed.track_stock = body.track_stock !== false;
+    // When the toggle is OFF, the threshold is meaningless. Set it to 0
+    // so the query-side "qty <= threshold" check can never match this
+    // product, without violating the NOT NULL constraint on the column.
+    if (body.track_stock === false) allowed.low_stock_threshold = 0;
+  }
   if ('track_barcode'       in body) {
     allowed.track_barcode = body.track_barcode !== false;
     // If the toggle was turned OFF, clear any existing barcode so the
