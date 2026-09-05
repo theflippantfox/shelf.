@@ -13,7 +13,7 @@
   import Input from '$lib/components/ui/Input.svelte';
   import {
     ArrowLeft, Printer, Share2, RotateCcw, Check,
-    AlertCircle, Package, X,
+    AlertCircle, Package, X, Clock, Calendar,
   } from 'lucide-svelte';
 
   let { data } = $props();
@@ -225,6 +225,63 @@
       toasts.success('Copied to clipboard');
     }
   }
+
+  // ── Record-credit-payment sheet (only for credit sales) ───────────
+  let showPay = $state(false);
+  let payAmount = $state('');
+  let payMethod = $state<'cash' | 'bank' | 'credit_note'>('cash');
+  let payNotes  = $state('');
+  let paying    = $state(false);
+
+  function openRecordPayment() {
+    // Pre-fill with the remaining pending amount
+    const paid    = Number(sale.credit_amount_paid ?? 0);
+    const total   = Number(sale.total ?? 0);
+    const pending = Math.max(0, total - paid);
+    payAmount = pending > 0 ? String(pending) : '';
+    payMethod = 'cash';
+    payNotes  = '';
+    showPay   = true;
+  }
+
+  async function submitPayment() {
+    const amt = parseFloat(payAmount);
+    if (isNaN(amt) || amt <= 0) {
+      toasts.error('Enter a valid amount');
+      return;
+    }
+    const paid  = Number(sale.credit_amount_paid ?? 0);
+    const total = Number(sale.total ?? 0);
+    const due   = total - paid;
+    if (amt > due + 0.005) {
+      toasts.error(`Amount exceeds pending (${formatCurrency(due)})`);
+      return;
+    }
+    paying = true;
+    try {
+      const res = await fetch(`/api/sales/${sale.id}/credit-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount,
+          destination: payMethod,
+          notes:       payNotes || undefined,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        toasts.error(result.error ?? 'Payment failed');
+        return;
+      }
+      // Server returned the updated sale — push it into the data prop
+      // by reloading the page (simplest correct way).
+      toasts.success(`Payment of ${formatCurrency(amt)} recorded`);
+      showPay = false;
+      window.location.reload();
+    } finally {
+      paying = false;
+    }
+  }
 </script>
 
 <svelte:head><title>Receipt {sale?.sale_ref ?? ''} · Shëlf</title></svelte:head>
@@ -272,9 +329,6 @@
         <div>
           <p class="text-[var(--text-3)] uppercase tracking-wider text-[9.5px] font-bold">Payment</p>
           <p class="font-semibold mt-0.5">{PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method}</p>
-          {#if sale.credit_amount_paid != null && sale.credit_amount_paid > 0}
-            <p class="text-[var(--text-3)]">received {formatCurrency(sale.credit_amount_paid)}</p>
-          {/if}
         </div>
         <div>
           <p class="text-[var(--text-3)] uppercase tracking-wider text-[9.5px] font-bold">Served by</p>
@@ -283,6 +337,89 @@
           </p>
         </div>
       </div>
+
+      <!-- Credit & balance panel — only for credit sales. -->
+      {#if sale.payment_method === 'credit' && !sale.voided_at}
+        {@const paid     = Number(sale.credit_amount_paid ?? 0)}
+        {@const total    = Number(sale.total ?? 0)}
+        {@const pending  = Math.max(0, total - paid)}
+        {@const pctPaid  = total > 0 ? Math.min(100, (paid / total) * 100) : 0}
+        {@const status   = sale.credit_status ?? (pending <= 0.005 ? 'paid' : paid <= 0.005 ? 'pending' : 'partial')}
+        <div class="rounded-xl p-4 mb-4 space-y-3"
+             style="background:color-mix(in srgb, {status === 'paid' ? 'var(--teal)' : status === 'partial' ? 'var(--gold)' : 'var(--crimson)'} 8%, var(--surface)); border:1px solid color-mix(in srgb, {status === 'paid' ? 'var(--teal)' : status === 'partial' ? 'var(--gold)' : 'var(--crimson)'} 28%, transparent);">
+          <!-- Header row: status + due date -->
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              <Clock size={14} strokeWidth={2.2}
+                     style="color:{status === 'paid' ? 'var(--teal-fg)' : status === 'partial' ? 'var(--gold-fg)' : 'var(--crimson-fg)'}" />
+              <p class="text-[11px] font-bold uppercase tracking-wider"
+                 style="color:{status === 'paid' ? 'var(--teal-fg)' : status === 'partial' ? 'var(--gold-fg)' : 'var(--crimson-fg)'}">
+                {status === 'paid' ? 'Paid in full' : status === 'partial' ? 'Partial payment' : 'Pending payment'}
+              </p>
+            </div>
+            {#if sale.credit_due_date}
+              <p class="text-[11px] text-[var(--text-3)] flex items-center gap-1">
+                <Calendar size={11} strokeWidth={2} />
+                Due by {new Date(sale.credit_due_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            {/if}
+          </div>
+
+          <!-- Progress bar: how much of the bill is paid -->
+          <div>
+            <div class="flex justify-between text-[10.5px] mb-1.5">
+              <span class="text-[var(--text-3)]">Paid</span>
+              <span class="font-semibold tabular-nums text-[var(--text-2)]">
+                {formatCurrency(paid)} / {formatCurrency(total)}
+              </span>
+            </div>
+            <div class="h-2 rounded-full overflow-hidden" style="background:var(--surface2)">
+              <div class="h-full rounded-full transition-all"
+                   style="width: {pctPaid}%; background: {status === 'paid' ? 'var(--teal)' : 'var(--gold)'}"></div>
+            </div>
+          </div>
+
+          <!-- Paid / Pending tiles -->
+          <div class="grid grid-cols-2 gap-2">
+            <div class="rounded-lg p-2.5"
+                 style="background:color-mix(in srgb, var(--teal) 12%, var(--surface))">
+              <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--teal-fg)">Paid</p>
+              <p class="text-[16px] font-bold tabular-nums mt-0.5" style="color:var(--teal-fg)">
+                {formatCurrency(paid)}
+              </p>
+            </div>
+            <div class="rounded-lg p-2.5"
+                 style="background:color-mix(in srgb, {pending > 0 ? 'var(--crimson)' : 'var(--teal)'} 12%, var(--surface))">
+              <p class="text-[9px] font-bold uppercase tracking-wider"
+                 style="color:{pending > 0 ? 'var(--crimson-fg)' : 'var(--teal-fg)'}">
+                {pending > 0 ? 'Pending' : 'Settled'}
+              </p>
+              <p class="text-[16px] font-bold tabular-nums mt-0.5"
+                 style="color:{pending > 0 ? 'var(--crimson-fg)' : 'var(--teal-fg)'}">
+                {formatCurrency(pending)}
+              </p>
+            </div>
+          </div>
+
+          <!-- Notes (if any) -->
+          {#if sale.notes}
+            <div class="rounded-lg p-2.5 text-[11.5px] italic text-[var(--text-2)]"
+                 style="background:var(--surface)">
+              <p class="text-[9px] not-italic font-bold uppercase tracking-wider text-[var(--text-3)] mb-0.5">Note</p>
+              "{sale.notes}"
+            </div>
+          {/if}
+
+          <!-- Action: record a credit payment (cashier marks more paid) -->
+          {#if status !== 'paid' && sale.customer_id}
+            <div class="flex justify-end pt-1">
+              <Button size="sm" variant="secondary" onclick={openRecordPayment}>
+                <Check size={12} strokeWidth={2.2} /> Record payment
+              </Button>
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Items -->
       <div class="border-t border-[var(--border)] pt-3">
@@ -561,6 +698,84 @@
       <Button variant="secondary" onclick={() => (showReturn = false)} class="flex-1">Cancel</Button>
       <Button variant="primary" onclick={submitReturn} loading={saving} class="flex-1">
         <Check size={14} strokeWidth={2.2} /> Record return
+      </Button>
+    </div>
+  {/snippet}
+</Sheet>
+
+<!-- ──────────────────────────────────────────────────────────────────────
+  RECORD-CREDIT-PAYMENT SHEET
+  Triggered by the "Record payment" button on the credit & balance
+  panel. Lets the cashier record an incoming payment against the
+  customer's outstanding balance. Pre-fills the amount with the
+  remaining pending.
+  ────────────────────────────────────────────────────────────────────── -->
+<Sheet bind:open={showPay} title="Record credit payment" maxWidth="max-w-md">
+  <div class="space-y-4">
+    <div class="rounded-xl p-3 space-y-1.5" style="background:var(--surface2)">
+      <div class="flex justify-between text-[11.5px]">
+        <span class="text-[var(--text-3)]">Total bill</span>
+        <span class="font-semibold tabular-nums">{formatCurrency(sale?.total ?? 0)}</span>
+      </div>
+      <div class="flex justify-between text-[11.5px]">
+        <span class="text-[var(--text-3)]">Already paid</span>
+        <span class="font-semibold tabular-nums" style="color:var(--teal-fg)">
+          {formatCurrency(sale?.credit_amount_paid ?? 0)}
+        </span>
+      </div>
+      <div class="flex justify-between text-[12.5px] font-bold border-t border-[var(--border)] pt-1.5 mt-1.5">
+        <span>Pending</span>
+        <span class="tabular-nums" style="color:var(--crimson-fg)">
+          {formatCurrency(Math.max(0, (sale?.total ?? 0) - (sale?.credit_amount_paid ?? 0)))}
+        </span>
+      </div>
+    </div>
+
+    <!-- Method: cash / UPI-bank / store credit note -->
+    <div>
+      <p class="input-label mb-1.5">Received via</p>
+      <div class="grid grid-cols-3 gap-1.5">
+        {#each [['cash','Cash','var(--teal)'],['bank','UPI / Card','var(--primary)'],['credit_note','Store credit','var(--gold)']] as [val, label, color]}
+          <button type="button"
+                  class="px-2 py-2 text-[10.5px] font-semibold rounded-md border transition
+                         {payMethod === val
+                           ? 'shadow-sm'
+                           : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface2)] text-[var(--text-2)]'}"
+                  style={payMethod === val
+                    ? `border-color:${color}; background:color-mix(in srgb, ${color} 10%, transparent); color:${color};`
+                    : ''}
+                  onclick={() => payMethod = val}>
+            {label}
+          </button>
+        {/each}
+      </div>
+    </div>
+
+    <!-- Amount -->
+    <div>
+      <p class="input-label mb-1.5">Amount received now</p>
+      <Input type="number" step="0.01" min="0.01"
+             max={Math.max(0, (sale?.total ?? 0) - (sale?.credit_amount_paid ?? 0))}
+             bind:value={payAmount} />
+    </div>
+
+    <!-- Notes -->
+    <div>
+      <p class="input-label mb-1.5">Notes <span class="text-[var(--text-3)] font-normal">(optional)</span></p>
+      <textarea
+        bind:value={payNotes}
+        rows="2"
+        placeholder="e.g. paid via GPay, customer promised rest by Friday…"
+        class="input text-sm resize-y min-h-[56px]"
+      ></textarea>
+    </div>
+  </div>
+
+  {#snippet footer()}
+    <div class="flex gap-2">
+      <Button variant="secondary" onclick={() => (showPay = false)} class="flex-1">Cancel</Button>
+      <Button variant="primary" onclick={submitPayment} loading={paying} class="flex-1">
+        <Check size={14} strokeWidth={2.2} /> Record payment
       </Button>
     </div>
   {/snippet}
