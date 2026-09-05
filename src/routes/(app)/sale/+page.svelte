@@ -17,6 +17,7 @@
   import Sheet from '$lib/components/ui/Sheet.svelte';
   import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
   import QtyInput from "$lib/components/ui/QtyInput.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
   import ProductCardSkeleton from "$lib/components/ui/ProductCardSkeleton.svelte";
   import BarcodeScanner from "$lib/components/ui/BarcodeScanner.svelte";
   import { navigating } from '$app/state';
