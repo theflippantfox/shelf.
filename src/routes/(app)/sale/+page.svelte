@@ -37,7 +37,8 @@
   let filterCat     = $state("");
   let cartOpen      = $state(false);
   let showCheckout  = $state(false);
-  let submitting    = $state(false);
+  let submitting        = $state(false);
+  let creditPromptOpen  = $state(false);   // modal that asks for amount received
   let showReceipt   = $state(false);
   let scanOpen      = $state(false);
   let lastSaleRef   = $state("");
@@ -159,12 +160,43 @@
   /* ── Helpers ───────────────────────────────────────────────────────────── */
   const PAY_META: Record<PaymentMethod, { icon: any; label: string; tone: 'primary' | 'teal' | 'cobalt' | 'gold' }> = {
     cash:     { icon: Banknote,        label: 'Cash',     tone: 'teal'    },
-    // 'credit' = customer owes money (full or partial). Customer MUST be
-    // picked before the sheet will let you confirm. The status sub-form
-    // appears below the payment chooser.
+    // 'credit' = customer owes money (full or partial). When the user
+    // picks this, a dedicated modal pops up to capture the amount
+    // received and due date. They can't complete the sale without
+    // confirming the modal.
     credit:   { icon: Clock,           label: 'On credit', tone: 'gold'    },
     transfer: { icon: ArrowLeftRight,  label: 'UPI',      tone: 'primary' },
   };
+
+  // Picking 'credit' from the checkout sheet opens a dedicated modal
+  // that asks for the amount received and (optionally) a due date.
+  // The user MUST confirm the modal to keep the credit selection —
+  // cancelling the modal flips payment back to 'cash' (the default).
+  function pickPaymentMethod(key: PaymentMethod) {
+    cart.setPaymentMethod(key);
+    if (key === 'credit') {
+      creditPromptOpen = true;
+    }
+  }
+  // Confirm the credit prompt — keep the credit selection and close
+  // the modal. The amount + due date are already bound to state vars.
+  function confirmCreditPrompt() {
+    if (!cart.customerId) {
+      toasts.error('Pick a customer for credit sales first');
+      creditPromptOpen = false;
+      cart.setPaymentMethod('cash');
+      return;
+    }
+    creditPromptOpen = false;
+  }
+  // Cancel the credit prompt — flip back to cash and reset the credit
+  // form. The user explicitly chose not to do credit.
+  function cancelCreditPrompt() {
+    creditPromptOpen = false;
+    cart.setPaymentMethod('cash');
+    creditAmountPaid = '';
+    creditDueDate = '';
+  }
 
   /* ── Credit sub-form state ────────────────────────────────────────────
      When the user picks 'On credit' payment, a sub-form asks:
@@ -791,7 +823,7 @@
             style={active ? `border-color:${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'};
                               background:color-mix(in srgb, ${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'} 12%, transparent);
                               color:${meta.tone === 'primary' ? 'var(--primary-fg)' : meta.tone === 'teal' ? 'var(--teal-fg)' : meta.tone === 'gold' ? 'var(--gold-fg)' : 'var(--cobalt-fg)'}` : ''}
-            onclick={() => cart.setPaymentMethod(key)}
+            onclick={() => pickPaymentMethod(key)}
           >
             <meta.icon size={18} strokeWidth={2} />
             <span class="text-xs font-bold">{meta.label}</span>
@@ -802,62 +834,33 @@
     </div>
 
     {#if cart.paymentMethod === 'credit'}
-      <!-- On-credit sub-form. Customer must be selected above. The
-           form asks "how much did you receive right now" — 0 by default
-           for the common "walk out the door owing us" case. The rest
-           of the bill becomes the amount due, shown prominently. -->
-      <div class="rounded-xl p-3 space-y-3" style="background:var(--gold-dim); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);">
+      <!-- Read-only summary of the on-credit state set in the modal.
+           Edit by opening the credit prompt modal via "Change amount". -->
+      <div class="rounded-xl p-3 space-y-2" style="background:var(--gold-dim); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);">
         <div class="flex items-center gap-2 text-[var(--gold-fg)]">
           <AlertCircle size={13} strokeWidth={2.2} />
           <p class="text-[11px] font-semibold">
             On credit — {cart.customerId ? `owing ${cart.customerName}` : 'pick a customer above'}
           </p>
         </div>
-
-        <!-- Total + amount-due summary -->
         <div class="grid grid-cols-2 gap-2">
-          <div class="rounded-lg p-2.5" style="background:color-mix(in srgb, var(--gold) 8%, var(--surface))">
-            <p class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Total bill</p>
-            <p class="text-[16px] font-bold tabular-nums text-[var(--text)] mt-0.5">{formatCurrency(grandTotal)}</p>
+          <div class="rounded-lg p-2" style="background:color-mix(in srgb, var(--gold) 8%, var(--surface))">
+            <p class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Received</p>
+            <p class="text-[13px] font-bold tabular-nums text-[var(--text)] mt-0.5">{formatCurrency(creditNumeric)}</p>
           </div>
-          <div class="rounded-lg p-2.5" style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface))">
+          <div class="rounded-lg p-2" style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface))">
             <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--crimson-fg)">Amount due</p>
-            <p class="text-[16px] font-bold tabular-nums mt-0.5" style="color:var(--crimson-fg)">
-              {formatCurrency(Math.max(0, grandTotal - (parseFloat(creditAmountPaid) || 0)))}
-            </p>
+            <p class="text-[13px] font-bold tabular-nums mt-0.5" style="color:var(--crimson-fg)">{formatCurrency(Math.max(0, grandTotal - creditNumeric))}</p>
           </div>
         </div>
-
-        <!-- Amount received now (defaults to 0 = full pending) -->
-        <div>
-          <p class="input-label mb-1.5 text-[var(--gold-fg)]">
-            Amount received now
-            <span class="text-[var(--text-3)] font-normal">(0 = full pending)</span>
-          </p>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            max={grandTotal}
-            bind:value={creditAmountPaid}
-            placeholder="0"
-          />
-        </div>
-
-        <!-- Due date (optional) -->
-        <div>
-          <p class="input-label mb-1.5 text-[var(--gold-fg)]">
-            Due date
-            <span class="text-[var(--text-3)] font-normal">(optional)</span>
-          </p>
-          <Input type="date" bind:value={creditDueDate} />
-        </div>
-
-        {#if !cart.customerId}
-          <p class="text-[11px] font-semibold" style="color:var(--crimson)">
-            Pick a customer above to enable credit sales.
-          </p>
-        {/if}
+        <button
+          type="button"
+          class="text-[11px] font-semibold underline-offset-2 hover:underline"
+          style="color:var(--gold-fg)"
+          onclick={() => creditPromptOpen = true}
+        >
+          Change amount
+        </button>
       </div>
     {/if}
 
@@ -903,6 +906,124 @@
         size="lg"
       >
         {isEdit ? 'Update Sale' : 'Complete Sale'}
+      </Button>
+    </div>
+  {/snippet}
+</Sheet>
+
+<!-- ─────────────────────────────────────────────────────────────────────────
+  CREDIT PROMPT MODAL
+  Pops up the moment the user picks 'On credit'. They MUST enter
+  the amount received (defaults to 0 = full pending) and confirm
+  before the sale can be completed. Cancelling the modal flips
+  payment back to 'cash' so the user is never stuck on 'credit'.
+  ───────────────────────────────────────────────────────────────────────── -->
+<Sheet bind:open={creditPromptOpen} title="On credit — set amount received" maxWidth="max-w-md">
+  <div class="space-y-4">
+    <div class="flex items-start gap-2.5 p-3 rounded-xl"
+         style="background:var(--gold-dim); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);">
+      <AlertCircle size={14} strokeWidth={2.2} class="mt-0.5 shrink-0" style="color:var(--gold-fg)" />
+      <p class="text-[11.5px] leading-relaxed" style="color:var(--gold-fg)">
+        Customer is taking goods now and paying later. How much
+        are they paying <strong>right now</strong>?
+        Leave at 0 to record the full bill as pending.
+      </p>
+    </div>
+
+    <!-- Customer + total summary -->
+    <div class="rounded-xl p-3 space-y-2" style="background:var(--surface2)">
+      <div class="flex justify-between text-[11.5px]">
+        <span class="text-[var(--text-3)]">Customer</span>
+        <span class="font-semibold truncate ml-2">{cart.customerName ?? '—'}</span>
+      </div>
+      <div class="flex justify-between text-[11.5px]">
+        <span class="text-[var(--text-3)]">Total bill</span>
+        <span class="font-bold tabular-nums">{formatCurrency(grandTotal)}</span>
+      </div>
+    </div>
+
+    <!-- Amount received now -->
+    <div>
+      <p class="input-label mb-1.5">
+        Amount received now
+        <span class="text-[var(--text-3)] font-normal ml-1">(0 = full pending)</span>
+      </p>
+      <Input
+        type="number"
+        step="0.01"
+        min="0"
+        max={grandTotal}
+        bind:value={creditAmountPaid}
+        placeholder="0"
+      />
+    </div>
+
+    <!-- Live summary: pending amount + status chip -->
+    <div class="grid grid-cols-2 gap-2">
+      <div class="rounded-lg p-2.5" style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface))">
+        <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--crimson-fg)">Amount due</p>
+        <p class="text-[16px] font-bold tabular-nums mt-0.5" style="color:var(--crimson-fg)">{formatCurrency(Math.max(0, grandTotal - creditNumeric))}</p>
+      </div>
+      <div class="rounded-lg p-2.5 flex flex-col justify-center"
+           style="background:color-mix(in srgb,
+             {creditStatus === 'paid' ? 'var(--teal)' : creditStatus === 'partial' ? 'var(--gold)' : 'var(--crimson)'} 10%,
+             var(--surface))">
+        <p class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Status</p>
+        <p class="text-[14px] font-bold mt-0.5"
+           style="color: {creditStatus === 'paid' ? 'var(--teal-fg)' : creditStatus === 'partial' ? 'var(--gold-fg)' : 'var(--crimson-fg)'}">
+          {creditStatus === 'paid' ? 'Paid in full' : creditStatus === 'partial' ? 'Partial' : 'Pending'}
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick-fill buttons -->
+    <div>
+      <p class="input-label mb-1.5">Quick fill</p>
+      <div class="grid grid-cols-4 gap-1.5">
+        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
+                onclick={() => creditAmountPaid = '0'}>
+          None (₹0)
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
+                onclick={() => creditAmountPaid = String(grandTotal / 2)}>
+          Half
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
+                onclick={() => creditAmountPaid = String(grandTotal)}>
+          All
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
+                onclick={() => creditAmountPaid = ''}>
+          Clear
+        </button>
+      </div>
+    </div>
+
+    <!-- Due date -->
+    <div>
+      <p class="input-label mb-1.5">
+        Due date
+        <span class="text-[var(--text-3)] font-normal ml-1">(optional)</span>
+      </p>
+      <Input type="date" bind:value={creditDueDate} />
+    </div>
+
+    <!-- Customer reminder if not picked yet -->
+    {#if !cart.customerId}
+      <div class="rounded-lg p-2.5 text-[11px] font-semibold"
+           style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface)); color:var(--crimson-fg);">
+        Pick a customer above the payment options before confirming.
+      </div>
+    {/if}
+  </div>
+
+  {#snippet footer()}
+    <div class="flex gap-2">
+      <Button variant="secondary" onclick={cancelCreditPrompt} class="flex-1">
+        Use cash instead
+      </Button>
+      <Button variant="primary" onclick={confirmCreditPrompt} disabled={!cart.customerId} class="flex-1">
+        Confirm on credit
       </Button>
     </div>
   {/snippet}
