@@ -1,4 +1,6 @@
-# Offline-First PWA — Design Plan
+# Offline-First PWA — Status
+
+**Status: ✅ Core implemented, shipped in `684fb19`.**
 
 ## Goal
 Every page reads from a reactive client-side store that is hydrated from
@@ -6,127 +8,108 @@ the server when online and from IndexedDB when offline. Every write goes
 through an optimistic local update + a queue. The sync engine drains
 the queue when online, with backoff on failure.
 
-## Existing foundation
-- `src/lib/offline/offlineDb.ts` — IndexedDB schema for products + pending_sales + meta
-- `src/lib/offline/offlineSync.svelte.ts` — online/offline state + sales queue flush
+## What's done
 
-## What's missing (and how to build it)
+### 1. IndexedDB schema v2
+- `products` — read-through cache (existed in v1)
+- `categories`, `customers`, `register` — NEW read-through caches
+- `pending_ops` — NEW generic mutation queue
+- `pending_sales` — legacy queue (preserved for backward compat)
+- `meta` — small kv store for sync timestamps
 
-### 1. Expand IndexedDB schema
-- v1 already has `products`, `pending_sales`, `meta`
-- v2 adds:
-  - `categories` (cached, read-through)
-  - `customers` (cached, read-through)
-  - `sales_cache` (cached, recent sales for history/analytics)
-  - `register_cache` (cached, recent register entries)
-  - `settings_cache` (cached, shop settings)
-  - `pending_ops` (generic mutation queue — kind/method/body/target_id)
+### 2. Generic pending_ops queue
+- `offlineFetch(path, options)` — `fetch` wrapper that queues writes
+  when offline, returns 202 to the caller. The page's existing
+  `if (res.ok)` check is the only contract.
+- `enqueueOp({kind, method, path, body, headers})` — public helper
+  used by both the engine and pages.
+- Per-op: id (UUID), kind, method, path, body, headers, attempts,
+  next_retry_at, last_error, last_status, permanent.
 
-### 2. Reactive data stores (one per entity)
-- `src/lib/stores/offline/products.svelte.ts`
-- `src/lib/stores/offline/customers.svelte.ts`
-- `src/lib/stores/offline/categories.svelte.ts`
-- `src/lib/stores/offline/register.svelte.ts`
-- Each store exposes:
-  - reactive `$state` items array
-  - `ensureLoaded()` — fetch from server, fall back to cache when offline
-  - `createLocal()` / `updateLocal()` / `removeLocal()` — optimistic + enqueue
-  - `reconcileLocalRow(client_id, realRow)` — called by sync on success
+### 3. Sync engine
+- `flushPendingOps()` — walks the queue, replays each via fetch,
+  applies exponential backoff (5s, 15s, 1m, 5m, 30m) on transient
+  errors, marks 4xx (other than 408/429) as permanent.
+- `flushPendingSales()` — legacy v1 sales queue.
+- `refreshAllCaches()` — warms products, categories, customers,
+  register from the server.
+- `syncNow()` — user-triggered full sync (used by the "Sync now"
+  button in the OfflineIndicator).
+- 5s periodic flush picks up ops whose retry timer has expired.
 
-### 3. Sync engine rewrite
-- `offlineSync.svelte.ts` extends to:
-  - `enqueue(op)` — push to pending_ops, kick off flush if online
-  - `flushPendingOps()` — walk the queue, POST/PATCH/DELETE
-  - `flushPendingSales()` — existing sales queue (preserved for backward compat)
-  - Exponential backoff: 5s, 15s, 1m, 5m, 30m (capped)
-  - 4xx = permanent error, mark and stop
-  - 5xx / network = transient, retry with backoff
-  - Periodic retry interval (5s) for ops whose `next_retry_at` has passed
+### 4. Store hydration
+- `inventory.svelte.ts` and `customers.svelte.ts` now have
+  `hydrateFromCache()` methods that read from IDB.
+- The layout's `$effect` calls `hydrateFromCache()` on every page
+  mount. The server payload (from the same layout's `$effect.pre`)
+  overlays IDB.
+- The flow is: IDB shows first (instant, works offline) → server
+  replaces → user makes a write (optimistic) → sync engine flushes
+  the queue when online.
 
-### 4. Endpoint resolution
-- `endpointForOp(op)` — maps `{kind, method, target_id}` → URL
-  - product POST  → /api/products
-  - product PATCH → /api/products/{id}
-  - customer POST → /api/customers
-  - register POST  → /api/cash-register
-  - credit-payment → /api/sales/{id}/credit-payment
-  - void-sale      → /api/sales/{id}
+### 5. UI
+- `OfflineIndicator.svelte` — three states:
+  - offline (gold pill with pending count)
+  - online-with-pending (cobalt "N pending · Sync now" button)
+  - just-reconnected (brief teal "Back online")
+- `/offline-test` — manual debug page (enqueue a test op, sync now,
+  inspect the queue).
 
-### 5. UI integration
-- Pages that READ from a list: keep the server `load` (it seeds the cache
-  via `ensureLoaded`), then use the store for re-renders
-- Pages that WRITE: call `store.createLocal(...)` instead of fetch;
-  the sync engine handles the server POST
-- New `OfflineBadge.svelte` component:
-  - Shows online/offline indicator
-  - Shows pending count with "Sync now" button
-  - Shown in the Header
+### 6. Page integrations (writes that work offline)
+- `/sale` — sale creation, with "Pending sync" badge in the receipt
+- `/cash-register` — manual entries, transfers, voids
+- `/sale/[id]` — credit payments, returns
 
-### 6. Page-by-page changes (priority order)
-1. **Customers** — add offline store, page reads from it
-2. **Categories** — same pattern
-3. **Cash register** — entries create offline
-4. **Products** (inventory) — already has the store skeleton
-5. **History** — uses sales_cache, shows pending badge
-6. **Analytics** — reads from cached sales
+## What's still TODO
 
-## Build issues encountered (and how to work around)
+### Priority 1 — page coverage gaps
+- `/inventory` — add product (POST /api/products) — page-level edit
+  works but the create path is a `fetch` call, not `offlineFetch`
+- `/customers` — add customer (POST /api/customers) — same gap
+- `/restocking/orders/[id]` — receive delivery (PATCH) — same gap
+- `/restocking/orders/[id]` — record payment (POST payments) —
+  already considered, but page uses direct fetch
+- `/categories` — create/edit categories
 
-**`.svelte.ts` resolution**: Vite 8's `import-analysis` plugin doesn't
-honor `resolve.extensions` for static imports. The current existing
-files in the project (`auth.svelte.ts`, `cart.svelte.ts`, etc.) work
-because SvelteKit's pre-processing handles them before the import-analysis
-runs. The issue arises when a `.svelte.ts` file is imported from another
-`.svelte.ts` file in a NEW subdirectory of `src/lib/offline/stores/`.
+### Priority 2 — read-side cache coverage
+- `/categories` page — only renders from server data, not the
+  store. Add `categories.svelte.ts` store and hydrate from IDB
+- `/restocking/*` pages — receive cached suppliers + products
+  (mostly fine, they use direct fetches)
 
-**Workaround options:**
-1. **Use plain `.ts` files** for the new stores (not `.svelte.ts`). But
-   then the `$state` runes won't work — they'd need to be wrapped in
-   a class with `$state` in a constructor.
-2. **Put the new stores alongside existing ones** in `src/lib/stores/`
-   (not in a new subdirectory) — this works because SvelteKit's
-   pre-processing path already covers that directory.
-3. **Add the `.svelte.ts` extension to Vite's `resolve.extensions` AND
-   `optimizeDeps.entries`** — this should work but needs more testing.
+### Priority 3 — service-worker-side queue
+- The service worker has its own `sw-queue` IndexedDB store
+  (mentioned in the original plan). The page-side engine handles
+  all current writes. The SW queue is for the case where the user
+  submits a write and the page is closed before the page-side engine
+  can flush. This isn't built yet but isn't blocking — the page-side
+  `flushPendingSales` / `flushPendingOps` on the next page load
+  handles the common case.
 
-**Recommended path: option 2.** Move the new stores to
-`src/lib/stores/products-offline.svelte.ts` etc., alongside the existing
-ones. This avoids the resolution issue entirely.
+### Priority 4 — nicer "pending sales" UX
+- The history page should show "pending" sales (with a clock icon)
+  so the user knows they have unsynced sales in the queue
+- Currently they're not shown — they only appear in the OfflineIndicator
 
-## Implementation order (incremental, testable)
+### Priority 5 — server-side idempotency
+- The server doesn't dedupe `client_id` yet for sales. The `Idempotency-Key`
+  header is set by the page but the server doesn't read it.
+- For a clean offline experience, the server should accept the
+  client_id and treat duplicate POSTs with the same id as the
+  same sale. Otherwise a user submitting offline + losing the
+  response could create a duplicate when the sync engine retries
+  the queue.
+- The supplier payment endpoint already has this (client_request_id
+  UNIQUE in the DB).
 
-### Phase 1: Schema + sync engine
-- Expand `offlineDb.ts` to v2 with the new stores
-- Rewrite `offlineSync.svelte.ts` to enqueue + flush `pending_ops`
-- Verify the existing sales queue still works (regression test)
+## How to test
 
-### Phase 2: Products store
-- Create `src/lib/stores/products-offline.svelte.ts` (alongside the
-  existing stores, not in a new directory)
-- Wire it up to the products page
-- Verify online + offline flows
+See `/tmp/manual_offline_test.md` for the full procedure. Short
+version: open DevTools → Network → Offline → make a sale →
+expect "Pending sync" badge + the pill shows "1 pending" →
+go back online → pill shows "1 pending · Sync now" → click it →
+queue drains.
 
-### Phase 3: Customers + Categories stores
-- Same pattern as products
-- Wire to customers + categories pages
-
-### Phase 4: Register store
-- The cash register has its own entry-creation flow
-- Optimistic local entry + sync
-- The main balance card stays server-authoritative (it's the source of
-  truth for how much real money is in each drawer)
-
-### Phase 5: Pages integration
-- All pages that read lists of stuff use the stores
-- All write forms use the local-creators
-- Pending badges on the relevant pages
-- The "Sync now" button in the Header
-
-## What this plan does NOT do
-- No service-worker-side queue (the existing SW only handles the
-  precache; the page-side sync engine handles writes)
-- No conflict resolution for concurrent edits on multiple devices
-  (this is a single-user-single-device shop, so the last-writer-wins
-  is acceptable)
-- No offline-queue for file uploads (we have no file-upload API
-  endpoints right now)
+The `/offline-test` page is a faster way: open it, click "Enqueue
+test op", see the row appear in the queue list, click "Sync now",
+see it disappear.
