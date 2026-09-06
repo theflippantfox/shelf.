@@ -1037,7 +1037,7 @@
 <!-- ─────────────────────────────────────────────────────────────────────────
   CHECKOUT MODAL
   ───────────────────────────────────────────────────────────────────────── -->
-<Sheet bind:open={showCheckout} title="Complete sale" maxWidth="max-w-md">
+<Sheet bind:open={showCheckout} title={isEdit ? 'Update sale' : 'Complete sale'} maxWidth="max-w-md">
   <div class="flex flex-col gap-4">
     <!-- Sale timestamp — defaults to now; user can backdate or correct clock skew.
          Above the customer selector per the design decision. -->
@@ -1201,26 +1201,36 @@
 
     <!-- Summary -->
     <div class="rounded-xl p-3.5 space-y-1.5 text-xs" style="background:var(--surface2)">
-      <div class="flex justify-between">
-        <span class="text-[var(--text-3)]">Subtotal</span>
-        <span class="tabular-nums font-semibold">{formatCurrency(cart.subtotal)}</span>
+    <div class="flex justify-between">
+      <span class="text-[var(--text-3)]">Subtotal</span>
+      <span class="tabular-nums font-semibold">{formatCurrency(cart.subtotal)}</span>
+    </div>
+    {#if cart.discountAmount > 0}
+      <div class="flex justify-between" style="color:var(--teal-fg)">
+        <span class="font-semibold">Discount</span>
+        <span class="tabular-nums font-semibold">– {formatCurrency(cart.discountAmount)}</span>
       </div>
-      {#if cart.discountAmount > 0}
-        <div class="flex justify-between" style="color:var(--teal-fg)">
-          <span class="font-semibold">Discount</span>
-          <span class="tabular-nums font-semibold">– {formatCurrency(cart.discountAmount)}</span>
-        </div>
-      {/if}
-      {#if data.taxRate > 0 && taxAmount > 0}
-        <div class="flex justify-between text-[var(--text-3)]">
-          <span>{data.taxName}</span>
-          <span class="tabular-nums">{formatCurrency(taxAmount)}</span>
-        </div>
-      {/if}
-      <div class="flex justify-between font-bold text-base pt-1.5 border-t border-[var(--border)] mt-1">
-        <span>Total</span>
-        <span class="tabular-nums" style="color:var(--primary)">{formatCurrency(grandTotal)}</span>
+    {/if}
+    {#if data.taxRate > 0 && taxAmount > 0}
+      <div class="flex justify-between text-[var(--text-3)]">
+        <span>{data.taxName}</span>
+        <span class="tabular-nums">{formatCurrency(taxAmount)}</span>
       </div>
+    {/if}
+    <div class="flex justify-between font-bold text-base pt-1.5 border-t border-[var(--border)] mt-1">
+      <span>Total</span>
+      <span class="tabular-nums" style="color:var(--primary)">{formatCurrency(grandTotal)}</span>
+    </div>
+    {#if cart.paymentMethod === 'credit'}
+      <div class="flex justify-between text-[11px] pt-1 border-t border-[var(--border)] mt-1.5 gap-4">
+        <span class="text-[var(--text-3)]">Received</span>
+        <span class="tabular-nums font-semibold" style="color:var(--teal-fg)">{formatCurrency(creditNumeric)}</span>
+      </div>
+      <div class="flex justify-between text-[11px] gap-4">
+        <span class="text-[var(--text-3)]">Pending</span>
+        <span class="tabular-nums font-semibold" style="color:var(--crimson-fg)">{formatCurrency(Math.max(0, grandTotal - creditNumeric))}</span>
+      </div>
+    {/if}
     </div>
   </div>
 
