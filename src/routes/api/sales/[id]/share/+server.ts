@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { userClientFromCtx } from '$lib/server/supabase';
+import { adminClient } from '$lib/server/supabase';
 
 /**
  * POST /api/sales/[id]/share — enable (or regenerate) the shareable
@@ -29,7 +29,7 @@ export async function POST({ cookies, params, request, locals }: import('@svelte
   try { body = await request.json(); } catch { /* empty body is OK */ }
   const enable = body?.enabled !== false;  // default true
 
-  const supabase = userClientFromCtx({ cookies } as any);
+  const supabase = adminClient();
   // We always mint a fresh token (whether enabling or re-enabling) so
   // the old URL stops working. Disable sets sharing_enabled=false and
   // nulls the token; re-enable mints a new one.
@@ -42,7 +42,7 @@ export async function POST({ cookies, params, request, locals }: import('@svelte
   } else {
     update.share_token = null;
   }
-  const { data, error: upErr } = await supabase
+  const { data, error: upErr } = await (supabase as any)
     .from('sales')
     .update(update as any)
     .eq('id', params.id)
@@ -68,8 +68,8 @@ export async function GET({ cookies, params, locals, request }: import('@sveltej
   if (!params.id)          throw error(400, 'Missing sale id');
   if (!locals.currentShop) throw error(401, 'No shop');
 
-  const supabase = userClientFromCtx({ cookies } as any);
-  const { data, error: rErr } = await supabase
+  const supabase = adminClient();
+  const { data, error: rErr } = await (supabase as any)
     .from('sales')
     .select('share_token, sharing_enabled')
     .eq('id', params.id)

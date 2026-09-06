@@ -540,7 +540,7 @@
 
       <!-- Action row -->
       {#if !sale.voided_at}
-        <div class="flex gap-2 mt-4 no-print">
+        <div class="flex gap-2 mt-4 flex-wrap no-print">
           <Button variant="primary" onclick={openReturnSheet} class="flex-1" disabled={sale.voided_at}>
             <RotateCcw size={14} strokeWidth={2} /> Process return
           </Button>
