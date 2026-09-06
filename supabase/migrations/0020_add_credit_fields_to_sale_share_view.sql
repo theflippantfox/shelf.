@@ -10,6 +10,7 @@ drop view if exists public.sale_share_view;
 create or replace view public.sale_share_view as
 select
   s.id,
+  s.shop_id,
   s.share_token,
   s.sale_ref,
   s.created_at,
