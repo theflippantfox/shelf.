@@ -222,11 +222,9 @@
       return;
     }
     creditPromptOpen = false;
-    if (!cartOpen) {
-      // Came from the checkout sheet's "Change amount" — just close.
-      return;
-    }
-    // Came from the cart — submit the sale directly.
+    // Always submit — cartOpen only controls whether the cart sheet is
+    // visible on screen, not whether the cart has items. The user may
+    // have the cart minimized and confirm from the credit modal.
     void submitSale();
   }
   // Cancel the credit prompt — flip back to cash and reset the credit
