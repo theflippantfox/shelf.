@@ -102,6 +102,16 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
     : ((sale as any).customer_id as any)?.id;
   const oldTotal = (sale as any).total;
 
+  // Capture old credit fields from the fetched sale
+  const oldCreditAmountPaid = (sale as any).credit_amount_paid ?? 0;
+  const oldOutstanding     = oldTotal - oldCreditAmountPaid;
+
+  // Credit fields — only sent when payment_method is 'credit'.
+  // For non-credit edits these are absent/undefined.
+  const newCreditStatus     = body.credit_status;
+  const newCreditAmountPaid = body.credit_amount_paid;
+  const newCreditDueDate   = body.credit_due_date;
+
   await supabase.from('sales').update({
     customer_id: body.customer_id ?? (sale as any).customer_id,
     discount_type: body.discount_type,
@@ -112,6 +122,9 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
     tax_amount: body.tax_amount,
     payment_method: body.payment_method,
     notes: body.notes ?? (sale as any).notes,
+    credit_status:       newCreditStatus,
+    credit_amount_paid:  newCreditAmountPaid,
+    credit_due_date:     newCreditDueDate ?? (sale as any).credit_due_date,
   }).eq('id', params.id);
 
   // Optional: update the sale's created_at. Done via RPC because we
@@ -239,6 +252,24 @@ export async function PATCH({ cookies, params, request, locals  }: import('@svel
       await supabase.from('customers').update({
         total_spent: ((cust as any).total_spent ?? 0) + totalDelta,
       }).eq('id', newCustomerId);
+    }
+  }
+
+  // Adjust customer outstanding_balance for credit sales.
+  // This is a manual adjustment since the INSERT trigger only fires on new
+  // sales, not on PATCH edits. The delta is the difference between the
+  // old outstanding and the new outstanding.
+  if (newCustomerId && body.payment_method === 'credit') {
+    const newOutstanding = (body.total ?? oldTotal) - (newCreditAmountPaid ?? 0);
+    const outstandingDelta = newOutstanding - oldOutstanding;
+    if (Math.abs(outstandingDelta) > 0.005) {
+      const { data: cust } = await supabase
+        .from('customers').select('outstanding_balance').eq('id', newCustomerId).single();
+      if (cust) {
+        await supabase.from('customers').update({
+          outstanding_balance: Math.max(0, ((cust as any).outstanding_balance ?? 0) + outstandingDelta),
+        }).eq('id', newCustomerId);
+      }
     }
   }
 

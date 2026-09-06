@@ -109,6 +109,13 @@
       discountStr = sale.discount_type === 'percent'
         ? `${sale.discount_value}%`
         : `${Number(sale.discount_value).toFixed(2)}`;
+      // Pre-populate credit sub-form if this is an existing credit sale
+      if (sale.payment_method === 'credit') {
+        creditAmountPaid = sale.credit_amount_paid != null
+          ? String(sale.credit_amount_paid)
+          : '';
+        creditDueDate = sale.credit_due_date ?? '';
+      }
     }
   });
 
