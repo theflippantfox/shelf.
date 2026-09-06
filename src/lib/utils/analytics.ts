@@ -649,6 +649,154 @@ export function buildMonthCalendar(
   };
 }
 
+// ── Profit Calendar (P&L heatmap) ─────────────────────────────────────────────
+
+export interface ProfitCell {
+  date:     string;   // ISO yyyy-mm-dd in shop tz ('' for padding)
+  revenue:  number;
+  cogs:     number;
+  profit:   number;
+  count:    number;   // number of sales
+  dow:      number;   // 0=Sun .. 6=Sat
+  isFuture: boolean;
+  isToday:  boolean;
+  day:      number;   // 1-31 (0 for placeholders)
+}
+export interface ProfitCalendar {
+  cells:       ProfitCell[];
+  weeks:       number;
+  monthLabel:  string;
+  year:        number;
+  month:       number;     // 1-12
+  totalRev:    number;
+  totalCogs:   number;
+  totalProfit: number;
+  max:         number;     // max absolute profit
+  hasData:     boolean;
+  today:       string;
+  bestDay?:    { date: string; profit: number };
+  /** Per-sale details for each day, keyed by ISO date — used for day-expand */
+  daySales:    Record<string, { saleId: string; revenue: number; cogs: number; profit: number; createdAt: string }[]>;
+}
+
+/**
+ * buildProfitCalendar — month calendar where each cell shows daily profit
+ * (revenue − COGS) instead of revenue. Used by the P&L report.
+ *
+ * `items` are sale_items with the nested sales!inner(shop_id, created_at) join.
+ * `productCostMap` is the same Map<productId, cost_price> used elsewhere.
+ */
+export function buildProfitCalendar(
+  items: any[],
+  productCostMap: Map<string, number>,
+  shopTz: string,
+  targetMonth: dayjs.Dayjs = dayjs().tz(shopTz),
+): ProfitCalendar {
+  const year     = targetMonth.year();
+  const month    = targetMonth.month() + 1;
+  const firstOf  = targetMonth.startOf('month');
+  const lastOf   = targetMonth.endOf('month');
+  const daysIn   = lastOf.date();
+  const firstDow = firstOf.day();
+  const today    = dayjs().tz(shopTz);
+
+  // Aggregate per-day: revenue, cogs, count, plus per-sale detail
+  const buckets = new Map<string, { revenue: number; cogs: number; count: number; saleIds: Set<string> }>();
+  const saleBuckets = new Map<string, Map<string, { revenue: number; cogs: number; createdAt: string }>>();
+
+  for (const item of (items ?? [])) {
+    const createdAt = item.sales?.created_at;
+    if (!createdAt) continue;
+    const d = dayjs(createdAt).tz(shopTz).startOf('day');
+    if (d.year() !== year || d.month() + 1 !== month) continue;
+
+    const key = d.format('YYYY-MM-DD');
+    const lineTotal = toNum(item.line_total);
+    const snap   = toNum(item.cost_at_sale);
+    const mapped = productCostMap.get(item.product_id);
+    const joined = toNum(item.product?.cost_price);
+    const cost   = snap > 0 ? snap : (mapped && mapped > 0 ? mapped : joined);
+    const itemCogs = cost * toNum(item.qty);
+
+    const b = buckets.get(key) ?? { revenue: 0, cogs: 0, count: 0, saleIds: new Set<string>() };
+    b.revenue += lineTotal;
+    b.cogs    += itemCogs;
+    if (!b.saleIds.has(item.sale_id)) { b.count += 1; b.saleIds.add(item.sale_id); }
+    buckets.set(key, b);
+
+    // Per-sale detail
+    if (!saleBuckets.has(key)) saleBuckets.set(key, new Map());
+    const dayMap = saleBuckets.get(key)!;
+    const sb = dayMap.get(item.sale_id) ?? { revenue: 0, cogs: 0, createdAt };
+    sb.revenue += lineTotal;
+    sb.cogs    += itemCogs;
+    dayMap.set(item.sale_id, sb);
+  }
+
+  const totalCells = firstDow + daysIn;
+  const weeks      = Math.ceil(totalCells / 7);
+  const todayIso   = today.format('YYYY-MM-DD');
+
+  const cells: ProfitCell[] = [];
+  let totalRev = 0, totalCogs = 0, totalProfit = 0, maxAbs = 0;
+  let bestDay: { date: string; profit: number } | undefined;
+
+  for (let i = 0; i < weeks * 7; i++) {
+    const dayNum = i - firstDow + 1;
+    if (dayNum < 1 || dayNum > daysIn) {
+      cells.push({ date: '', revenue: 0, cogs: 0, profit: 0, count: 0, dow: i % 7, isFuture: false, isToday: false, day: 0 });
+      continue;
+    }
+    const d   = firstOf.date(dayNum);
+    const key = d.format('YYYY-MM-DD');
+    const b   = buckets.get(key);
+    const rev  = b ? Math.round(b.revenue) : 0;
+    const cog  = b ? Math.round(b.cogs) : 0;
+    const prof = rev - cog;
+
+    cells.push({
+      date:     key,
+      revenue:  rev,
+      cogs:     cog,
+      profit:   prof,
+      count:    b?.count ?? 0,
+      dow:      d.day(),
+      isFuture: d.isAfter(today, 'day'),
+      isToday:  key === todayIso,
+      day:      dayNum,
+    });
+
+    if (b) {
+      totalRev    += rev;
+      totalCogs   += cog;
+      totalProfit += prof;
+      const abs = Math.abs(prof);
+      if (abs > maxAbs) { maxAbs = abs; bestDay = { date: key, profit: prof }; }
+    }
+  }
+
+  // Build daySales
+  const daySales: ProfitCalendar['daySales'] = {};
+  for (const [dateKey, dayMap] of saleBuckets) {
+    daySales[dateKey] = Array.from(dayMap.entries()).map(([saleId, sb]) => ({
+      saleId,
+      revenue:   Math.round(sb.revenue),
+      cogs:      Math.round(sb.cogs),
+      profit:    Math.round(sb.revenue - sb.cogs),
+      createdAt: sb.createdAt,
+    }));
+  }
+
+  return {
+    cells, weeks, year, month,
+    totalRev, totalCogs, totalProfit,
+    max: maxAbs, hasData: totalRev > 0 || totalCogs > 0,
+    today: todayIso, bestDay,
+    monthLabel: firstOf.format('MMMM YYYY'),
+    daySales,
+  };
+}
+
 // ── Margin analysis ───────────────────────────────────────────────────────────
 
 export interface MarginData {
