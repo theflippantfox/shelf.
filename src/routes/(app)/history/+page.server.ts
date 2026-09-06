@@ -42,7 +42,7 @@ export async function load({ cookies,  locals, url  }: import('@sveltejs/kit').R
   // so the UI can show "paid ₹X of ₹Y" right in the row.
   let salesQuery = supabase
     .from('sales')
-    .select('id, sale_ref, total, payment_method, subtotal, voided_at, created_at as date_created, void_reason, customer_id, credit_status, credit_amount_paid, credit_due_date, credit_settled_at, customer:customers(name)')
+    .select('id, sale_ref, total, payment_method, subtotal, voided_at, created_at, void_reason, customer_id, credit_status, credit_amount_paid, credit_due_date, credit_settled_at, customer:customers(name)')
     .eq('shop_id', shopId)
     .order('created_at', { ascending: false })
     .range((page - 1) * limit, page * limit - 1);

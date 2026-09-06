@@ -317,8 +317,8 @@
                 {s.customer?.name ?? 'Walk-in'}
               </p>
               <span class="text-[10px] text-[var(--text-3)]">·</span>
-              <p class="text-[10px] text-[var(--text-3)] whitespace-nowrap" title={formatDateTime(s.date_created)}>
-                {formatRelative(s.date_created)}
+              <p class="text-[10px] text-[var(--text-3)] whitespace-nowrap" title={formatDateTime(s.created_at)}>
+                {formatRelative(s.created_at)}
               </p>
               {#if s.served_by?.first_name}
                 <span class="text-[10px] text-[var(--text-3)] hidden sm:inline">·</span>
