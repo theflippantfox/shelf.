@@ -11,7 +11,7 @@
   import Input from '$lib/components/ui/Input.svelte';
   import {
     ArrowLeft, Printer, Share2, RotateCcw, Check,
-    AlertCircle, X, Clock, Calendar,
+    AlertCircle, X, Clock, Calendar, Pencil,
   } from 'lucide-svelte';
 
   let { data } = $props();
@@ -547,6 +547,13 @@
           <Button variant="secondary" onclick={printReceipt}>
             <Printer size={14} strokeWidth={2} /> Print
           </Button>
+          <a
+            href="/sale?id={sale.id}&mode=edit"
+            class="btn btn-secondary"
+            aria-label="Edit sale"
+          >
+            <Pencil size={14} strokeWidth={2} /> Edit
+          </a>
           <Button variant="secondary" onclick={openShare}>
             <Share2 size={14} strokeWidth={2} /> Share
           </Button>
