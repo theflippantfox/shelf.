@@ -124,27 +124,46 @@ export async function enqueueOp(input: {
   path:    string;
   body?:   any;
   headers?: Record<string, string>;
+  priority?: number;   // auto-computed if omitted
 }): Promise<string> {
   const db = await getDb();
   const id = crypto.randomUUID();
   const row: PendingOp = {
     id,
     kind:    input.kind,
+    priority: input.priority ?? computePriority(input.kind),
     method:  input.method,
     path:    input.path,
     body:    input.body,
     headers: input.headers,
-    created_at:    Date.now(),
-    attempts:      0,
-    next_retry_at: 0,                // ready to flush immediately when online
-    last_error:    null,
-    last_status:   null,
-    permanent:     false,
+    created_at:     Date.now(),
+    attempts:       0,
+    next_retry_at:  0,                // ready to flush immediately when online
+    last_error:     null,
+    last_status:    null,
+    permanent:      false,
   };
   await db.put('pending_ops', row);
   // Wake the sync engine so it can flush right now if online.
   void offlineSync.flushPendingOps();
   return id;
+}
+
+/** Priority map: lower = processes first. */
+const KIND_PRIORITY: Record<PendingOp['kind'], number> = {
+  customer:      1,   // highest — new customers must exist before sales
+  supplier:      1,   // same as customer
+  product:       2,   // products needed for inventory accuracy
+  register:      2,   // cash register ops
+  sale:         10,   // sales last (customer already exists)
+  credit_payment: 11,  // tied to an existing sale
+  return:        11,  // tied to an existing sale
+  share_toggle:  12,  // low urgency
+  other:         99,  // catch-all
+};
+
+function computePriority(kind: PendingOp['kind']): number {
+  return KIND_PRIORITY[kind] ?? 99;
 }
 
 /* ──────────────────────────────────────────────────────────────────

@@ -140,8 +140,10 @@ export interface PendingSale {
  */
 export interface PendingOp {
   id:              string;          // client-generated uuid
-  kind:            'sale' | 'product' | 'customer' | 'register' |
+  kind:            'sale' | 'product' | 'customer' | 'supplier' | 'register' |
                    'credit_payment' | 'return' | 'share_toggle' | 'other';
+  /** Lower = higher priority. Flush order: customer/supplier(1) → product/register(2) → sale(10) → credit_payment/return(11). */
+  priority?:        number;
   method:          'POST' | 'PATCH' | 'DELETE';
   path:            string;          // e.g. '/api/products' or '/api/sales/abc/credit-payment'
   body?:           any;             // JSON body for POST/PATCH
@@ -189,6 +191,7 @@ interface ShelfDB extends DBSchema {
     indexes: {
       'by-next-retry': number;   // when it can be retried
       'by-created': number;      // FIFO order
+      'by-priority': number;    // priority order (lower = first)
     };
   };
   meta: {
@@ -198,7 +201,7 @@ interface ShelfDB extends DBSchema {
 }
 
 const DB_NAME = 'shelf';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let _db: Promise<IDBPDatabase<ShelfDB>> | null = null;
 

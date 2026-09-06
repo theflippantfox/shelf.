@@ -107,7 +107,9 @@ async function flushPendingOps(): Promise<void> {
 
   // Filter to ops that are ready to retry (next_retry_at has passed).
   const now = Date.now();
-  const ready = rows.filter(r => !r.permanent && r.next_retry_at <= now);
+  const ready = rows
+    .filter(r => !r.permanent && r.next_retry_at <= now)
+    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));  // lower = first, undefined = 99 (lowest)
   if (ready.length === 0) {
     // All pending ops are still in backoff — schedule a check.
     scheduleFlush(readyEarliest(rows));
