@@ -39,9 +39,19 @@ export async function load({ params, cookies, url }: import('@sveltejs/kit').Req
     .select('product_name, product_sku, qty, unit_price, line_total')
     .eq('sale_id', (header as any).id);
 
+  // 3. Shop name for the receipt header
+  const shopId = (header as any).shop_id;
+  let shopName: string | undefined;
+  if (shopId) {
+    const { data: shop } = await supabase
+      .from('shops').select('name').eq('id', shopId).single();
+    shopName = (shop as any)?.name;
+  }
+
   return {
-    sale:    header as any,
-    items:   items ?? [],
-    isVoided: !!(header as any).voided_at,
+    sale:      header as any,
+    items:     items ?? [],
+    isVoided:  !!(header as any).voided_at,
+    shopName,
   };
 }

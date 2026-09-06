@@ -22,7 +22,7 @@
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
-<div class="min-h-screen flex items-start justify-center p-4 md:p-8"
+<div class="min-h-screen flex items-center justify-center p-4 md:p-8"
      style="background:var(--bg);">
   <!--
     Layout:
@@ -32,8 +32,11 @@
   -->
   <div class="surface-card w-full max-w-sm mx-auto p-5">
 
-    <!-- ── Header: Receipt ref + date ──────────────────────────── -->
+    <!-- ── Header: Shop name + Receipt ref + date ──────────────────── -->
     <div class="text-center mb-4">
+      {#if data.shopName}
+        <p class="text-[11px] font-semibold mb-0.5" style="color:var(--primary)">{data.shopName}</p>
+      {/if}
       <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--text-3)]">Receipt</p>
       <p class="text-[22px] font-bold tabular-nums tracking-tight mt-0.5">{sale?.sale_ref ?? '—'}</p>
       <p class="text-[11px] text-[var(--text-3)] mt-0.5">
