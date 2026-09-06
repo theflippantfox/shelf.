@@ -37,11 +37,11 @@ export async function load({ params, cookies, url }: import('@sveltejs/kit').Req
   const { data: items } = await supabase
     .from('sale_items')
     .select('product_name, product_sku, qty, unit_price, line_total')
-    .eq('sale_id', header.id);
+    .eq('sale_id', (header as any).id);
 
   return {
-    sale:    header,
+    sale:    header as any,
     items:   items ?? [],
-    isVoided: !!header.voided_at,
+    isVoided: !!(header as any).voided_at,
   };
 }
