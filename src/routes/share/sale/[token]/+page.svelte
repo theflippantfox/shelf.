@@ -35,10 +35,10 @@
     <!-- ── Header: Shop name + Receipt ref + date ──────────────────── -->
     <div class="text-center mb-4">
       {#if data.shopName}
-        <p class="text-[11px] font-semibold mb-0.5" style="color:var(--primary)">{data.shopName}</p>
+        <p class="text-[18px] font-bold mb-1" style="color:var(--primary)">{data.shopName}</p>
       {/if}
       <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--text-3)]">Receipt</p>
-      <p class="text-[22px] font-bold tabular-nums tracking-tight mt-0.5">{sale?.sale_ref ?? '—'}</p>
+      <p class="text-[13px] font-semibold tabular-nums tracking-tight mt-0.5">{sale?.sale_ref ?? '—'}</p>
       <p class="text-[11px] text-[var(--text-3)] mt-0.5">
         {new Date(sale?.created_at).toLocaleString('en-IN', {
           day: 'numeric', month: 'short', year: 'numeric',
