@@ -15,13 +15,19 @@
   let justReconnected = $state(false);
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let syncing = $state(false);
+  // Track whether the user has ever gone offline in this session.
+  // Only show "Back online" if they were previously offline.
+  let everOffline = $state(false);
 
   $effect(() => {
     if (offlineSync.online) {
-      justReconnected = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      reconnectTimer = setTimeout(() => (justReconnected = false), 3000);
+      if (everOffline) {
+        justReconnected = true;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(() => (justReconnected = false), 3000);
+      }
     } else {
+      everOffline = true;
       justReconnected = false;
       if (reconnectTimer) clearTimeout(reconnectTimer);
     }
