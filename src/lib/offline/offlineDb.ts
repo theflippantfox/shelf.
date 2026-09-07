@@ -198,10 +198,20 @@ interface ShelfDB extends DBSchema {
     key: string;             // sentinel keyPath (always 'meta' in practice)
     value: MetaEntry;
   };
+  /** Cached sale items grouped by sale_id, used for P&L analytics. */
+  sale_items: {
+    key: string;             // sale_id (groups items by sale)
+    value: {
+      sale_id: string;
+      items: any[];          // array of sale_item rows
+      cached_at: number;
+    };
+    indexes: { 'by-cached': number };
+  };
 }
 
 const DB_NAME = 'shelf';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let _db: Promise<IDBPDatabase<ShelfDB>> | null = null;
 
@@ -239,6 +249,11 @@ export function getDb(): Promise<IDBPDatabase<ShelfDB>> {
         const pendingOps = db.createObjectStore('pending_ops', { keyPath: 'id' });
         pendingOps.createIndex('by-next-retry', 'next_retry_at');
         pendingOps.createIndex('by-created',  'created_at');
+      }
+      if (oldVersion < 4) {
+        // v4: sale items cache for P&L analytics
+        const saleItems = db.createObjectStore('sale_items', { keyPath: 'sale_id' });
+        saleItems.createIndex('by-cached', 'cached_at');
       }
       // Future versions add new stores / indexes here.
     },
