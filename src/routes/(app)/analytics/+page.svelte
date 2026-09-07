@@ -148,6 +148,13 @@
     </div>
   </div>
 
+  <div class="flex items-center justify-end mb-4">
+    <a href="/analytics/pnl" class="inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-[var(--radius-pill)] border transition-all"
+       style="border-color:var(--primary); color:var(--primary); background:color-mix(in srgb, var(--primary) 8%, transparent)">
+      P&L report <TrendingUp size={13} strokeWidth={2} />
+    </a>
+  </div>
+
   {#if !analytics}
     <div class="surface-card flex flex-col items-center justify-center h-64 text-[var(--text-3)] anim-in">
       <div class="w-8 h-8 rounded-full border-2 border-[var(--border)] border-t-[var(--primary)] animate-spin mb-3" aria-hidden="true"></div>
