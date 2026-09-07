@@ -13,6 +13,22 @@
 
   const pnl = $derived((data as any).pnl);
   const tab = $derived(pnl?.tab ?? 'calendar');
+  const fromCache = $derived((data as any).fromCache ?? false);
+  const refreshing = $derived((data as any).refreshing ?? false);
+
+  // ── Cache hydration on mount ─────────────────────────────────────────────
+  $effect(() => {
+    if (!pnl) return;
+
+    // Build cache key from current URL params
+    const params = new URLSearchParams(window.location.search);
+    const cacheKey = `pnl:${params.get('period') ?? '7d'}:${params.get('tab') ?? 'calendar'}:${params.get('month') ?? ''}`;
+
+    // Write to IndexedDB in background (non-blocking)
+    import('$lib/offline/cacheFirst').then(({ cache }) => {
+      cache.write('sale_items', cacheKey, pnl).catch(() => {});
+    }).catch(() => {});
+  });
 
   // ── Tab navigation ─────────────────────────────────────────────────────
   const tabs = [
