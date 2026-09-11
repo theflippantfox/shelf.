@@ -5,26 +5,27 @@
  * IndexedDB in background. Subsequent visits read from IndexedDB instantly.
  */
 
-import { browser } from '$app/environment';
+import { browser } from "$app/environment";
 
 export const load = async ({ data, url }: any) => {
   if (!browser) return data;
 
-  const cacheKey = 'inventory:list';
+  const { getShopKey } = await import("$lib/offline/cacheFirst");
+  const cacheKey = `${getShopKey()}:inventory:list`;
 
   try {
-    const { cacheFirst, cache } = await import('$lib/offline/cacheFirst');
+    const { cacheFirst, cache } = await import("$lib/offline/cacheFirst");
 
-    const result = await cacheFirst(
-      'products',
+    const result = await cacheFirst<any>(
+      "products",
       cacheKey,
       () => Promise.resolve(null),
-      { maxAge: 30_000, label: 'inventory' },
+      { maxAge: 30_000, label: "inventory" },
     );
 
     if (result.data) {
       if (result.refreshing && data?.products) {
-        cache.write('products', cacheKey, data.products).catch(() => {});
+        cache.write("products", cacheKey, data.products).catch(() => {});
       }
       return {
         ...data,
@@ -34,17 +35,23 @@ export const load = async ({ data, url }: any) => {
         refreshing: result.refreshing,
       };
     }
-  } catch { /* cache unavailable */ }
+  } catch {
+    /* cache unavailable */
+  }
 
   // Cache cold — use server data, populate cache in background
   if (data?.products || data?.categories) {
     try {
-      const { cache } = await import('$lib/offline/cacheFirst');
-      cache.write('products', cacheKey, {
-        products: data.products,
-        categories: data.categories,
-      }).catch(() => {});
-    } catch { /* non-fatal */ }
+      const { cache } = await import("$lib/offline/cacheFirst");
+      cache
+        .write("products", cacheKey, {
+          products: data.products,
+          categories: data.categories,
+        })
+        .catch(() => {});
+    } catch {
+      /* non-fatal */
+    }
   }
 
   return { ...data, fromCache: false, refreshing: false };

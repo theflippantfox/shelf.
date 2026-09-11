@@ -110,6 +110,7 @@
         localStorage.setItem('theme', themeDark ? 'dark' : 'light');
         break;
       case 'logout':
+        import('$lib/offline/cacheFirst').then(({ destroyAllData }) => destroyAllData()).catch(() => {});
         fetch('/api/auth', { method: 'DELETE' }).finally(() => goto('/login'));
         break;
       case 'search-product':

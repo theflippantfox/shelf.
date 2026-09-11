@@ -2,26 +2,27 @@
  * +page.ts for Customers — cache-first layer over server data.
  */
 
-import { browser } from '$app/environment';
+import { browser } from "$app/environment";
 
 export const load = async ({ data }: any) => {
   if (!browser) return data;
 
-  const cacheKey = 'customers:list';
+  const { getShopKey } = await import("$lib/offline/cacheFirst");
+  const cacheKey = `${getShopKey()}:customers:list`;
 
   try {
-    const { cacheFirst, cache } = await import('$lib/offline/cacheFirst');
+    const { cacheFirst, cache } = await import("$lib/offline/cacheFirst");
 
-    const result = await cacheFirst(
-      'customers',
+    const result = await cacheFirst<any>(
+      "customers",
       cacheKey,
       () => Promise.resolve(null),
-      { maxAge: 30_000, label: 'customers' },
+      { maxAge: 30_000, label: "customers" },
     );
 
     if (result.data) {
       if (result.refreshing && data?.customers) {
-        cache.write('customers', cacheKey, data.customers).catch(() => {});
+        cache.write("customers", cacheKey, data.customers).catch(() => {});
       }
       return {
         ...data,
@@ -30,13 +31,17 @@ export const load = async ({ data }: any) => {
         refreshing: result.refreshing,
       };
     }
-  } catch { /* cache unavailable */ }
+  } catch {
+    /* cache unavailable */
+  }
 
   if (data?.customers) {
     try {
-      const { cache } = await import('$lib/offline/cacheFirst');
-      cache.write('customers', cacheKey, data.customers).catch(() => {});
-    } catch { /* non-fatal */ }
+      const { cache } = await import("$lib/offline/cacheFirst");
+      cache.write("customers", cacheKey, data.customers).catch(() => {});
+    } catch {
+      /* non-fatal */
+    }
   }
 
   return { ...data, fromCache: false, refreshing: false };

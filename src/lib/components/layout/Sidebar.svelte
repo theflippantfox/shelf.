@@ -37,6 +37,10 @@
   }
 
   async function logout() {
+    try {
+      const { destroyAllData } = await import('$lib/offline/cacheFirst');
+      await destroyAllData();
+    } catch { /* non-fatal */ }
     await fetch("/api/auth", { method: "DELETE" });
     goto("/login");
   }
