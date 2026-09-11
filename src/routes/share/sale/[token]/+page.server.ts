@@ -1,5 +1,5 @@
-import { error } from '@sveltejs/kit';
-import { userClient, userClientFromCtx } from '$lib/server/supabase';
+import { error } from "@sveltejs/kit";
+import { userClient } from "$lib/server/supabase";
 
 /**
  * /share/sale/[token] — public, unauthenticated receipt view.
@@ -12,19 +12,23 @@ import { userClient, userClientFromCtx } from '$lib/server/supabase';
  * Returns the slimmed-down sale view + the line items. Customer
  * phone/email + internal notes are not exposed here.
  */
-export async function load({ params, cookies, url }: import('@sveltejs/kit').RequestEvent) {
+export async function load({
+  params,
+  cookies,
+}: import("@sveltejs/kit").RequestEvent) {
   const token = params.token;
-  if (!token) throw error(404, 'Invalid share link');
+  if (!token) throw error(404, "Invalid share link");
 
   // 1. Lookup the sale header. Use the public view so RLS is
   //    enforced for anon.
   const supabase = userClient({ cookies } as any);
   const { data: header, error: hdrErr } = await supabase
-    .from('sale_share_view')
-    .select('*')
-    .eq('share_token', token)
+    .from("sale_share_view")
+    .select("*")
+    .eq("share_token", token)
     .single();
-  if (hdrErr || !header) throw error(404, 'Receipt not found or sharing disabled');
+  if (hdrErr || !header)
+    throw error(404, "Receipt not found or sharing disabled");
 
   // 2. Items. Use a fresh anon client and only the public-safe
   //    columns. RLS on sale_items is the standard member policy,
@@ -35,23 +39,26 @@ export async function load({ params, cookies, url }: import('@sveltejs/kit').Req
   //    this case because there's no JWT) with a server-side check
   //    that the parent sale is shared.
   const { data: items } = await supabase
-    .from('sale_items')
-    .select('product_name, product_sku, qty, unit_price, line_total')
-    .eq('sale_id', (header as any).id);
+    .from("sale_items")
+    .select("product_name, product_sku, qty, unit_price, line_total")
+    .eq("sale_id", (header as any).id);
 
   // 3. Shop name for the receipt header
   const shopId = (header as any).shop_id;
   let shopName: string | undefined;
   if (shopId) {
     const { data: shop } = await supabase
-      .from('shops').select('name').eq('id', shopId).single();
+      .from("shops")
+      .select("name")
+      .eq("id", shopId)
+      .single();
     shopName = (shop as any)?.name;
   }
 
   return {
-    sale:      header as any,
-    items:     items ?? [],
-    isVoided:  !!(header as any).voided_at,
+    sale: header as any,
+    items: items ?? [],
+    isVoided: !!(header as any).voided_at,
     shopName,
   };
 }
