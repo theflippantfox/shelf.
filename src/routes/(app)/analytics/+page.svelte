@@ -23,44 +23,43 @@ import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from 
   let analytics = $state<any>(null);
   let currentSearch = $state("");
 
-  async function loadAnalytics(search: string) {
-    const cacheKey = buildAnalyticsCacheKey(search);
+        async function loadAnalytics(search: string) {
+                const cacheKey = buildAnalyticsCacheKey(search);
 
-    // 1. Try IDB cache first — instant if available, don't block
-    try {
-      const cached = await readAnalyticsCache(cacheKey);
-      if (cached?.analytics) {
-        analytics = cached.analytics;
-      }
-    } catch {}
+                // 1. IDB cache — instant, non-blocking
+                readAnalyticsCache(cacheKey).then((cached: any) => {
+                        if (cached?.analytics && !analytics) {
+                                analytics = cached.analytics;
+                        }
+                });
 
-    // 2. Fetch fresh from API — update when ready (non-blocking)
-    fetch(`/api/analytics${search}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
-        if (json?.analytics) {
-          analytics = json.analytics;
-          writeAnalyticsCache(cacheKey, json);
+                // 2. API fetch — fully non-blocking, fire-and-forget
+                fetch(`/api/analytics${search}`)
+                        .then((r) => (r.ok ? r.json() : null))
+                        .then((json) => {
+                                if (json?.analytics) {
+                                        analytics = json.analytics;
+                                        writeAnalyticsCache(cacheKey, json);
+                                }
+                        })
+                        .catch(() => {});
         }
-      })
-      .catch(() => {});
-  }
 
-  // Load on mount
-  if (browser) {
-    onMount(() => {
-      currentSearch = window.location.search;
-      loadAnalytics(currentSearch);
-    });
-  }
+        // Load on mount
+        if (browser) {
+                onMount(() => {
+                        currentSearch = window.location.search;
+                        loadAnalytics(currentSearch);
+                });
+        }
 
-  // Handle period tab clicks —直接 call loadAnalytics, no effect
-  function changePeriod(preset: string) {
-    const search = `?period=${preset}`;
-    currentSearch = search;
-    goto(search, { replaceState: true, invalidateAll: false });
-    if (browser) loadAnalytics(search);
-  }
+        // Handle period tab clicks
+        function changePeriod(preset: string) {
+                const search = `?period=${preset}`;
+                currentSearch = search;
+                goto(search, { replaceState: true, invalidateAll: false });
+                if (browser) loadAnalytics(search);
+        }
 
   const presets = [
     { label: "Today",       value: "today" },
