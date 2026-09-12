@@ -22,7 +22,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
   import Sheet from '$lib/components/ui/Sheet.svelte';
   import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
   import QtyInput from "$lib/components/ui/QtyInput.svelte";
-  import Input from "$lib/components/ui/Input.svelte";
+
   import ProductCardSkeleton from "$lib/components/ui/ProductCardSkeleton.svelte";
   import BarcodeScanner from "$lib/components/ui/BarcodeScanner.svelte";
   import { navigating } from '$app/state';
@@ -32,7 +32,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
     ShoppingCart, Trash2, User, Plus, Minus,
     Banknote, ArrowLeftRight, X,
     Search, Check, ChevronRight, ChevronDown, Package, ScanLine,
-    Clock, AlertCircle, Pause, Play, Trash,
+    Clock, Pause, Play, Trash,
   } from "lucide-svelte";
 
   let { data } = $props();
@@ -43,15 +43,20 @@ import { register as regStore } from "$lib/stores/register.svelte";
   let cartOpen      = $state(false);
   let showCheckout  = $state(false);
   let submitting        = $state(false);
-  let creditPromptOpen  = $state(false);   // modal that asks for amount received
   let showReceipt   = $state(false);
   let scanOpen      = $state(false);
   let lastSaleRef   = $state("");
   let lastSaleTotal = $state(0);
   let lastSaleMethod = $state<PaymentMethod>('cash');
+  let lastSaleSplitInfo = $state<string>('');
   let lastSaleCustomer = $state<string>('');
   let discountStr   = $state("");
   let customerSearch = $state("");
+  // Payment inputs — always visible, auto-detect method from values
+  let cashAmt = $state('');
+  let upiAmt = $state('');
+  let creditAmt = $state('');
+  let roundOff = $state(0);
   // Held-cart sheet
   let showHeld = $state(false);
 
@@ -110,13 +115,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
       discountStr = sale.discount_type === 'percent'
         ? `${sale.discount_value}%`
         : `${Number(sale.discount_value).toFixed(2)}`;
-      // Pre-populate credit sub-form if this is an existing credit sale
-      if (sale.payment_method === 'credit') {
-        creditAmountPaid = sale.credit_amount_paid != null
-          ? String(sale.credit_amount_paid)
-          : '';
-        creditDueDate = sale.credit_due_date ?? '';
-      }
+
     }
   });
 
@@ -189,127 +188,132 @@ import { register as regStore } from "$lib/stores/register.svelte";
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   });
 
-  const grandTotal = $derived.by(() =>
-    data.taxInclusive ? cart.total : cart.total + taxAmount,
-  );
+  const grandTotal = $derived.by(() => {
+    const sub = cart.subtotal - cart.discountAmount;
+    return Math.round(Math.max(0, sub + (data.taxRate > 0 ? sub * (data.taxRate / 100) : 0)) * 100) / 100;
+  });
+
+  /** Final total including round-off. */
+  const finalTotal = $derived(Math.round((grandTotal + roundOff) * 100) / 100);
 
   /* ── Helpers ───────────────────────────────────────────────────────────── */
   const PAY_META: Record<PaymentMethod, { icon: any; label: string; tone: 'primary' | 'teal' | 'cobalt' | 'gold' }> = {
     cash:     { icon: Banknote,        label: 'Cash',     tone: 'teal'    },
-    // 'credit' = customer owes money (full or partial). When the user
-    // picks this, a dedicated modal pops up to capture the amount
-    // received and due date. They can't complete the sale without
-    // confirming the modal.
     credit:   { icon: Clock,           label: 'On credit', tone: 'gold'    },
     transfer: { icon: ArrowLeftRight,  label: 'UPI',      tone: 'primary' },
   };
 
-  // Picking 'credit' from the checkout sheet opens a dedicated modal
-  // that asks for the amount received and (optionally) a due date.
-  // The user MUST confirm the modal to keep the credit selection —
-  // cancelling the modal flips payment back to 'cash' (the default).
-  function pickPaymentMethod(key: PaymentMethod) {
-    cart.setPaymentMethod(key);
-    if (key === 'credit') {
-      creditPromptOpen = true;
-    }
+  // ── Payment inputs: smart redistribution ────────────────────────
+  // Cash is always the "remainder". When UPI or Credit changes,
+  // Cash is the “remainder” — it auto-adjusts so the sum always equals finalTotal.
+  // Hard cap: sum of all three can never exceed finalTotal.
+
+  function onCashInput(raw: string) {
+    const credit = parseFloat(creditAmt) || 0;
+    const upi    = parseFloat(upiAmt) || 0;
+    const maxCash = Math.max(0, finalTotal - credit - upi);
+    const val = Math.min(Math.max(0, parseFloat(raw) || 0), maxCash);
+    cashAmt = val > 0 ? String(val) : '';
+    applySplits();
   }
-  // Confirm the credit prompt. The caller (cart or checkout sheet)
-  // is inferred from whether the cart sheet is still open at confirm
-  // time. If the cart is open, the user came from there and we
-  // submit the sale directly (skipping the checkout sheet — for
-  // credit, the checkout sheet was just a customer picker which the
-  // credit prompt has already replaced). If the cart is closed, the
-  // user came from the checkout sheet (via "Change amount") and we
-  // just close the modal so they can hit Complete Sale.
-  function confirmCreditPrompt() {
-    if (!cart.customerId) {
-      toasts.error('Pick a customer for credit sales first');
-      creditPromptOpen = false;
-      cart.setPaymentMethod('cash');
-      return;
-    }
-    creditPromptOpen = false;
-    // Always submit — cartOpen only controls whether the cart sheet is
-    // visible on screen, not whether the cart has items. The user may
-    // have the cart minimized and confirm from the credit modal.
-    void submitSale();
+
+  function onUpiInput(raw: string) {
+    const credit = parseFloat(creditAmt) || 0;
+    const maxUpi = Math.max(0, finalTotal - credit);
+    const val = Math.min(Math.max(0, parseFloat(raw) || 0), maxUpi);
+    upiAmt = val > 0 ? String(val) : '';
+    // Cash absorbs the remainder
+    const maxCash = Math.max(0, finalTotal - credit - val);
+    cashAmt = maxCash > 0 ? String(maxCash) : '';
+    applySplits();
   }
-  // Cancel the credit prompt — flip back to cash and reset the credit
-  // form. The user explicitly chose not to do credit.
-  function cancelCreditPrompt() {
-    creditPromptOpen = false;
-    cart.setPaymentMethod('cash');
-    creditAmountPaid = '';
-    creditDueDate = '';
+
+  function onCreditInput(raw: string) {
+    const upi   = parseFloat(upiAmt) || 0;
+    const maxCr = Math.max(0, finalTotal - upi);
+    const val = Math.min(Math.max(0, parseFloat(raw) || 0), maxCr);
+    creditAmt = val > 0 ? String(val) : '';
+    // Cash absorbs the remainder
+    const maxCash = Math.max(0, finalTotal - upi - val);
+    cashAmt = maxCash > 0 ? String(maxCash) : '';
+    applySplits();
   }
-  // Open the credit prompt from inside the checkout sheet. The checkout
-  // sheet is closed first because Svelte/SvelteKit's nested-modal UX is
-  // fiddly — opening a fresh sheet from the cart screen gives a cleaner
-  // result (and the checkout state is preserved on the cart).
-  function openCreditPrompt() {
-    if (!cart.customerId) {
-      toasts.error('Pick a customer before changing the credit amount');
-      return;
-    }
-    showCheckout = false;
-    // Brief delay so the checkout sheet animates out before the
-    // credit prompt animates in (avoids two sheets fighting for focus).
-    setTimeout(() => { creditPromptOpen = true; }, 150);
+
+  /** Apply splits and auto-set the primary payment method. */
+  function applySplits() {
+    const cash = parseFloat(cashAmt) || 0;
+    const upi  = parseFloat(upiAmt) || 0;
+    const credit = parseFloat(creditAmt) || 0;
+    cart.clearSplits();
+    if (cash > 0) cart.addSplit('cash', cash);
+    if (upi > 0) cart.addSplit('transfer', upi);
+    if (credit > 0) cart.addSplit('credit', credit);
+    // Auto-detect primary method by highest amount
+    let method: PaymentMethod = 'cash';
+    const max = Math.max(cash, upi, credit);
+    if (max === upi) method = 'transfer';
+    else if (max === credit) method = 'credit';
+    cart.setPaymentMethod(method);
   }
-  // Same as openCreditPrompt but for the cart sheet. Closes the cart
-  // sheet, then opens the credit prompt after the close animation.
-  function openCreditPromptFromCart() {
-    if (!cart.customerId) {
+
+  /** Round grandTotal to nearest ₹1. */
+  function autoRoundOff() {
+    const rem = grandTotal % 1;
+    if (rem === 0) { roundOff = 0; return; }
+    roundOff = Math.round((rem >= 0.5 ? (1 - rem) : -rem) * 100) / 100;
+  }
+
+  /** Build a human-readable label for the split payment on the receipt. */
+  function splitLabel(splits: { method: PaymentMethod; amount: number }[]): string {
+    return splits.map((s) => `${PAY_META[s.method]?.label ?? s.method} ${formatCurrency(s.amount)}`).join(' + ');
+  }
+
+  /** Remaining amount not yet covered by the split fields. */
+  const splitRemainder = $derived.by(() => {
+    const used = (parseFloat(cashAmt) || 0)
+              + (parseFloat(upiAmt) || 0)
+              + (parseFloat(creditAmt) || 0);
+    return Math.round((finalTotal - used) * 100) / 100;
+  });
+
+  // The cart's checkout button. For credit, ensure a customer is picked.
+  function handleCheckoutClick() {
+    if (isCreditSale && !cart.customerId) {
       toasts.error('Pick a customer for credit sales first');
       return;
     }
     cartOpen = false;
-    setTimeout(() => { creditPromptOpen = true; }, 150);
-  }
-  // The cart's checkout button. For credit, it says "Next" and opens
-  // the credit prompt. For everything else, it goes to the checkout
-  // sheet (where the user picks the customer and confirms).
-  function handleCheckoutClick() {
-    if (cart.paymentMethod === 'credit') {
-      if (!cart.customerId) {
-        toasts.error('Pick a customer for credit sales first');
-        return;
-      }
-      openCreditPromptFromCart();
-    } else {
-      cartOpen = false;
-      showCheckout = true;
-    }
+    showCheckout = true;
   }
 
-  /* ── Credit sub-form state ────────────────────────────────────────────
-     When the user picks 'On credit' payment, a sub-form asks:
-       - Amount received now: 0 for full pending, the total for full paid,
-         anything in between for partial
-       - Due date: optional, for tracking when the customer promises to pay
-     Status is derived from the amount received. */
-  let creditAmountPaid = $state<string>('');
-  let creditDueDate    = $state<string>('');
-  // Derive credit_status from the amount received. This replaces the
-  // old 3-button "Status" picker — the user just types the amount and
-  // we figure out the status. 0 = pending, full = paid, anything in
-  // between = partial.
-  const creditStatus = $derived.by(() => {
-    if (cart.paymentMethod !== 'credit') return 'pending';
-    const amt = parseFloat(creditAmountPaid);
-    if (isNaN(amt) || amt <= 0)             return 'pending';
-    if (amt >= grandTotal - 0.005)         return 'paid';
-    return 'partial';
+  /* ── Unified credit derivations ────────────────────────────────────────
+     Credit is now just another payment method — fully handled inside the
+     split-payment UI or as a single-method selection. No separate modal.
+     We derive everything we need from the cart + split state. */
+  /** True when credit is part of this sale (single-method OR split). */
+  const isCreditSale = $derived(
+    (parseFloat(creditAmt) || 0) > 0
+  );
+
+  /** How much is owed on credit (the credit portion of the total). */
+  const activeCreditAmount = $derived(
+    isCreditSale ? (parseFloat(creditAmt) || 0) : 0
+  );
+
+  /** How much was paid upfront (cash + UPI portions). */
+  const activeAmountPaid = $derived(
+    isCreditSale ? finalTotal - activeCreditAmount : finalTotal
+  );
+
+  /** Derived credit status for the backend. */
+  const activeCreditStatus = $derived.by((): 'pending' | 'partial' | 'paid' => {
+    if (!isCreditSale) return 'paid';
+    if (activeAmountPaid >= finalTotal) return 'paid';
+    if (activeAmountPaid > 0) return 'partial';
+    return 'pending';
   });
-  const creditNumeric = $derived(parseFloat(creditAmountPaid) || 0);
-  // Reset credit sub-form when the user switches away from credit
-  $effect(() => {
-    if (cart.paymentMethod !== 'credit') {
-      creditAmountPaid = '';
-      creditDueDate = '';
-    }
-  });
+
+
 
   function setQty(productId: string, qty: number) {
     cart.setQty(productId, qty);
@@ -327,16 +331,9 @@ import { register as regStore } from "$lib/stores/register.svelte";
     // Credit sales MUST have a customer — we can't track who owes the
     // money otherwise. Block the submission here (the button is also
     // disabled below for a clearer signal).
-    if (cart.paymentMethod === 'credit' && !cart.customerId) {
+    if (isCreditSale && !cart.customerId) {
       toasts.error('Pick a customer for credit sales');
       return;
-    }
-    // For partial credit, validate the amount is sane.
-    if (cart.paymentMethod === 'credit' && creditStatus === 'partial') {
-      if (creditNumeric <= 0 || creditNumeric >= grandTotal) {
-        toasts.error('Partial credit amount must be > 0 and < total');
-        return;
-      }
     }
     submitting = true;
     const payload: any = {
@@ -347,22 +344,18 @@ import { register as regStore } from "$lib/stores/register.svelte";
       discount_value: cart.discountValue,
       discount_amount: cart.discountAmount,
       subtotal: cart.subtotal,
-      total: grandTotal,
+      total: finalTotal,
       tax_amount: taxAmount,
       payment_method: cart.paymentMethod,
+      payment_splits: cart.hasValidSplits ? cart.paymentSplits : null,
       notes: cart.notes,
       // Optional backdate / clock-skew correction. Null = use now().
       created_at: cart.createdAt,
     };
-    // Credit fields — only included when the user picked credit.
-    // creditStatus is derived from creditAmountPaid, so we don't need
-    // a separate picker; we just send the amount we received.
-    if (cart.paymentMethod === 'credit') {
-      payload.credit_status = creditStatus;
-      payload.credit_amount_paid = creditNumeric;
-      if (creditDueDate) {
-        payload.credit_due_date = creditDueDate;
-      }
+    // Credit fields — derived from unified credit state.
+    if (isCreditSale) {
+      payload.credit_status = activeCreditStatus;
+      payload.credit_amount_paid = activeAmountPaid;
     }
 
     // Offline path: queue the sale via offlineFetch, which writes
@@ -398,7 +391,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
           salesStore.add({
             id: clientId,
             sale_ref: `OFFLINE-${Date.now()}`,
-            total: grandTotal,
+            total: finalTotal,
             payment_method: cart.paymentMethod,
             created_at: payload.created_at ?? new Date().toISOString(),
             customer: cart.customerId ? { id: cart.customerId, name: cart.customerName } : null,
@@ -409,7 +402,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
           regStore.add({
             id:           crypto.randomUUID(),
             destination:  'counter',
-            amount:       grandTotal,
+            amount:       finalTotal,
             entry_type:   'sale',
             source:       'sale',
             sale_id:      clientId,
@@ -425,8 +418,9 @@ import { register as regStore } from "$lib/stores/register.svelte";
             if (p) invStore.update(item.productId, { qty: Math.max(0, (p.qty ?? 0) - item.qty) });
           }
           lastSaleRef      = `OFFLINE-${Date.now()}`;
-          lastSaleTotal    = grandTotal;
+          lastSaleTotal    = finalTotal;
           lastSaleMethod   = cart.paymentMethod;
+          lastSaleSplitInfo = '';
           lastSaleCustomer = cart.customerName || 'Walk-in';
           toasts.info("Sale saved offline — will sync when online");
           showCheckout = false;
@@ -453,8 +447,9 @@ import { register as regStore } from "$lib/stores/register.svelte";
     const data2 = await res.json();
     if (res.ok) {
       lastSaleRef      = isEdit ? (data2.sale_ref ?? saleId ?? '') : (data2.sale_ref ?? '');
-      lastSaleTotal    = grandTotal;
+      lastSaleTotal    = finalTotal;
       lastSaleMethod   = cart.paymentMethod;
+      lastSaleSplitInfo = cart.hasValidSplits ? splitLabel(cart.paymentSplits) : '';
       lastSaleCustomer = cart.customerName || 'Walk-in';
 
       // Push the new/edited sale into the sales store so the
@@ -462,7 +457,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
       // instantly without a server round-trip.
       salesStore.add({
         ...data2,
-        total:        grandTotal,
+        total:        finalTotal,
         payment_method: cart.paymentMethod,
         created_at:   cart.createdAt ?? data2.created_at ?? new Date().toISOString(),
         customer:     cart.customerId ? { id: cart.customerId, name: cart.customerName } : null,
@@ -476,7 +471,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
         regStore.add({
           id:           crypto.randomUUID(),
           destination:  'counter',
-          amount:       grandTotal,
+          amount:       finalTotal,
           entry_type:   'sale',
           source:       'sale',
           sale_id:      saleId2,
@@ -706,7 +701,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
         <span class="text-xs font-semibold">{cart.count} in cart</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(grandTotal)}</span>
+        <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(finalTotal)}</span>
         <ChevronRight size={14} strokeWidth={2} class="text-[var(--text-3)]" />
       </div>
     </button>
@@ -920,48 +915,93 @@ import { register as regStore } from "$lib/stores/register.svelte";
         </div>
       </div>
 
-      <!-- Payment method picker. For non-credit, tapping Checkout goes
-           straight to the checkout sheet. For credit, the button label
-           changes to "Next" and tapping it opens the credit prompt
-           modal. Either way, picking credit commits the customer choice
-           and the amount received happens before submitSale(). -->
-      <div>
-        <p class="input-label mb-1.5">Payment method</p>
-        <div class="grid grid-cols-3 gap-1.5">
-          {#each ['cash', 'credit', 'transfer'] as m}
-            {@const key    = m as PaymentMethod}
-            {@const meta   = PAY_META[key]}
-            {@const active = cart.paymentMethod === key}
-            <button
-              type="button"
-              class="py-2.5 rounded-lg border-2 flex flex-col items-center gap-0.5 transition-all active:scale-[0.97]
-                {active
-                  ? 'shadow-sm'
-                  : 'border-[var(--border)] bg-[var(--surface2)] hover:bg-[var(--surface)] text-[var(--text-2)]'}"
-              style={active
-                ? `border-color:${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'};
-                   background:color-mix(in srgb, ${meta.tone === 'primary' ? 'var(--primary)' : meta.tone === 'teal' ? 'var(--teal)' : meta.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'} 10%, transparent);
-                   color:${meta.tone === 'primary' ? 'var(--primary-fg)' : meta.tone === 'teal' ? 'var(--teal-fg)' : meta.tone === 'gold' ? 'var(--gold-fg)' : 'var(--cobalt-fg)'}`
-                : ''}
-              onclick={() => pickPaymentMethod(key)}
-            >
-              <meta.icon size={15} strokeWidth={2} />
-              <span class="text-[10.5px] font-bold">{meta.label}</span>
-            </button>
-          {/each}
+      <!-- Discount + Round-off row -->
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <p class="input-label mb-1">Discount</p>
+          <input
+            bind:value={discountStr}
+            placeholder="500 or 10%"
+            class="input text-sm w-full"
+            oninput={applyDiscount}
+          />
+        </div>
+        <div>
+          <p class="input-label mb-1">Round-off</p>
+          <div class="flex gap-1">
+            <input
+              type="number"
+              step="0.01"
+              class="input text-sm flex-1"
+              placeholder="0"
+              value={roundOff || ''}
+              oninput={(e) => { roundOff = parseFloat((e.target as HTMLInputElement).value) || 0; }}
+            />
+            <button type="button" class="btn btn-secondary text-[10px] px-2" onclick={autoRoundOff} title="Round to nearest ₹1">₹1</button>
+          </div>
         </div>
       </div>
 
-      <!-- Compact credit summary if credit is selected. Tapping "Edit
-           amount" re-opens the credit prompt modal. -->
-      {#if cart.paymentMethod === 'credit'}
+      <!-- Payment inputs — always visible, method auto-detected -->
+      <div class="rounded-xl p-3 space-y-2" style="background:var(--surface2)">
+        <!-- Cash -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-semibold w-14 shrink-0 flex items-center gap-1">
+            <Banknote size={11} strokeWidth={2} /> Cash
+          </span>
+          <input
+            type="number" step="0.01" min="0"
+            class="input flex-1 text-sm"
+            placeholder="0"
+            value={cashAmt}
+            oninput={(e) => onCashInput((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <!-- UPI -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-semibold w-14 shrink-0 flex items-center gap-1">
+            <ArrowLeftRight size={11} strokeWidth={2} /> UPI
+          </span>
+          <input
+            type="number" step="0.01" min="0"
+            class="input flex-1 text-sm"
+            placeholder="0"
+            value={upiAmt}
+            oninput={(e) => onUpiInput((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <!-- Credit -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-semibold w-14 shrink-0 flex items-center gap-1">
+            <Clock size={11} strokeWidth={2} /> Credit
+          </span>
+          <input
+            type="number" step="0.01" min="0"
+            class="input flex-1 text-sm"
+            placeholder="0"
+            value={creditAmt}
+            oninput={(e) => onCreditInput((e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <!-- Remainder indicator -->
+        {#if splitRemainder !== 0}
+          <div class="pt-1 border-t border-[var(--border)]">
+            <span class="text-[10px] font-semibold" style="color:var(--crimson-fg)">
+              {splitRemainder > 0 ? `Remaining ${formatCurrency(splitRemainder)}` : `Over by ${formatCurrency(Math.abs(splitRemainder))}`}
+            </span>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Credit info banner -->
+      {#if isCreditSale}
         <div class="rounded-lg p-2.5 flex items-center justify-between gap-2"
              style="background:color-mix(in srgb, var(--gold) 10%, var(--surface));">
           <div class="text-[10.5px]">
             <span style="color:var(--gold-fg); font-weight:600">
-              {creditStatus === 'paid' ? 'Paid in full'
-                : creditStatus === 'partial' ? 'Partial · due ' + formatCurrency(Math.max(0, grandTotal - creditNumeric))
-                : 'Pending · ' + formatCurrency(grandTotal) + ' due'}
+              {activeCreditStatus === 'paid' ? 'Paid in full'
+                : activeCreditStatus === 'partial' ? 'Partial · ' + formatCurrency(activeCreditAmount) + ' on credit'
+                : 'Pending · ' + formatCurrency(finalTotal) + ' due'}
             </span>
             {#if cart.customerId}
               <span class="text-[var(--text-3)] ml-1">· {cart.customerName}</span>
@@ -969,22 +1009,10 @@ import { register as regStore } from "$lib/stores/register.svelte";
               <span class="ml-1" style="color:var(--crimson-fg); font-weight:600">· pick a customer</span>
             {/if}
           </div>
-          <button
-            type="button"
-            class="text-[10.5px] font-semibold underline-offset-2 hover:underline"
-            style="color:var(--gold-fg)"
-            onclick={openCreditPromptFromCart}
-          >
-            {creditStatus === 'pending' ? 'Set amount' : 'Edit'}
-          </button>
         </div>
       {/if}
 
       <div class="flex flex-col gap-1 text-xs">
-        <div class="flex justify-between">
-          <span class="text-[var(--text-3)]">Subtotal</span>
-          <span class="tabular-nums font-semibold">{formatCurrency(cart.subtotal)}</span>
-        </div>
         {#if cart.discountAmount > 0}
           <div class="flex justify-between" style="color:var(--teal-fg)">
             <span class="font-semibold">Discount</span>
@@ -999,7 +1027,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
         {/if}
         <div class="flex justify-between font-bold text-base pt-1 border-t border-[var(--border)] mt-1">
           <span>Total</span>
-          <span class="tabular-nums">{formatCurrency(grandTotal)}</span>
+          <span class="tabular-nums" style="color:var(--primary)">{formatCurrency(finalTotal)}</span>
         </div>
       </div>
       <div class="flex gap-2">
@@ -1024,9 +1052,9 @@ import { register as regStore } from "$lib/stores/register.svelte";
           onclick={handleCheckoutClick}
           class="flex-1 justify-center"
           size="lg"
-          disabled={cart.paymentMethod === 'credit' && !cart.customerId}
+          disabled={isCreditSale && !cart.customerId}
         >
-          {cart.paymentMethod === 'credit' ? 'Next' : 'Checkout'}
+          Checkout
           <ChevronRight size={14} strokeWidth={2.5} />
         </Button>
       </div>
@@ -1043,7 +1071,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
     >
       <ShoppingCart size={16} strokeWidth={2} />
       <span class="text-xs text-[var(--primary-fg)]/70 tabular-nums">{cart.count}</span>
-      <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(grandTotal)}</span>
+      <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(finalTotal)}</span>
     </button>
   </div>
 {/if}
@@ -1079,7 +1107,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
     >
       <ShoppingCart size={16} strokeWidth={2} />
       <span class="text-xs text-[var(--primary-fg)]/70 tabular-nums">{cart.count}</span>
-      <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(grandTotal)}</span>
+      <span class="text-sm font-bold tabular-nums">{formatCurrencyCompact(finalTotal)}</span>
     </button>
   </div>
 {/if}
@@ -1087,7 +1115,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
 <!-- ─────────────────────────────────────────────────────────────────────────
   CHECKOUT MODAL
   ───────────────────────────────────────────────────────────────────────── -->
-<Sheet bind:open={showCheckout} title={isEdit ? 'Update sale' : 'Complete sale'} maxWidth="max-w-md">
+<Sheet bind:open={showCheckout} title={isEdit ? 'Update' : 'Checkout'} maxWidth="max-w-md">
   <div class="flex flex-col gap-4">
     <!-- Sale timestamp — defaults to now; user can backdate or correct clock skew.
          Above the customer selector per the design decision. -->
@@ -1155,275 +1183,45 @@ import { register as regStore } from "$lib/stores/register.svelte";
       {/if}
     </div>
 
-    <!-- Discount -->
-    <div>
-      <p class="input-label mb-1.5">Discount <span class="text-[var(--text-3)] font-normal">(optional)</span></p>
-      <div class="flex gap-2">
-        <input
-          bind:value={discountStr}
-          placeholder="Amount (e.g. 500) or percent (10%)"
-          class="input text-sm flex-1"
-          oninput={applyDiscount}
-        />
-        {#if cart.discountAmount > 0}
-          <button
-            class="btn btn-secondary btn-sm"
-            onclick={() => { discountStr = ''; cart.setDiscount('amount', 0); }}
-          >Clear</button>
-        {/if}
-      </div>
-      {#if cart.discountAmount > 0}
-        <p class="text-[11px] mt-1.5" style="color:var(--teal-fg)">
-          Saving {formatCurrency(cart.discountAmount)} ({((cart.discountAmount / Math.max(cart.subtotal, 1)) * 100).toFixed(0)}% off)
-        </p>
-      {/if}
-    </div>
-
-    <!-- Payment (read-only here; user picked it in the cart sheet).
-         The icon + label is shown for clarity, plus a 'Change' link
-         that pops them back to the cart to re-select. -->
-    <div>
-      <div class="flex items-center justify-between mb-1.5">
-        <p class="input-label">Payment method</p>
-        <button
-          type="button"
-          class="text-[10.5px] font-semibold underline-offset-2 hover:underline"
-          style="color:var(--primary-fg)"
-          onclick={() => { showCheckout = false; cartOpen = true; }}
-        >
-          Change
-        </button>
-      </div>
-      {#if true}
-        {@const m = PAY_META[cart.paymentMethod]}
-        <div class="input w-full flex items-center gap-2 py-2.5"
-             style={m ? `border-color:${m.tone === 'primary' ? 'var(--primary)' : m.tone === 'teal' ? 'var(--teal)' : m.tone === 'gold' ? 'var(--gold)' : 'var(--cobalt)'};` : ''}>
-          {#if m}
-            <m.icon size={15} strokeWidth={2} />
-            <span class="text-[12.5px] font-bold">{m.label}</span>
-          {:else}
-            <span class="text-[12.5px] font-semibold">{cart.paymentMethod}</span>
-          {/if}
-          {#if cart.paymentMethod === 'credit' && creditNumeric > 0 && creditNumeric < grandTotal}
-            <span class="ml-auto text-[10.5px] font-semibold" style="color:var(--gold-fg)">
-              received {formatCurrency(creditNumeric)}
-            </span>
-          {/if}
-          {#if cart.paymentMethod === 'credit' && creditNumeric >= grandTotal}
-            <span class="ml-auto text-[10.5px] font-semibold" style="color:var(--teal-fg)">
-              paid in full
-            </span>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    {#if cart.paymentMethod === 'credit'}
-      <!-- Read-only summary of the on-credit state set in the modal.
-           Edit by opening the credit prompt modal via "Change amount". -->
-      <div class="rounded-xl p-3 space-y-2" style="background:var(--gold-dim); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);">
-        <div class="flex items-center gap-2 text-[var(--gold-fg)]">
-          <AlertCircle size={13} strokeWidth={2.2} />
-          <p class="text-[11px] font-semibold">
-            On credit — {cart.customerId ? `owing ${cart.customerName}` : 'pick a customer above'}
-          </p>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div class="rounded-lg p-2" style="background:color-mix(in srgb, var(--gold) 8%, var(--surface))">
-            <p class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Received</p>
-            <p class="text-[13px] font-bold tabular-nums text-[var(--text)] mt-0.5">{formatCurrency(creditNumeric)}</p>
+    <!-- Payment breakdown -->
+    {#if cart.hasValidSplits}
+      <div class="rounded-xl p-3 space-y-1.5" style="background:var(--surface2)">
+        {#each cart.paymentSplits as sp}
+          {@const spm = PAY_META[sp.method]}
+          <div class="flex items-center gap-2 text-[11.5px]">
+            {#if spm}<spm.icon size={12} strokeWidth={2} />{/if}
+            <span class="font-semibold flex-1">{spm?.label ?? sp.method}</span>
+            <span class="font-bold tabular-nums">{formatCurrency(sp.amount)}</span>
           </div>
-          <div class="rounded-lg p-2" style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface))">
-            <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--crimson-fg)">Amount due</p>
-            <p class="text-[13px] font-bold tabular-nums mt-0.5" style="color:var(--crimson-fg)">{formatCurrency(Math.max(0, grandTotal - creditNumeric))}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          class="text-[11px] font-semibold underline-offset-2 hover:underline"
-          style="color:var(--gold-fg)"
-          onclick={openCreditPrompt}
-        >
-          Change amount
-        </button>
+        {/each}
       </div>
     {/if}
 
-    <!-- Summary -->
-    <div class="rounded-xl p-3.5 space-y-1.5 text-xs" style="background:var(--surface2)">
-    <div class="flex justify-between">
-      <span class="text-[var(--text-3)]">Subtotal</span>
-      <span class="tabular-nums font-semibold">{formatCurrency(cart.subtotal)}</span>
+    <!-- Total -->
+    <div class="flex items-center justify-between py-2.5 px-3 rounded-xl" style="background:var(--surface2)">
+      <span class="text-[12px] font-semibold text-[var(--text-3)]">Total</span>
+      <span class="text-[17px] font-bold tabular-nums" style="color:var(--primary)">{formatCurrency(finalTotal)}</span>
     </div>
-    {#if cart.discountAmount > 0}
-      <div class="flex justify-between" style="color:var(--teal-fg)">
-        <span class="font-semibold">Discount</span>
-        <span class="tabular-nums font-semibold">– {formatCurrency(cart.discountAmount)}</span>
-      </div>
-    {/if}
-    {#if data.taxRate > 0 && taxAmount > 0}
-      <div class="flex justify-between text-[var(--text-3)]">
-        <span>{data.taxName}</span>
-        <span class="tabular-nums">{formatCurrency(taxAmount)}</span>
-      </div>
-    {/if}
-    <div class="flex justify-between font-bold text-base pt-1.5 border-t border-[var(--border)] mt-1">
-      <span>Total</span>
-      <span class="tabular-nums" style="color:var(--primary)">{formatCurrency(grandTotal)}</span>
-    </div>
-    {#if cart.paymentMethod === 'credit'}
-      <div class="flex justify-between text-[11px] pt-1 border-t border-[var(--border)] mt-1.5 gap-4">
-        <span class="text-[var(--text-3)]">Received</span>
-        <span class="tabular-nums font-semibold" style="color:var(--teal-fg)">{formatCurrency(creditNumeric)}</span>
-      </div>
-      <div class="flex justify-between text-[11px] gap-4">
-        <span class="text-[var(--text-3)]">Pending</span>
-        <span class="tabular-nums font-semibold" style="color:var(--crimson-fg)">{formatCurrency(Math.max(0, grandTotal - creditNumeric))}</span>
-      </div>
-    {/if}
-    </div>
-  </div>
-
-  {#snippet footer()}
-    <div class="flex gap-2">
-      <Button
-        variant="secondary"
-        onclick={() => (showCheckout = false)}
-        class="flex-1 justify-center"
-      >
-        Back
-      </Button>
-      <Button
-        loading={submitting}
-        disabled={submitting || (cart.paymentMethod === 'credit' && !cart.customerId)}
-        onclick={submitSale}
-        class="flex-1 justify-center"
-        size="lg"
-      >
-        {isEdit ? 'Update Sale' : 'Complete Sale'}
-      </Button>
-    </div>
-  {/snippet}
-</Sheet>
-
-<!-- ─────────────────────────────────────────────────────────────────────────
-  CREDIT PROMPT MODAL
-  Pops up the moment the user picks 'On credit'. They MUST enter
-  the amount received (defaults to 0 = full pending) and confirm
-  before the sale can be completed. Cancelling the modal flips
-  payment back to 'cash' so the user is never stuck on 'credit'.
-  ───────────────────────────────────────────────────────────────────────── -->
-<Sheet bind:open={creditPromptOpen} title="On credit — set amount received" maxWidth="max-w-md">
-  <div class="space-y-4">
-    <div class="flex items-start gap-2.5 p-3 rounded-xl"
-         style="background:var(--gold-dim); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);">
-      <AlertCircle size={14} strokeWidth={2.2} class="mt-0.5 shrink-0" style="color:var(--gold-fg)" />
-      <p class="text-[11.5px] leading-relaxed" style="color:var(--gold-fg)">
-        Customer is taking goods now and paying later. How much
-        are they paying <strong>right now</strong>?
-        Leave at 0 to record the full bill as pending.
-      </p>
-    </div>
-
-    <!-- Customer + total summary -->
-    <div class="rounded-xl p-3 space-y-2" style="background:var(--surface2)">
-      <div class="flex justify-between text-[11.5px]">
-        <span class="text-[var(--text-3)]">Customer</span>
-        <span class="font-semibold truncate ml-2">{cart.customerName ?? '—'}</span>
-      </div>
-      <div class="flex justify-between text-[11.5px]">
-        <span class="text-[var(--text-3)]">Total bill</span>
-        <span class="font-bold tabular-nums">{formatCurrency(grandTotal)}</span>
-      </div>
-    </div>
-
-    <!-- Amount received now -->
-    <div>
-      <p class="input-label mb-1.5">
-        Amount received now
-        <span class="text-[var(--text-3)] font-normal ml-1">(0 = full pending)</span>
-      </p>
-      <Input
-        type="number"
-        step="0.01"
-        min="0"
-        max={grandTotal}
-        bind:value={creditAmountPaid}
-        placeholder="0"
-      />
-    </div>
-
-    <!-- Live summary: pending amount + status chip -->
-    <div class="grid grid-cols-2 gap-2">
-      <div class="rounded-lg p-2.5" style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface))">
-        <p class="text-[9px] font-bold uppercase tracking-wider" style="color:var(--crimson-fg)">Amount due</p>
-        <p class="text-[16px] font-bold tabular-nums mt-0.5" style="color:var(--crimson-fg)">{formatCurrency(Math.max(0, grandTotal - creditNumeric))}</p>
-      </div>
-      <div class="rounded-lg p-2.5 flex flex-col justify-center"
-           style="background:color-mix(in srgb,
-             {creditStatus === 'paid' ? 'var(--teal)' : creditStatus === 'partial' ? 'var(--gold)' : 'var(--crimson)'} 10%,
-             var(--surface))">
-        <p class="text-[9px] font-bold uppercase tracking-wider text-[var(--text-3)]">Status</p>
-        <p class="text-[14px] font-bold mt-0.5"
-           style="color: {creditStatus === 'paid' ? 'var(--teal-fg)' : creditStatus === 'partial' ? 'var(--gold-fg)' : 'var(--crimson-fg)'}">
-          {creditStatus === 'paid' ? 'Paid in full' : creditStatus === 'partial' ? 'Partial' : 'Pending'}
-        </p>
-      </div>
-    </div>
-
-    <!-- Quick-fill buttons -->
-    <div>
-      <p class="input-label mb-1.5">Quick fill</p>
-      <div class="grid grid-cols-4 gap-1.5">
-        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
-                onclick={() => creditAmountPaid = '0'}>
-          None (₹0)
-        </button>
-        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
-                onclick={() => creditAmountPaid = String(grandTotal / 2)}>
-          Half
-        </button>
-        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
-                onclick={() => creditAmountPaid = String(grandTotal)}>
-          All
-        </button>
-        <button type="button" class="btn btn-secondary btn-sm text-[11px]"
-                onclick={() => creditAmountPaid = ''}>
-          Clear
-        </button>
-      </div>
-    </div>
-
-    <!-- Due date -->
-    <div>
-      <p class="input-label mb-1.5">
-        Due date
-        <span class="text-[var(--text-3)] font-normal ml-1">(optional)</span>
-      </p>
-      <Input type="date" bind:value={creditDueDate} />
-    </div>
-
-    <!-- Customer reminder if not picked yet -->
-    {#if !cart.customerId}
-      <div class="rounded-lg p-2.5 text-[11px] font-semibold"
-           style="background:color-mix(in srgb, var(--crimson) 10%, var(--surface)); color:var(--crimson-fg);">
-        Pick a customer above the payment options before confirming.
+    {#if isCreditSale}
+      <div class="flex items-center justify-between -mt-1 px-1">
+        <span class="text-[11px] text-[var(--text-3)]">On credit</span>
+        <span class="text-[11px] font-bold tabular-nums" style="color:var(--crimson-fg)">{formatCurrency(activeCreditAmount)}</span>
       </div>
     {/if}
   </div>
 
   {#snippet footer()}
-    <div class="flex gap-2">
-      <Button variant="secondary" onclick={cancelCreditPrompt} class="flex-1">
-        Use cash instead
-      </Button>
-      <Button variant="primary" onclick={confirmCreditPrompt} disabled={!cart.customerId} class="flex-1">
-        Confirm on credit
-      </Button>
-    </div>
+    <Button
+      loading={submitting}
+      disabled={submitting || (isCreditSale && !cart.customerId) || (cart.hasValidSplits && !cart.customerId && isCreditSale)}
+      onclick={submitSale}
+      class="w-full justify-center"
+      size="lg"
+    >
+      {isEdit ? 'Update Sale' : 'Complete Sale'}
+    </Button>
   {/snippet}
 </Sheet>
-
 <!-- ─────────────────────────────────────────────────────────────────────────
   RECEIPT MODAL
   ───────────────────────────────────────────────────────────────────────── -->
@@ -1456,7 +1254,7 @@ import { register as regStore } from "$lib/stores/register.svelte";
       </div>
       <div class="flex justify-between">
         <span class="text-[var(--text-3)]">Payment</span>
-        <span class="font-semibold">{PAY_META[lastSaleMethod]?.label ?? lastSaleMethod}</span>
+        <span class="font-semibold">{lastSaleSplitInfo || (PAY_META[lastSaleMethod]?.label ?? lastSaleMethod)}</span>
       </div>
       <div class="flex justify-between text-base font-bold pt-1.5 border-t border-[var(--border)] mt-1">
         <span>Total</span>

@@ -12,42 +12,54 @@
     Calendar, Package, Banknote, ArrowUp, ArrowDown,
     Minus, Trophy, Activity,
   } from "lucide-svelte";
-  import { browser } from "$app/environment";
-  // @ts-expect-error — stale Svelte LSP cache; exports exist at offlineFetch.ts:283,301,321
+import { browser } from "$app/environment";
 import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from "$lib/offline/offlineFetch";
 
-  let { data } = $props();
+  let { data: _data } = $props();
+  import { page as _page } from "$app/state";
+  import { onMount } from "svelte";
 
   /* ── cache-first analytics ──────────────────────────────────────────────── */
-  // On mount, read cached analytics from IndexedDB so the page renders
-  // instantly even before the server responds. When fresh data arrives
-  // from the server (or API), it replaces the cached snapshot.
-  let cachedAnalytics = $state<any>(null);
-  let freshAnalytics = $state<any>(null);
-  let cacheKey = $state('');
+  let analytics = $state<any>(null);
+  let currentSearch = $state("");
 
-  // The analytics object used by the template: prefer fresh > server > cached
-  // Cached data is only used when server data is unavailable (offline).
-  const analytics = $derived(freshAnalytics ?? (data as any)?.analytics ?? cachedAnalytics);
+        async function loadAnalytics(search: string) {
+                const cacheKey = buildAnalyticsCacheKey(search);
 
-  if (browser) {
-    // Build cache key from current URL on mount
-    cacheKey = buildAnalyticsCacheKey(window.location.search);
-    readAnalyticsCache(cacheKey).then((cached: any) => {
-      if (cached) cachedAnalytics = cached.analytics;
-    });
+                // 1. IDB cache — instant, non-blocking
+                readAnalyticsCache(cacheKey).then((cached: any) => {
+                        if (cached?.analytics && !analytics) {
+                                analytics = cached.analytics;
+                        }
+                });
 
-    // Fetch fresh data from API in background and update cache
-    fetch(`/api/analytics${window.location.search}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((json) => {
-        if (json?.analytics) {
-          freshAnalytics = json.analytics;
-          writeAnalyticsCache(cacheKey, json);
+                // 2. API fetch — fully non-blocking, fire-and-forget
+                fetch(`/api/analytics${search}`)
+                        .then((r) => (r.ok ? r.json() : null))
+                        .then((json) => {
+                                if (json?.analytics) {
+                                        analytics = json.analytics;
+                                        writeAnalyticsCache(cacheKey, json);
+                                }
+                        })
+                        .catch(() => {});
         }
-      })
-      .catch(() => { /* offline — cached data is fine */ });
-  }
+
+        // Load on mount
+        if (browser) {
+                onMount(() => {
+                        currentSearch = window.location.search;
+                        loadAnalytics(currentSearch);
+                });
+        }
+
+        // Handle period tab clicks
+        function changePeriod(preset: string) {
+                const search = `?period=${preset}`;
+                currentSearch = search;
+                goto(search, { replaceState: true, invalidateAll: false });
+                if (browser) loadAnalytics(search);
+        }
 
   const presets = [
     { label: "Today",       value: "today" },
@@ -174,7 +186,7 @@ import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from 
           class="btn btn-sm whitespace-nowrap transition-all {active
             ? 'btn-primary'
             : 'btn-secondary'}"
-          onclick={() => goto(`?period=${p.value}`, { invalidateAll: true, replaceState: true })}
+          onclick={() => changePeriod(p.value)}
         >
           {p.label}
         </button>

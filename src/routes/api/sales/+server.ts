@@ -5,32 +5,38 @@
  * POST: create a sale with line items, decrement stock, log movements.
  *       Delegates to a SQL function `create_sale()` for atomicity.
  */
-import { json } from '@sveltejs/kit';
-import { userClient, userClientFromCtx } from '$lib/server/supabase';
+import { json } from "@sveltejs/kit";
+import { userClient, userClientFromCtx } from "$lib/server/supabase";
 
 /**
  * GET /api/sales
  */
-export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').RequestEvent) {
+export async function GET({
+  cookies,
+  locals,
+  url,
+}: import("@sveltejs/kit").RequestEvent) {
   if (!locals.currentShop) return json([]);
   const supabase = userClientFromCtx({ cookies } as any);
 
-  const page  = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
-  const limit = Math.min(200, parseInt(url.searchParams.get('limit') ?? '50'));
-  const from  = url.searchParams.get('from');
-  const to    = url.searchParams.get('to');
-  const method = url.searchParams.get('method');
+  const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1"));
+  const limit = Math.min(200, parseInt(url.searchParams.get("limit") ?? "50"));
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
+  const method = url.searchParams.get("method");
 
   let q = supabase
-    .from('sales')
-    .select('id, sale_ref, total, payment_method, voided_at, created_at, customer:customers(id, name, phone), served_by:profiles!sales_served_by_fkey(first_name, last_name)')
-    .eq('shop_id', locals.currentShop.id)
-    .order('created_at', { ascending: false })
+    .from("sales")
+    .select(
+      "id, sale_ref, total, payment_method, voided_at, created_at, customer:customers(id, name, phone), served_by:profiles!sales_served_by_fkey(first_name, last_name)",
+    )
+    .eq("shop_id", locals.currentShop.id)
+    .order("created_at", { ascending: false })
     .range((page - 1) * limit, page * limit - 1);
 
-  if (from)   q = q.gte('created_at', from);
-  if (to)     q = q.lte('created_at', to);
-  if (method) q = q.eq('payment_method', method);
+  if (from) q = q.gte("created_at", from);
+  if (to) q = q.lte("created_at", to);
+  if (method) q = q.eq("payment_method", method);
 
   const { data: sales, error } = await q;
   if (error) return json({ error: error.message }, { status: 500 });
@@ -43,36 +49,50 @@ export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').Req
  * Uses the `create_sale` RPC function for atomicity. Falls back to a
  * multi-query approach if the function isn't installed yet (older DB).
  */
-export async function POST({ cookies, request, locals  }: import('@sveltejs/kit').RequestEvent) {
+export async function POST({
+  cookies,
+  request,
+  locals,
+}: import("@sveltejs/kit").RequestEvent) {
   if (!locals.currentShop || !locals.user)
-    return json({ error: 'No shop' }, { status: 401 });
+    return json({ error: "No shop" }, { status: 401 });
 
   const {
-    items, customer_id,
-    discount_type, discount_value, discount_amount,
-    subtotal, total, tax_amount, payment_method, notes,
+    items,
+    customer_id,
+    discount_type,
+    discount_value,
+    discount_amount,
+    subtotal,
+    total,
+    tax_amount,
+    payment_method,
+    notes,
+    payment_splits,
     created_at,
     // Optional credit fields. Only relevant when payment_method = 'credit'.
     // credit_status: 'paid' | 'partial' | 'pending' (default 'paid' for non-credit)
     // credit_amount_paid: how much was received at sale time (for 'partial')
     // credit_due_date: when the customer promises to pay (for 'partial'/'pending')
-    credit_status, credit_amount_paid, credit_due_date,
+    credit_status,
+    credit_amount_paid,
+    credit_due_date,
   } = await request.json();
 
-  if (!items?.length) return json({ error: 'Cart is empty' }, { status: 400 });
+  if (!items?.length) return json({ error: "Cart is empty" }, { status: 400 });
 
   const supabase = userClientFromCtx({ cookies } as any);
 
   // Atomic via create_sale() SECURITY DEFINER function.
   // Uses userClient so auth.uid() is set inside the function (membership check).
-  const { data, error } = await supabase.rpc('create_sale', {
+  const { data, error } = await supabase.rpc("create_sale", {
     p_shop_id: locals.currentShop.id,
     p_customer_id: customer_id ?? null,
     p_served_by: locals.user.id,
     p_payment_method: payment_method,
     p_notes: notes ?? null,
     p_subtotal: subtotal,
-    p_discount_type: discount_type ?? 'amount',
+    p_discount_type: discount_type ?? "amount",
     p_discount_value: discount_value ?? 0,
     p_discount_amount: discount_amount ?? 0,
     p_tax_amount: tax_amount ?? 0,
@@ -88,11 +108,27 @@ export async function POST({ cookies, request, locals  }: import('@sveltejs/kit'
     // When null, the function uses now(). Server validates + applies.
     p_created_at: created_at ?? null,
     // Credit fields. The RPC defaults to 'paid' for non-credit payment methods.
-    p_credit_status: credit_status ?? 'paid',
+    p_credit_status: credit_status ?? "paid",
     p_credit_amount_paid: credit_amount_paid ?? 0,
     p_credit_due_date: credit_due_date ?? null,
   });
 
   if (error) return json({ error: error.message }, { status: 400 });
+
+  // After the RPC creates the sale, write the payment_splits JSONB
+  // if provided. The RPC doesn't know about this column yet, so we
+  // do a second query. This is fine because the sale already exists
+  // and the split data is purely informational (accounting / receipt).
+  if (
+    payment_splits &&
+    Array.isArray(payment_splits) &&
+    payment_splits.length > 0
+  ) {
+    const saleId = data?.[0]?.id ?? data?.id;
+    if (saleId) {
+      await supabase.from("sales").update({ payment_splits }).eq("id", saleId);
+    }
+  }
+
   return json(data, { status: 201 });
 }

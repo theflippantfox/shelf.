@@ -14,6 +14,7 @@
   import TopProgress       from '$lib/components/ui/TopProgress.svelte';
   import CommandBar        from '$lib/components/CommandBar.svelte';
   import { onMount }       from 'svelte';
+import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from '$lib/offline/offlineFetch';
 
   let { data, children } = $props();
 
@@ -119,6 +120,18 @@
         currentShop.setAllShops(shops);
       }
     } catch { /* offline — header switcher will just show current */ }
+
+    // Pre-warm analytics cache so /analytics loads instantly.
+    // Fire-and-forget — runs in background, no await.
+    const cacheKey = buildAnalyticsCacheKey('?period=30d');
+    readAnalyticsCache(cacheKey).then((cached) => {
+      if (!cached) {
+        fetch('/api/analytics?period=30d')
+          .then((r) => (r.ok ? r.json() : null))
+          .then((json) => { if (json?.analytics) writeAnalyticsCache(cacheKey, json); })
+          .catch(() => {});
+      }
+    });
   });
 </script>
 

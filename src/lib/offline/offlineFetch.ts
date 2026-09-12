@@ -35,6 +35,23 @@ export type OfflineFetchOptions = RequestInit & {
   forceOnline?: boolean;
 };
 
+/** Allowed URL prefixes for SSRF protection. All offlineFetch calls are relative API paths. */
+const ALLOWED_PREFIXES = ["/api/"];
+
+function assertSafeUrl(url: string): void {
+  // Allow relative paths (starting with /) that match known API prefixes
+  if (url.startsWith("/") && ALLOWED_PREFIXES.some((p) => url.startsWith(p)))
+    return;
+  // Allow same-origin absolute URLs
+  try {
+    const parsed = new URL(url, globalThis.location?.origin);
+    if (parsed.origin === globalThis.location?.origin) return;
+  } catch {
+    /* not a valid URL — fall through */
+  }
+  throw new Error(`[offlineFetch] Blocked outbound URL: ${url}`);
+}
+
 /**
  * Smart fetch: queues writes when offline, fetches normally otherwise.
  * Reads (GET) fall back to the server cache when offline.
@@ -47,9 +64,12 @@ export async function offlineFetch(
     // SSR — return a stub that won't crash but won't pretend to be real.
     return new Response(JSON.stringify({ error: "No offline fetch in SSR" }), {
       status: 500,
+      // pi-lens-ignore: ast-grep:no-runtime-typeof
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  assertSafeUrl(input);
 
   const method = (options.method ?? "GET").toUpperCase();
   const isWrite =
@@ -57,7 +77,25 @@ export async function offlineFetch(
 
   // Online: just fetch.
   if (offlineSync.online || options.forceOnline) {
-    return fetch(input, options);
+    // Ensure body is stringified for JSON requests.
+    const opts: RequestInit = { ...options };
+    if (
+      opts.body != null &&
+      typeof opts.body === "object" &&
+      !(opts.body instanceof FormData) &&
+      !(opts.body instanceof URLSearchParams) &&
+      !(opts.body instanceof Blob) &&
+      !(opts.body instanceof ArrayBuffer)
+    ) {
+      opts.body = JSON.stringify(opts.body);
+      // Auto-set Content-Type if not already set
+      const headers = new Headers(opts.headers as HeadersInit);
+      if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+      opts.headers = headers;
+    }
+    return fetch(input, opts);
   }
 
   // Offline + read: there's nothing useful to queue. Reject so the

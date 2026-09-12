@@ -47,11 +47,71 @@
   // ── Sheet: new manual entry ──────────────────────────────────────────
   let showSheet = $state(false);
   let sheetTab = $state<'expense' | 'injection' | 'transfer'>('expense');
+
+  // End of day UI
+  let showEod = $state(false);
+  let physicalCount = $state<string>('');
+  let eodNotes = $state('');
+  let eodSubmitting = $state(false);
   let sheetDestination = $state<'counter' | 'bank' | 'other'>('counter');
   let sheetAmount = $state('');
   let sheetNotes = $state('');
   let sheetTransferTo = $state<'counter' | 'bank' | 'other'>('bank');
   let sheetSubmitting = $state(false);
+
+  async function submitEod() {
+    if (eodSubmitting) return;
+    const actual = parseFloat(physicalCount);
+    if (isNaN(actual) && physicalCount !== '') {
+      toasts.error('Enter valid count');
+      return;
+    }
+    
+    // The expected is the current 'counter' balance.
+    const expected = regStore.counterBalance ?? 0;
+    const discrepancy = (physicalCount === '') ? 0 : actual - expected;
+
+    if (discrepancy !== 0) {
+      eodSubmitting = true;
+      try {
+        const payload = {
+          destination: 'counter',
+          amount: discrepancy,
+          entry_type: 'adjustment',
+          source: 'manual',
+          notes: eodNotes ? `EOD adjustment. ${eodNotes}` : 'EOD adjustment',
+          created_at: new Date().toISOString(),
+          effective_at: new Date().toISOString(),
+        };
+
+        const res = await offlineFetch('/api/cash-register', {
+          method: 'POST',
+          kind: 'register',
+          body: JSON.stringify(payload)
+        });
+        
+        if (res.ok) {
+          toasts.success('EOD adjustment recorded');
+          const row = res.status === 202 
+            ? { ...payload, id: crypto.randomUUID(), _pending: true } 
+            : await res.json();
+          regStore.add(row);
+        } else {
+          toasts.error('Failed to record adjustment');
+        }
+      } catch (err) {
+        toasts.error('Error saving adjustment');
+      } finally {
+        eodSubmitting = false;
+      }
+    } else {
+      toasts.success('Register matches perfectly');
+    }
+    
+    showEod = false;
+    physicalCount = '';
+    eodNotes = '';
+  }
 
   function openSheet(tab: 'expense' | 'injection' | 'transfer') {
     sheetTab = tab;
@@ -112,12 +172,12 @@
         const res = await offlineFetch('/api/cash-register/transfer', {
           method: 'POST',
           kind: 'register',
-          body: {
+          body: JSON.stringify({
             from: sheetDestination,
             to: sheetTransferTo,
             amount: signed,
             notes: sheetNotes,
-          },
+          }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -163,12 +223,12 @@
         const res = await offlineFetch('/api/cash-register', {
           method: 'POST',
           kind: 'register',
-          body: {
+          body: JSON.stringify({
             destination: sheetDestination,
             amount: signed,
             entry_type: sheetTab,
             notes: sheetNotes,
-          },
+          }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -219,7 +279,7 @@
     const res = await offlineFetch(`/api/cash-register/${voidTarget.id}`, {
       method: 'PATCH',
       kind: 'register',
-      body: { void_reason: voidReason },
+      body: JSON.stringify({ void_reason: voidReason }),
     });
     if (res.ok) {
       toasts.success('Entry voided');
@@ -355,6 +415,11 @@
 
       <!-- Action buttons: full-width on mobile, auto on md+ -->
       <div class="flex items-center gap-2 shrink-0">
+        <Button variant="secondary" size="sm" onclick={() => (showEod = true)} class="flex-1 md:flex-initial justify-center">
+          <Clock size={13} strokeWidth={2.5} />
+          <span class="hidden sm:inline">End of day</span>
+          <span class="sm:hidden">Close</span>
+        </Button>
         <Button variant="secondary" size="sm" onclick={() => openSheet('expense')} class="flex-1 md:flex-initial justify-center">
           <TrendingDown size={13} strokeWidth={2} />
           <span class="hidden sm:inline">Expense</span>
@@ -672,3 +737,72 @@
     </div>
   </div>
 </Sheet>
+
+<!-- ── End of Day Close ──────────────────────────────────────────────── -->
+<Sheet bind:open={showEod} title="Close Register (End of Day)" maxWidth="max-w-md">
+  <div class="flex flex-col gap-5 pb-6">
+    <div class="p-4 rounded-xl space-y-4" style="background:var(--surface2)">
+      <div class="flex justify-between items-end">
+        <span class="text-sm font-semibold text-[var(--text-2)]">Expected Cash in Drawer</span>
+        <span class="text-2xl font-bold font-mono tracking-tight text-[var(--teal)]">
+          {formatCurrency(regStore.counterBalance ?? 0)}
+        </span>
+      </div>
+    
+      <div class="pt-3 border-t border-[var(--border)]">
+        <p class="input-label mb-2">Physical Cash Count</p>
+        <div class="relative">
+          <Input 
+            type="number" 
+            bind:value={physicalCount} 
+            placeholder="Count the money in drawer..." 
+            class="text-xl font-mono !pl-8" 
+          />
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-[var(--text-3)]">$</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Discrepancy block -->
+    {#if physicalCount !== '' && !isNaN(parseFloat(physicalCount))}
+      {@const actual = parseFloat(physicalCount)}
+      {@const expected = regStore.counterBalance ?? 0}
+      {@const diff = actual - expected}
+      <div class="p-4 rounded-xl flex items-center justify-between {diff === 0 ? 'bg-emerald-500/10' : diff < 0 ? 'bg-rose-500/10' : 'bg-amber-500/10'}">
+        <div class="flex flex-col">
+          <span class="text-xs font-bold uppercase tracking-wider {diff === 0 ? 'text-emerald-500' : diff < 0 ? 'text-rose-500' : 'text-amber-500'}">
+            {diff === 0 ? 'Balanced' : diff < 0 ? 'Shortage' : 'Overage'}
+          </span>
+          {#if diff !== 0}
+            <span class="text-sm text-[var(--text-2)] mt-0.5">Will record an adjustment entry</span>
+          {/if}
+        </div>
+        <span class="font-mono font-bold text-lg {diff === 0 ? 'text-emerald-500' : diff < 0 ? 'text-rose-500' : 'text-amber-500'}">
+          {diff > 0 ? '+' : ''}{formatCurrency(diff)}
+        </span>
+      </div>
+
+      {#if diff !== 0}
+        <div>
+          <p class="input-label mb-1.5">Note/Explanation</p>
+          <Input bind:value={eodNotes} placeholder="e.g. Paid Rs 50 for tea from drawer" />
+        </div>
+      {/if}
+    {/if}
+
+    <div class="flex gap-3 pt-2">
+      <Button variant="secondary" onclick={() => (showEod = false)} class="flex-1 justify-center py-2.5">
+        Cancel
+      </Button>
+      <Button 
+        variant="primary" 
+        onclick={submitEod} 
+        disabled={eodSubmitting || (physicalCount !== '' && isNaN(parseFloat(physicalCount)))} 
+        class="flex-1 justify-center py-2.5"
+      >
+        {eodSubmitting ? 'Saving…' : 'Complete EOD'}
+      </Button>
+    </div>
+  </div>
+</Sheet>
+
