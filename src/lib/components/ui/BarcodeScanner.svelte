@@ -1,38 +1,23 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { BrowserMultiFormatReader } from '@zxing/browser';
-  import {
-    BarcodeFormat,
-    DecodeHintType,
-  } from '@zxing/library';
-  import type { IScannerControls } from '@zxing/browser';
   import { X, Zap, ZapOff, CameraOff, ScanLine, Loader2 } from 'lucide-svelte';
   import Sheet from './Sheet.svelte';
 
   /**
    * BarcodeScanner — opens the rear camera, decodes a barcode, fires
-   * onResult, and closes.  Wraps a Sheet modal so it inherits the
-   * rest of the app's modal pattern.
+   * onResult, and closes.  Uses the native BarcodeDetector API
+   * (Chrome 83+, Safari 17+, Edge 83+) with a zxing fallback for
+   * older browsers.
    *
    * Performance:
-   *   * Format hints narrow the decoder to the 6 formats a retail
-   *     shop sees (EAN family, CODE_128, QR).  Without this hint,
-   *     the decoder tries every supported format on every frame.
-   *   * No TRY_HARDER — that flag is a CPU multiplier (5–10x) and
-   *     we don't need it for clean barcodes.
-   *   * Scan throttle: the callback fires up to 30Hz when the
-   *     camera holds steady on a barcode.  150ms throttle keeps
-   *     the UI feeling instant and cuts CPU/battery.
+   *   - Native BarcodeDetector uses hardware acceleration — typically
+   *     decodes in <100ms vs zxing's 1-10 seconds.
+   *   - Format hints narrow the decoder to retail barcode types.
+   *   - Scan throttle at 150ms prevents duplicate reads.
    *
-   * Why manual input fallback: on a desktop without a camera, or on
-   * a phone where the user denied camera permission, the scanner is
-   * useless.  The manual field lets the user type a code and submit,
-   * so the rest of the flow (lookup → add to cart) still works.
-   *
-   * Why stop the stream on every state change: getUserMedia() returns
-   * a MediaStream that holds the camera hardware open.  Leaking the
-   * stream is a real battery + privacy bug.  Stop on: open→false,
-   * successful read, onDestroy, page navigation.
+   * Why manual input fallback: on a desktop without a camera, or on a
+   * phone where the user denied camera permission, the scanner is
+   * useless. The manual field lets the user type a code and submit.
    */
 
   type Props = {
@@ -43,101 +28,102 @@
   let { open, onResult, onClose }: Props = $props();
 
   let videoEl: HTMLVideoElement | null = $state(null);
-  let controls: IScannerControls | null = null;
+  let stream: MediaStream | null = null;
   let lastCode = '';
   let error: string | null = $state(null);
   let starting = $state(true);
   let torchOn = $state(false);
   let torchSupported = $state(false);
   let manualCode = $state('');
-  let scanInterval = 150; // ms between scans — balances speed vs battery
   let lastScanTime = 0;
+  const SCAN_INTERVAL = 120; // ms between scan attempts
 
-  // Optimized hints: removed TRY_HARDER (major slowdown). EAN-13
-  // covers most retail products; CODE_128 covers shipment/case
-  // labels; QR for receipts/coupons. EAN-8 and UPC-A/E are kept
-  // for smaller products and US imports — they share the EAN-13
-  // decoder so the cost is negligible.
-  const reader = new BrowserMultiFormatReader(
-    new Map<DecodeHintType, any>([
-      [DecodeHintType.POSSIBLE_FORMATS, [
+  // Native BarcodeDetector instance (when available)
+  let detector: any = null;
+  let detectorReady = false;
+
+  // zxing fallback instances
+  let zxingReader: any = null;
+  let zxingControls: any = null;
+
+  // ── Native BarcodeDetector ────────────────────────────────────────
+  const BARCODE_FORMATS = [
+    'ean_13', 'ean_8', 'upc_a', 'upc_e',
+    'code_128', 'code_39', 'qr_code',
+  ];
+
+  async function initNativeDetector(): Promise<boolean> {
+    if (typeof (window as any).BarcodeDetector === 'undefined') return false;
+    try {
+      const supported = await (window as any).BarcodeDetector.getSupportedFormats();
+      const formats = BARCODE_FORMATS.filter((f) => supported.includes(f));
+      if (formats.length === 0) return false;
+      detector = new (window as any).BarcodeDetector({ formats });
+      detectorReady = true;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── zxing fallback ────────────────────────────────────────────────
+  async function initZxing(): Promise<boolean> {
+    try {
+      const { BrowserMultiFormatReader } = await import('@zxing/browser');
+      const { BarcodeFormat, DecodeHintType } = await import('@zxing/library');
+
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
         BarcodeFormat.EAN_13,
         BarcodeFormat.EAN_8,
         BarcodeFormat.UPC_A,
         BarcodeFormat.UPC_E,
         BarcodeFormat.CODE_128,
         BarcodeFormat.QR_CODE,
-      ]],
-    ]),
-  );
+      ]);
+      zxingReader = new BrowserMultiFormatReader(hints);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
-  async function start() {
+  // ── Camera stream ─────────────────────────────────────────────────
+  async function startCamera(): Promise<boolean> {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
       error = 'Camera not available in this browser';
       starting = false;
-      return;
+      return false;
     }
-    starting = true;
-    error = null;
+
     try {
-      // Optimized constraints for barcode scanning:
-      // - environment-facing camera (the one on the back of the phone)
-      // - 720p (high enough to read barcodes, low enough to not
-      //   overwhelm the decoder)
-      // - continuous auto-focus so the camera keeps adjusting as
-      //   the user moves the phone
-      const constraints: MediaStreamConstraints = {
+      stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
           width:  { ideal: 1280 },
           height: { ideal: 720 },
         },
         audio: false,
-      };
+      });
 
-      // decodeFromConstraints is the simplest zxing API: it asks
-      // for the camera, attaches it to the video element, and
-      // starts decoding.  We skip the explicit enumerateDevices
-      // step — letting the browser pick the environment camera
-      // works on Chrome/Safari/Firefox without a deviceId round-trip.
-      controls = await reader.decodeFromConstraints(
-        constraints,
-        videoEl!,
-        (result, _err, _controls) => {
-          // Throttle: skip frames that arrive too quickly.  The
-          // decoder fires its callback for every frame that
-          // decodes successfully (up to 30Hz on a steady hold).
-          // 150ms is fast enough to feel instant and slow enough
-          // to cut CPU by ~5x compared to unthrottled.
-          const now = Date.now();
-          if (now - lastScanTime < scanInterval) return;
-          lastScanTime = now;
+      if (!videoEl) {
+        error = 'Video element not found';
+        starting = false;
+        return false;
+      }
 
-          if (result) {
-            const code = result.getText().trim();
-            if (!code || code === lastCode) return;
-            lastCode = code;
-            // If the browser reports torch capability on the
-            // current video track, enable the torch button.
-            const stream = videoEl?.srcObject as MediaStream | null;
-            const track = stream?.getVideoTracks?.()[0];
-            if (track) {
-              const caps = (track.getCapabilities?.() ?? {}) as any;
-              torchSupported = !!('torch' in caps);
-            }
-            stop();
-            onResult(code);
-            onClose();
-          }
-          // _err is "NotFoundException" on every frame that doesn't
-          // decode — expected, not an error worth showing.
-        },
-      );
-      starting = false;
+      videoEl.srcObject = stream;
+      await videoEl.play();
+
+      // Check torch capability
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        const caps = (track.getCapabilities?.() ?? {}) as any;
+        torchSupported = !!('torch' in caps);
+      }
+
+      return true;
     } catch (e: any) {
-      // NotAllowedError = user denied permission
-      // NotFoundError = no camera on the device
-      // NotReadableError = camera in use by another app
       const name = e?.name ?? '';
       if (name === 'NotAllowedError') {
         error = 'Camera access denied — type the barcode below';
@@ -147,56 +133,139 @@
         error = e?.message ?? 'Could not start camera';
       }
       starting = false;
+      return false;
     }
+  }
+
+  // ── Scan loop ─────────────────────────────────────────────────────
+  let scanFrameId: number | null = null;
+
+  function scanLoop() {
+    if (!open || (!detectorReady && !zxingReader)) return;
+
+    const now = Date.now();
+    if (now - lastScanTime < SCAN_INTERVAL) {
+      scanFrameId = requestAnimationFrame(scanLoop);
+      return;
+    }
+    lastScanTime = now;
+
+    if (detectorReady && videoEl) {
+      // Native BarcodeDetector — hardware accelerated
+      detector.detect(videoEl).then((barcodes: any[]) => {
+        if (barcodes.length > 0) {
+          const code = barcodes[0].rawValue?.trim();
+          if (code && code !== lastCode) {
+            lastCode = code;
+            handleResult(code);
+            return;
+          }
+        }
+        scanFrameId = requestAnimationFrame(scanLoop);
+      }).catch(() => {
+        scanFrameId = requestAnimationFrame(scanLoop);
+      });
+    } else {
+      scanFrameId = requestAnimationFrame(scanLoop);
+    }
+  }
+
+  // zxing callback-based decoding (only used as fallback)
+  function startZxingDecode() {
+    if (!zxingReader || !videoEl) return;
+
+    zxingControls = zxingReader.decodeFromVideoElement(
+      videoEl,
+      (result: any, _err: any) => {
+        const now = Date.now();
+        if (now - lastScanTime < SCAN_INTERVAL) return;
+        lastScanTime = now;
+
+        if (result) {
+          const code = result.getText().trim();
+          if (code && code !== lastCode) {
+            lastCode = code;
+            handleResult(code);
+          }
+        }
+      },
+    );
+  }
+
+  function handleResult(code: string) {
+    stop();
+    onResult(code);
+    onClose();
+  }
+
+  // ── Start / Stop ──────────────────────────────────────────────────
+  async function start() {
+    starting = true;
+    error = null;
+
+    const cameraReady = await startCamera();
+    if (!cameraReady) return;
+
+    // Try native BarcodeDetector first (10-100x faster)
+    if (await initNativeDetector()) {
+      starting = false;
+      scanFrameId = requestAnimationFrame(scanLoop);
+      return;
+    }
+
+    // Fall back to zxing
+    if (await initZxing()) {
+      starting = false;
+      startZxingDecode();
+      return;
+    }
+
+    error = 'No barcode decoder available';
+    starting = false;
   }
 
   function stop() {
-    if (controls) {
-      try { controls.stop(); } catch {}
-      controls = null;
+    if (scanFrameId != null) {
+      cancelAnimationFrame(scanFrameId);
+      scanFrameId = null;
     }
-    // Releasing the track explicitly is belt-and-braces — zxing
-    // usually does this, but we want to be sure the camera LED
-    // turns off when the user closes the modal.
-    if (videoEl?.srcObject) {
-      const stream = videoEl.srcObject as MediaStream;
+    if (zxingControls) {
+      try { zxingControls.stop(); } catch {}
+      zxingControls = null;
+    }
+    if (stream) {
       stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+    }
+    if (videoEl) {
       videoEl.srcObject = null;
     }
+    detector = null;
+    detectorReady = false;
+    zxingReader = null;
   }
 
-  // React to the `open` prop.  When it flips to true we start the
-  // camera; when it flips to false we stop it.  Cleanup is in the
-  // function returned from the effect.
   $effect(() => {
     if (open) {
-      // Wait for the DOM to render the <video> element before asking
-      // the reader to attach to it.
       queueMicrotask(() => {
-        if (open && videoEl && !controls) start();
+        if (open && videoEl) start();
       });
     } else {
       stop();
     }
   });
 
-  onMount(() => {
-    // If the modal is already open on mount (shouldn't happen in
-    // practice but defend against it), kick off the start.
-    if (open && videoEl) start();
-  });
-
   onDestroy(stop);
 
   async function toggleTorch() {
-    if (!controls?.switchTorch) return;
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
     const next = !torchOn;
     try {
-      await controls.switchTorch(next);
+      await track.applyConstraints({ advanced: [{ torch: next } as any] });
       torchOn = next;
     } catch {
-      // Some browsers reject torch toggles with a constraint error
-      // even when the capability is reported.  Just hide the toggle.
       torchSupported = false;
     }
   }
@@ -213,9 +282,6 @@
 
 <Sheet bind:open title="Scan barcode" maxWidth="max-w-md">
   <div class="relative aspect-[4/3] bg-[var(--inset)] rounded-[var(--radius-md)] overflow-hidden border border-[var(--border)]">
-    <!-- The video stream.  `playsinline` is required on iOS so the
-         video plays inline rather than going fullscreen.  `muted` is
-         required for autoplay to work without a user gesture. -->
     <video
       bind:this={videoEl}
       class="w-full h-full object-cover"
@@ -224,12 +290,7 @@
       autoplay
     ></video>
 
-    <!-- Scan window: 80% wide, 30% tall, centered.  The `box-shadow`
-         trick is the standard CSS pattern for a dim-everything-else
-         overlay: a 9999px inset shadow is huge but contained by the
-         rounded clip-path...  actually by the parent's
-         `overflow: hidden`.  The visible result is a dim overlay
-         with a clear scan window. -->
+    <!-- Scan window overlay -->
     <div
       class="absolute inset-0 flex items-center justify-center pointer-events-none"
       aria-hidden="true"
@@ -238,8 +299,6 @@
         class="w-[78%] h-[34%] border-2 border-[var(--primary)] rounded-md relative"
         style="box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);"
       >
-        <!-- Corner brackets for a more scanner-y feel.  Inset from
-             the border by 2px on each side so they sit just inside. -->
         <span class="absolute -top-px -left-px w-3 h-3 border-t-2 border-l-2 border-[var(--primary)] rounded-tl-sm"></span>
         <span class="absolute -top-px -right-px w-3 h-3 border-t-2 border-r-2 border-[var(--primary)] rounded-tr-sm"></span>
         <span class="absolute -bottom-px -left-px w-3 h-3 border-b-2 border-l-2 border-[var(--primary)] rounded-bl-sm"></span>
@@ -247,8 +306,6 @@
       </div>
     </div>
 
-    <!-- Top hint banner — only shows while scanning, hides when error
-         or manual input is showing. -->
     {#if !error}
       <div class="absolute top-3 left-0 right-0 flex justify-center pointer-events-none">
         <div class="bg-[var(--surface)]/90 text-[var(--text-2)] text-[11px] font-semibold px-2.5 py-1 rounded-full border border-[var(--border)] flex items-center gap-1.5">
@@ -280,9 +337,6 @@
     {/if}
   </div>
 
-  <!-- Manual input fallback — always visible at the bottom of the
-       modal so it's available even when the camera works (a faster
-       way to enter a known code on a desktop). -->
   <form onsubmit={submitManual} class="mt-3 flex gap-2">
     <input
       type="text"

@@ -144,6 +144,10 @@ class InventoryStore {
     return this.#items.find((p) => p.id === id);
   }
 
+  getByBarcode(barcode: string) {
+    return this.#items.find((p) => p.barcode === barcode);
+  }
+
   // ── Optimistic mutations ────────────────────────────────────────────
   /**
    * Add a new product. Caller passes the temp product with a

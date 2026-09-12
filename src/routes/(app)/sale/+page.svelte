@@ -584,6 +584,22 @@ import { register as regStore } from "$lib/stores/register.svelte";
    */
   async function onScanResult(code: string) {
     scanOpen = false;
+    // Fast path: check local inventory store first (instant, no
+    // network).  The layout seeds the store on every page load, so
+    // all in-stock products are already in memory.
+    const local = invStore.getByBarcode(code);
+    if (local) {
+      if ((local as any).qty <= 0) {
+        toasts.error(`${local.name} is out of stock`);
+        return;
+      }
+      cart.add(local);
+      toasts.success(`Added ${local.name}`);
+      return;
+    }
+    // Slow path: product not in local store — fetch from server.
+    // This happens when the barcode belongs to a product added on
+    // another device that hasn't synced yet.
     try {
       const res = await fetch(`/api/products/by-barcode/${encodeURIComponent(code)}`);
       if (res.ok) {
@@ -591,9 +607,6 @@ import { register as regStore } from "$lib/stores/register.svelte";
         cart.add(p);
         toasts.success(`Added ${p.name}`);
       } else if (res.status === 404) {
-        // The user can still add the product to inventory from the
-        // toast's undo affordance (added in a follow-up if useful) or
-        // by navigating to /inventory manually.
         toasts.error(`No product found for ${code}`);
       } else {
         toasts.error('Lookup failed');
