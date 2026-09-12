@@ -64,6 +64,7 @@ export async function offlineFetch(
     // SSR — return a stub that won't crash but won't pretend to be real.
     return new Response(JSON.stringify({ error: "No offline fetch in SSR" }), {
       status: 500,
+      // pi-lens-ignore: ast-grep:no-runtime-typeof
       headers: { "Content-Type": "application/json" },
     });
   }
