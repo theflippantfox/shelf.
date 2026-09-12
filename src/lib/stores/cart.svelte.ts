@@ -10,6 +10,11 @@ export interface CartItem {
 export type PaymentMethod = "cash" | "credit" | "transfer";
 export type DiscountType = "amount" | "percent";
 
+export interface PaymentSplit {
+  method: PaymentMethod;
+  amount: number;
+}
+
 class CartStore {
   #items = $state<CartItem[]>([]);
   #customerId = $state<string | null>(null);
@@ -17,6 +22,7 @@ class CartStore {
   #discountType = $state<DiscountType>("amount");
   #discountValue = $state(0); // major units (rupees) for 'amount', 0–100 for 'percent'
   #paymentMethod = $state<PaymentMethod>("cash");
+  #paymentSplits = $state<PaymentSplit[]>([]);
   #notes = $state("");
   // Optional override for the sale's created_at timestamp. ISO string or null.
   // When null, the server uses now(). When set, the server writes this exact
@@ -41,6 +47,20 @@ class CartStore {
   }
   get paymentMethod() {
     return this.#paymentMethod;
+  }
+  get paymentSplits() {
+    return this.#paymentSplits;
+  }
+  /** Sum of all split amounts. */
+  get splitsTotal() {
+    return this.#paymentSplits.reduce((s, sp) => s + sp.amount, 0);
+  }
+  /** True when splits are active and sum to the grand total. */
+  get hasValidSplits() {
+    return (
+      this.#paymentSplits.length > 0 &&
+      Math.abs(this.splitsTotal - this.total) < 0.01
+    );
   }
   get notes() {
     return this.#notes;
@@ -117,6 +137,24 @@ class CartStore {
     this.#paymentMethod = method;
   }
 
+  addSplit(method: PaymentMethod, amount: number) {
+    this.#paymentSplits = [...this.#paymentSplits, { method, amount }];
+  }
+
+  updateSplit(index: number, amount: number) {
+    this.#paymentSplits = this.#paymentSplits.map((sp, i) =>
+      i === index ? { ...sp, amount } : sp,
+    );
+  }
+
+  removeSplit(index: number) {
+    this.#paymentSplits = this.#paymentSplits.filter((_, i) => i !== index);
+  }
+
+  clearSplits() {
+    this.#paymentSplits = [];
+  }
+
   setNotes(notes: string) {
     this.#notes = notes;
   }
@@ -146,6 +184,7 @@ class CartStore {
     this.#discountType = "amount";
     this.#discountValue = 0;
     this.#paymentMethod = "cash";
+    this.#paymentSplits = [];
     this.#notes = "";
     this.#createdAt = null;
   }
@@ -173,6 +212,7 @@ class CartStore {
     // discount_value: in major units for 'amount', in 0–100 for 'percent'.
     this.#discountValue = sale.discount_value;
     this.#paymentMethod = sale.payment_method as PaymentMethod;
+    this.#paymentSplits = (sale as any).payment_splits ?? [];
     this.#notes = sale.notes ?? "";
     // Pre-populate the timestamp override with the sale's existing created_at
     // so the user can see/edit it from the checkout sheet.
@@ -220,6 +260,7 @@ class CartStore {
       discountType: this.#discountType,
       discountValue: this.#discountValue,
       paymentMethod: this.#paymentMethod,
+      paymentSplits: this.#paymentSplits.map((sp) => ({ ...sp })),
       notes: this.#notes,
     };
     this.#persist([snapshot, ...this.#heldCarts()]);
@@ -241,6 +282,8 @@ class CartStore {
     this.#discountType = found.discountType;
     this.#discountValue = found.discountValue;
     this.#paymentMethod = found.paymentMethod;
+    this.#paymentSplits =
+      (found as any).paymentSplits?.map((sp: any) => ({ ...sp })) ?? [];
     this.#notes = found.notes;
     this.#createdAt = null;
     this.#persist(all.filter((c) => c.id !== id));
@@ -312,6 +355,7 @@ export interface HeldCart {
   discountType: DiscountType;
   discountValue: number;
   paymentMethod: PaymentMethod;
+  paymentSplits: PaymentSplit[];
   notes: string;
 }
 

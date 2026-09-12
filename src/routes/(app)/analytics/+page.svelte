@@ -12,8 +12,7 @@
     Calendar, Package, Banknote, ArrowUp, ArrowDown,
     Minus, Trophy, Activity,
   } from "lucide-svelte";
-  import { browser } from "$app/environment";
-  // @ts-expect-error — stale Svelte LSP cache; exports exist at offlineFetch.ts:283,301,321
+import { browser } from "$app/environment";
 import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from "$lib/offline/offlineFetch";
 
   let { data } = $props();
