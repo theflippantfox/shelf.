@@ -11,12 +11,18 @@
   import Sheet      from '$lib/components/ui/Sheet.svelte';
   import Input      from '$lib/components/ui/Input.svelte';
   import { formatDateTime } from '$lib/utils/format';
+  import dayjs from 'dayjs';
+  import utc from 'dayjs/plugin/utc';
+  import timezone from 'dayjs/plugin/timezone';
+  dayjs.extend(utc);
+  dayjs.extend(timezone);
   import {
     Plus, TrendingUp, TrendingDown, ArrowLeftRight, Ban,
     ShoppingCart, Wallet, Building2, Box, Clock,
   } from 'lucide-svelte';
 
   let { data } = $props();
+  const shopTz = (data as any).shopTz ?? 'UTC';
 
   // Seed the register store from the server data. After that, all
   // reads (balance, grouped history, outstanding credit) come from
@@ -335,25 +341,26 @@
     if (!p) return '';
     return `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
   }
+  function shopNow() { return dayjs().tz(shopTz); }
+  function shopDateStr(d: dayjs.Dayjs) { return d.format('YYYY-MM-DD'); }
+  function entryDate(e: any) { return (e.effective_at ?? e.created_at).slice(0, 10); }
+
   function dayLabel(iso: string) {
-    const d = new Date(iso);
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const yesterdayIso = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-    if (iso === todayIso) return 'Today';
-    if (iso === yesterdayIso) return 'Yesterday';
-    return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+    const d = dayjs(iso).tz(shopTz);
+    const today = shopDateStr(shopNow());
+    const yesterday = shopDateStr(shopNow().subtract(1, 'day'));
+    if (iso === today) return 'Today';
+    if (iso === yesterday) return 'Yesterday';
+    return d.format('ddd, D MMM');
   }
   function relativeDay(iso: string) {
-    // Lightweight "2h ago" / "Mon" for mobile
-    const d = new Date(iso);
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const yesterdayIso = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-    const dIso = d.toISOString().slice(0, 10);
-    if (dIso === todayIso) {
-      return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
-    }
-    if (dIso === yesterdayIso) return 'Yesterday';
-    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    const d = dayjs(iso).tz(shopTz);
+    const today = shopDateStr(shopNow());
+    const yesterday = shopDateStr(shopNow().subtract(1, 'day'));
+    const dStr = shopDateStr(d);
+    if (dStr === today) return d.format('h:mm A');
+    if (dStr === yesterday) return 'Yesterday';
+    return d.format('D MMM');
   }
 
   // Group entries by day (newest first within each day)
@@ -368,16 +375,16 @@
   });
 
   // Daily totals for the headline row
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const sevenDaysAgoIso = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const todayIso = shopDateStr(shopNow());
+  const sevenDaysAgoIso = shopDateStr(shopNow().subtract(7, 'day'));
   const todayTotal = $derived(
     (regStore.all as any[])
-      .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) === todayIso)
+      .filter((e) => entryDate(e) === todayIso)
       .reduce((s, e) => s + (e.amount ?? 0), 0),
   );
   const weekTotal = $derived(
     (regStore.all as any[])
-      .filter((e) => (e.effective_at ?? e.created_at).slice(0, 10) >= sevenDaysAgoIso)
+      .filter((e) => entryDate(e) >= sevenDaysAgoIso)
       .reduce((s, e) => s + (e.amount ?? 0), 0),
   );
   // Balance is derived from the entries. Same numbers as the server's

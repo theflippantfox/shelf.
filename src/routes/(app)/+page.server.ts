@@ -1,5 +1,10 @@
 import { userClientFromCtx } from "$lib/server/supabase";
 import type { RequestEvent } from "@sveltejs/kit";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /**
  * Home/dashboard page — today's revenue, profit, top products, stock alerts.
@@ -9,11 +14,11 @@ import type { RequestEvent } from "@sveltejs/kit";
 export async function load({ cookies, locals }: RequestEvent) {
   const shopId = locals.currentShop!.id;
   const supabase = userClientFromCtx({ cookies } as any); // RLS-correct (shop-scoped)
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yStart = new Date(todayStart);
-  yStart.setDate(yStart.getDate() - 1);
-  const yEnd = todayStart;
+  const shopTz = (locals.currentShop as any)?.timezone ?? "UTC";
+  const now = dayjs().tz(shopTz);
+  const todayStart = now.startOf("day").toDate();
+  const yStart = now.subtract(1, "day").startOf("day").toDate();
+  const yEnd = now.startOf("day").toDate();
 
   const [
     { data: todaySales = [] },
@@ -196,7 +201,7 @@ export async function load({ cookies, locals }: RequestEvent) {
   // the inventory store; they update instantly when products are
   // added or their qty changes)
 
-  const hour = now.getHours();
+  const hour = now.hour();
   const greeting =
     hour < 5
       ? "Working late"

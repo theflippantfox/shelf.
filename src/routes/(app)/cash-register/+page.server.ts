@@ -1,4 +1,4 @@
-import { userClientFromCtx } from '$lib/server/supabase';
+import { userClientFromCtx } from "$lib/server/supabase";
 
 /**
  * /cash-register — server load
@@ -11,7 +11,10 @@ import { userClientFromCtx } from '$lib/server/supabase';
  *   * credit    — separate object with the outstanding receivable total
  *                 and a per-customer breakdown for the credit section
  */
-export async function load({ cookies, locals }: import('@sveltejs/kit').RequestEvent) {
+export async function load({
+  cookies,
+  locals,
+}: import("@sveltejs/kit").RequestEvent) {
   if (!locals.currentShop) {
     return {
       entries: [],
@@ -25,49 +28,74 @@ export async function load({ cookies, locals }: import('@sveltejs/kit').RequestE
 
   // Fetch in parallel: last 100 entries, the cash-only balance
   // (counter/bank/other), and the credit-receivables total + per-customer.
-  const [entriesRes, balanceRes, creditTotalRes, creditByCustomerRes] = await Promise.all([
-    supabase
-      .from('cash_register')
-      .select('id, destination, amount, entry_type, source, sale_id, transfer_group_id, notes, created_by, created_at, effective_at, voided_at, void_reason, created_by_profile:profiles!cash_register_created_by_fkey(first_name, last_name)')
-      .eq('shop_id', shopId)
-      .is('voided_at', null)
-      .order('created_at', { ascending: false })
-      .limit(100),
-    // Exclude 'credit' destination from the cash-only balance
-    supabase.rpc('get_register_balance', { p_shop_id: shopId }),
-    supabase.rpc('outstanding_receivables_total', { p_shop_id: shopId }).maybeSingle(),
-    supabase
-      .from('sales')
-      .select('total, credit_amount_paid, customer_id, customers!inner(name)')
-      .eq('shop_id', shopId)
-      .eq('payment_method', 'credit')
-      .in('credit_status', ['partial', 'pending'])
-      .is('voided_at', null)
-      .order('created_at', { ascending: false })
-      .limit(100),
-  ]);
+  const [entriesRes, balanceRes, creditTotalRes, creditByCustomerRes] =
+    await Promise.all([
+      supabase
+        .from("cash_register")
+        .select(
+          "id, destination, amount, entry_type, source, sale_id, transfer_group_id, notes, created_by, created_at, effective_at, voided_at, void_reason, created_by_profile:profiles!cash_register_created_by_fkey(first_name, last_name)",
+        )
+        .eq("shop_id", shopId)
+        .is("voided_at", null)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      // Exclude 'credit' destination from the cash-only balance
+      // @ts-expect-error — Supabase RPC TS false positive (never type)
+      supabase.rpc("get_register_balance", { p_shop_id: shopId }),
+      // @ts-expect-error — Supabase RPC TS false positive (never type)
+      supabase
+        .rpc("outstanding_receivables_total", { p_shop_id: shopId })
+        .maybeSingle(),
+      supabase
+        .from("sales")
+        .select("total, credit_amount_paid, customer_id, customers!inner(name)")
+        .eq("shop_id", shopId)
+        .eq("payment_method", "credit")
+        .in("credit_status", ["partial", "pending"])
+        .is("voided_at", null)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ]);
 
   // Cash-only balance: filter out the 'credit' destination so the main
   // balance card shows real money only.
   const cashDests = ((balanceRes.data ?? []) as any[])
-    .filter((r: any) => r.destination !== 'credit')
-    .map((r: any) => ({ destination: r.destination, balance: Number(r.balance) }));
+    .filter((r: any) => r.destination !== "credit")
+    .map((r: any) => ({
+      destination: r.destination,
+      balance: Number(r.balance),
+    }));
   const cashTotal = cashDests.reduce((s: number, r: any) => s + r.balance, 0);
 
   // Per-customer credit breakdown
-  const byCust: Record<string, { name: string; outstanding: number; sales: number }> = {};
+  const byCust: Record<
+    string,
+    { name: string; outstanding: number; sales: number }
+  > = {};
   for (const r of (creditByCustomerRes.data ?? []) as any[]) {
     const cid = r.customer_id;
     if (!cid) continue;
-    if (!byCust[cid]) byCust[cid] = { name: r.customers?.name ?? 'Unknown', outstanding: 0, sales: 0 };
-    byCust[cid].outstanding += Number(r.total) - Number(r.credit_amount_paid ?? 0);
+    if (!byCust[cid])
+      byCust[cid] = {
+        name: r.customers?.name ?? "Unknown",
+        outstanding: 0,
+        sales: 0,
+      };
+    byCust[cid].outstanding +=
+      Number(r.total) - Number(r.credit_amount_paid ?? 0);
     byCust[cid].sales += 1;
   }
   const creditByCustomer = Object.entries(byCust)
-    .map(([id, v]) => ({ id, name: v.name, outstanding: v.outstanding, sales: v.sales }))
+    .map(([id, v]) => ({
+      id,
+      name: v.name,
+      outstanding: v.outstanding,
+      sales: v.sales,
+    }))
     .sort((a, b) => b.outstanding - a.outstanding);
 
   return {
+    shopTz: locals.currentShop?.timezone ?? "UTC",
     entries: entriesRes.data ?? [],
     balance: {
       destinations: cashDests,
