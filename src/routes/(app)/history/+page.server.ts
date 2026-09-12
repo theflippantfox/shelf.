@@ -1,4 +1,9 @@
 import { userClient, userClientFromCtx } from '$lib/server/supabase';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const PAGE_SIZE = 25;
 
@@ -21,6 +26,7 @@ const PAGE_SIZE = 25;
 export async function load({ cookies,  locals, url  }: import('@sveltejs/kit').RequestEvent) {
   const shopId = locals.currentShop!.id;
   const supabase = userClientFromCtx({ cookies } as any);
+  const shopTz = (locals.currentShop as any)?.timezone ?? 'UTC';
 
   const page      = Math.max(1, parseInt(url.searchParams.get('page') ?? '1'));
   const q         = (url.searchParams.get('q') ?? '').trim();
@@ -30,13 +36,13 @@ export async function load({ cookies,  locals, url  }: import('@sveltejs/kit').R
   const range     = (url.searchParams.get('range') ?? 'all').trim();
   const limit     = PAGE_SIZE;
 
-  // Date range
-  const now    = new Date();
-  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Date range — use shop timezone for day boundaries
+  const now    = dayjs().tz(shopTz);
+  const today0 = now.startOf('day').toDate();
   let from: Date | null = null;
   if (range === 'today') from = today0;
-  else if (range === '7d')  from = new Date(today0.getTime() - 6  * 86_400_000);
-  else if (range === '30d') from = new Date(today0.getTime() - 29 * 86_400_000);
+  else if (range === '7d')  from = now.subtract(6, 'day').startOf('day').toDate();
+  else if (range === '30d') from = now.subtract(29, 'day').startOf('day').toDate();
 
   // Build the sales query — now includes credit fields + customer balance
   // so the UI can show "paid ₹X of ₹Y" right in the row.

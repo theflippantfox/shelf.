@@ -4,18 +4,21 @@
  */
 import { json } from '@sveltejs/kit';
 import { userClient, userClientFromCtx } from '$lib/server/supabase';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 export async function GET({ cookies, locals, url  }: import('@sveltejs/kit').RequestEvent) {
   if (!locals.currentShop) return json({ error: 'No shop' }, { status: 401 });
   const shopId = locals.currentShop.id;
 
   const period = url.searchParams.get('period') ?? '30d';
-  const now = new Date();
-  const startDate = new Date();
-  if      (period === '7d')  startDate.setDate(now.getDate() - 7);
-  else if (period === '90d') startDate.setDate(now.getDate() - 90);
-  else                       startDate.setDate(now.getDate() - 30);
-  const startDateIso = startDate.toISOString();
+  const shopTz = (locals.currentShop as any)?.timezone ?? 'UTC';
+  const now = dayjs().tz(shopTz);
+  const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+  const startDateIso = now.subtract(days, 'day').startOf('day').toISOString();
 
   const supabase = userClientFromCtx({ cookies } as any);
 

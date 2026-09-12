@@ -1,5 +1,10 @@
 import { json, error } from '@sveltejs/kit';
 import { userClientFromCtx } from '$lib/server/supabase';
+import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 /**
  * GET /api/expenses — list non-PO expenses for the current shop.
@@ -23,11 +28,11 @@ export async function GET({ cookies, locals, url }: import('@sveltejs/kit').Requ
   const supabase = userClientFromCtx({ cookies } as any);
   const shopId   = locals.currentShop.id;
 
-  // Default window: last 30 days
-  const today    = new Date();
-  const defFrom  = new Date(today.getTime() - 30 * 86_400_000);
-  const from     = url.searchParams.get('from') ?? defFrom.toISOString().slice(0, 10);
-  const to       = url.searchParams.get('to')   ?? today.toISOString().slice(0, 10);
+  // Default window: last 30 days — use shop timezone
+  const shopTz = (locals.currentShop as any)?.timezone ?? 'UTC';
+  const now    = dayjs().tz(shopTz);
+  const from   = url.searchParams.get('from') ?? now.subtract(30, 'day').format('YYYY-MM-DD');
+  const to     = url.searchParams.get('to')   ?? now.format('YYYY-MM-DD');
 
   // Source = 'manual' (hand-typed entries) or 'refund' (refunds).
   // Both are "money going in or out" — for the expense summary we
