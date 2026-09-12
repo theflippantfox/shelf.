@@ -26,7 +26,7 @@ import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from 
   async function loadAnalytics(search: string) {
     const cacheKey = buildAnalyticsCacheKey(search);
 
-    // 1. Try IDB cache first — instant if available
+    // 1. Try IDB cache first — instant if available, don't block
     try {
       const cached = await readAnalyticsCache(cacheKey);
       if (cached?.analytics) {
@@ -34,17 +34,16 @@ import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from 
       }
     } catch {}
 
-    // 2. Always fetch fresh from API — update when ready
-    try {
-      const res = await fetch(`/api/analytics${search}`);
-      if (res.ok) {
-        const json = await res.json();
+    // 2. Fetch fresh from API — update when ready (non-blocking)
+    fetch(`/api/analytics${search}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
         if (json?.analytics) {
           analytics = json.analytics;
           writeAnalyticsCache(cacheKey, json);
         }
-      }
-    } catch {}
+      })
+      .catch(() => {});
   }
 
   // Load on mount
