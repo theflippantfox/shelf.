@@ -16,6 +16,8 @@ import { browser } from "$app/environment";
 import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from "$lib/offline/offlineFetch";
 
   let { data } = $props();
+  // Access page store for reactive URL changes (period tabs)
+  import { page } from "$app/state";
 
   /* ── cache-first analytics ──────────────────────────────────────────────── */
   // On mount, read cached analytics from IndexedDB so the page renders
@@ -23,29 +25,41 @@ import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from 
   // from the server (or API), it replaces the cached snapshot.
   let cachedAnalytics = $state<any>(null);
   let freshAnalytics = $state<any>(null);
-  let cacheKey = $state('');
+  let loading = $state(true);
 
   // The analytics object used by the template: prefer fresh > server > cached
   // Cached data is only used when server data is unavailable (offline).
   const analytics = $derived(freshAnalytics ?? (data as any)?.analytics ?? cachedAnalytics);
 
   if (browser) {
-    // Build cache key from current URL on mount
-    cacheKey = buildAnalyticsCacheKey(window.location.search);
-    readAnalyticsCache(cacheKey).then((cached: any) => {
-      if (cached) cachedAnalytics = cached.analytics;
-    });
+    // Reactive: re-fetch when URL search params change (period tab clicks)
+    $effect(() => {
+      const search = page.url.search;
+      const cacheKey = buildAnalyticsCacheKey(search);
+      loading = true;
 
-    // Fetch fresh data from API in background and update cache
-    fetch(`/api/analytics${window.location.search}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((json) => {
-        if (json?.analytics) {
-          freshAnalytics = json.analytics;
-          writeAnalyticsCache(cacheKey, json);
+      // 1. Read from IDB cache instantly
+      readAnalyticsCache(cacheKey).then((cached: any) => {
+        if (cached) {
+          cachedAnalytics = cached.analytics;
+          loading = false;
         }
-      })
-      .catch(() => { /* offline — cached data is fine */ });
+      });
+
+      // 2. Fetch fresh data from API in background
+      fetch(`/api/analytics${search}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (json?.analytics) {
+            freshAnalytics = json.analytics;
+            loading = false;
+            writeAnalyticsCache(cacheKey, json);
+          }
+        })
+        .catch(() => {
+          loading = false;
+        });
+    });
   }
 
   const presets = [
