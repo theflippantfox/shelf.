@@ -16,34 +16,51 @@ import { browser } from "$app/environment";
 import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from "$lib/offline/offlineFetch";
 
   let { data: _data } = $props();
-  import { page } from "$app/state";
+  import { page as _page } from "$app/state";
+  import { onMount } from "svelte";
 
   /* ── cache-first analytics ──────────────────────────────────────────────── */
   let analytics = $state<any>(null);
+  let currentSearch = $state("");
 
-  if (browser) {
-    $effect(() => {
-      const search = page.url.search;
-      const cacheKey = buildAnalyticsCacheKey(search);
+  async function loadAnalytics(search: string) {
+    const cacheKey = buildAnalyticsCacheKey(search);
 
-      // 1. Read from IDB cache instantly — show immediately
-      readAnalyticsCache(cacheKey).then((cached: any) => {
-        if (cached?.analytics) {
-          analytics = cached.analytics;
+    // 1. Try IDB cache first — instant if available
+    try {
+      const cached = await readAnalyticsCache(cacheKey);
+      if (cached?.analytics) {
+        analytics = cached.analytics;
+      }
+    } catch {}
+
+    // 2. Always fetch fresh from API — update when ready
+    try {
+      const res = await fetch(`/api/analytics${search}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.analytics) {
+          analytics = json.analytics;
+          writeAnalyticsCache(cacheKey, json);
         }
-      });
+      }
+    } catch {}
+  }
 
-      // 2. Fetch fresh data from API in background — update when ready
-      fetch(`/api/analytics${search}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((json) => {
-          if (json?.analytics) {
-            analytics = json.analytics;
-            writeAnalyticsCache(cacheKey, json);
-          }
-        })
-        .catch(() => {});
+  // Load on mount
+  if (browser) {
+    onMount(() => {
+      currentSearch = window.location.search;
+      loadAnalytics(currentSearch);
     });
+  }
+
+  // Handle period tab clicks —直接 call loadAnalytics, no effect
+  function changePeriod(preset: string) {
+    const search = `?period=${preset}`;
+    currentSearch = search;
+    goto(search, { replaceState: true, invalidateAll: false });
+    if (browser) loadAnalytics(search);
   }
 
   const presets = [
@@ -171,7 +188,7 @@ import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from 
           class="btn btn-sm whitespace-nowrap transition-all {active
             ? 'btn-primary'
             : 'btn-secondary'}"
-          onclick={() => goto(`?period=${p.value}`, { invalidateAll: true, replaceState: true })}
+          onclick={() => changePeriod(p.value)}
         >
           {p.label}
         </button>
