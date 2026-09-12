@@ -15,50 +15,34 @@
 import { browser } from "$app/environment";
 import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from "$lib/offline/offlineFetch";
 
-  let { data } = $props();
-  // Access page store for reactive URL changes (period tabs)
+  let { data: _data } = $props();
   import { page } from "$app/state";
 
   /* ── cache-first analytics ──────────────────────────────────────────────── */
-  // On mount, read cached analytics from IndexedDB so the page renders
-  // instantly even before the server responds. When fresh data arrives
-  // from the server (or API), it replaces the cached snapshot.
-  let cachedAnalytics = $state<any>(null);
-  let freshAnalytics = $state<any>(null);
-  let loading = $state(true);
-
-  // The analytics object used by the template: prefer fresh > server > cached
-  // Cached data is only used when server data is unavailable (offline).
-  const analytics = $derived(freshAnalytics ?? (data as any)?.analytics ?? cachedAnalytics);
+  let analytics = $state<any>(null);
 
   if (browser) {
-    // Reactive: re-fetch when URL search params change (period tab clicks)
     $effect(() => {
       const search = page.url.search;
       const cacheKey = buildAnalyticsCacheKey(search);
-      loading = true;
 
-      // 1. Read from IDB cache instantly
+      // 1. Read from IDB cache instantly — show immediately
       readAnalyticsCache(cacheKey).then((cached: any) => {
-        if (cached) {
-          cachedAnalytics = cached.analytics;
-          loading = false;
+        if (cached?.analytics) {
+          analytics = cached.analytics;
         }
       });
 
-      // 2. Fetch fresh data from API in background
+      // 2. Fetch fresh data from API in background — update when ready
       fetch(`/api/analytics${search}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((json) => {
           if (json?.analytics) {
-            freshAnalytics = json.analytics;
-            loading = false;
+            analytics = json.analytics;
             writeAnalyticsCache(cacheKey, json);
           }
         })
-        .catch(() => {
-          loading = false;
-        });
+        .catch(() => {});
     });
   }
 

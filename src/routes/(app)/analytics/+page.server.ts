@@ -3,7 +3,13 @@
  * All heavy analytics data is fetched client-side with IDB caching.
  */
 
-export function load({ locals, setHeaders }: { locals: any; setHeaders: (h: Record<string, string>) => void }) {
+export function load({
+  locals,
+  setHeaders,
+}: {
+  locals: any;
+  setHeaders: (h: Record<string, string>) => void;
+}) {
   setHeaders?.({ "cache-control": "private, max-age=60" });
 
   const shop = locals.currentShop;
