@@ -8,7 +8,6 @@
 
   let { data } = $props();
 
-  const shop = $derived((data as any).shop);
 
   let paletteId = $state<string>((data as any).shop?.palette_id ?? 'graphite-mint');
   let themeMode = $state<'light' | 'dark' | 'system'>((data as any).shop?.theme ?? 'system');
@@ -93,70 +92,86 @@
     <h2 class="text-[13px] font-semibold text-[var(--text-2)] uppercase tracking-wide">Palette</h2>
     <p class="text-[11px] text-[var(--text-3)]">{PALETTES.length} presets · click to preview</p>
   </div>
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {#each PALETTES as p (p.id)}
       {@const active = p.id === paletteId}
       {@const light  = p.light}
+      {@const dark   = p.dark}
       <button
         type="button"
         data-palette={p.id}
-        class="group relative text-left rounded-[12px] overflow-hidden border transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 {active ? 'shadow-[0_0_0_2px_var(--primary)]' : 'border-[var(--border)]'}"
-        style="border-color:{active ? 'var(--primary)' : 'var(--border)'};"
+        class="group relative text-left rounded-2xl overflow-hidden border-2 transition-all duration-200 ease-out hover:scale-[1.02] hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 {active ? 'shadow-lg' : 'hover:shadow-md'}"
+        style="border-color:{active ? p.accent : 'var(--border)'};"
         onclick={() => previewPalette(p.id)}
         aria-pressed={active}
       >
-        <!-- Accent stripe — the palette's signature color, one row at the top -->
-        <div class="h-1.5" style="background:{p.accent};"></div>
+        <!-- Active indicator -->
+        {#if active}
+          <div class="absolute top-3 right-3 z-10 w-6 h-6 rounded-full flex items-center justify-center" style="background:{p.accent};">
+            <Check size={12} strokeWidth={3} class="text-white" />
+          </div>
+        {/if}
 
-        <!-- Composition preview: primary button + text samples, on the surface -->
-        <div class="relative px-3.5 pt-4 pb-3" style="background:{light.surface};">
-          {#if active}
-            <span
-              class="absolute top-2 right-2 inline-flex items-center justify-center w-5 h-5 rounded-full"
-              style="background:var(--primary);color:var(--primary-fg);"
-              aria-hidden="true"
-            >
-              <Check size={11} strokeWidth={3.5} />
-            </span>
-          {/if}
-
-          <!-- Header line: text + secondary text, mimics a card heading -->
-          <div class="mb-2.5 space-y-1">
-            <div class="h-2 rounded-sm" style="background:{light.text}; width:72%; opacity:0.85;"></div>
-            <div class="h-1.5 rounded-sm" style="background:{light.text2}; width:48%; opacity:0.55;"></div>
+        <!-- Split preview: Light (top) + Dark (bottom) -->
+        <div class="relative">
+          <!-- Light mode preview -->
+          <div class="px-4 pt-4 pb-3" style="background:{light.bg};">
+            <!-- Mini sidebar + content mock -->
+            <div class="flex gap-2">
+              <!-- Sidebar mock -->
+              <div class="w-8 h-16 rounded-lg flex flex-col items-center py-1.5 gap-1" style="background:{light.sidebarBg};">
+                <div class="w-3 h-3 rounded" style="background:{light.sidebarAccent};"></div>
+                <div class="w-5 h-1 rounded-sm" style="background:{light.sidebarMuted};opacity:0.6;"></div>
+                <div class="w-4 h-1 rounded-sm" style="background:{light.sidebarMuted};opacity:0.4;"></div>
+              </div>
+              <!-- Content area -->
+              <div class="flex-1 space-y-1.5">
+                <div class="h-1.5 rounded-sm" style="background:{light.text};width:60%;opacity:0.7;"></div>
+                <div class="h-1 rounded-sm" style="background:{light.text3};width:40%;opacity:0.5;"></div>
+                <div class="flex gap-1 mt-2">
+                  <div class="px-1.5 py-0.5 rounded text-[7px] font-bold" style="background:{light.primary};color:{light.primaryFg};">BTN</div>
+                  <div class="px-1.5 py-0.5 rounded text-[7px]" style="background:{light.surface2};color:{light.text2};border:1px solid {light.border};">TAG</div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Primary chip + neutral chips side by side -->
-          <div class="flex items-center gap-1.5">
-            <div
-              class="h-6 px-2 inline-flex items-center rounded-md text-[9px] font-bold uppercase tracking-wider"
-              style="background:{light.primary};color:{light.primaryFg};"
-            >Primary</div>
-            <div
-              class="h-6 px-2 inline-flex items-center rounded-md text-[9px] font-semibold"
-              style="background:{light.surface2};color:{light.text2};border:1px solid {light.border};"
-            >Chip</div>
-            <div
-              class="h-6 px-2 inline-flex items-center rounded-md text-[9px] font-semibold"
-              style="background:transparent;color:{light.text3};border:1px dashed {light.border};"
-            >Ghost</div>
+          <!-- Accent divider -->
+          <div class="h-1" style="background:linear-gradient(90deg,{p.accent},{p.accent}88);"></div>
+
+          <!-- Dark mode preview -->
+          <div class="px-4 pt-3 pb-3" style="background:{dark.bg};">
+            <div class="flex gap-2">
+              <div class="w-8 h-16 rounded-lg flex flex-col items-center py-1.5 gap-1" style="background:{dark.sidebarBg};">
+                <div class="w-3 h-3 rounded" style="background:{dark.sidebarAccent};"></div>
+                <div class="w-5 h-1 rounded-sm" style="background:{dark.sidebarMuted};opacity:0.6;"></div>
+                <div class="w-4 h-1 rounded-sm" style="background:{dark.sidebarMuted};opacity:0.4;"></div>
+              </div>
+              <div class="flex-1 space-y-1.5">
+                <div class="h-1.5 rounded-sm" style="background:{dark.text};width:60%;opacity:0.7;"></div>
+                <div class="h-1 rounded-sm" style="background:{dark.text3};width:40%;opacity:0.5;"></div>
+                <div class="flex gap-1 mt-2">
+                  <div class="px-1.5 py-0.5 rounded text-[7px] font-bold" style="background:{dark.primary};color:{dark.primaryFg};">BTN</div>
+                  <div class="px-1.5 py-0.5 rounded text-[7px]" style="background:{dark.surface2};color:{dark.text2};border:1px solid {dark.border};">TAG</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Swatch strip — six key tokens, single horizontal row -->
-        <div class="flex h-6" aria-hidden="true">
-          <div class="flex-1" style="background:{light.bg};" title="bg"></div>
-          <div class="flex-1" style="background:{light.surface};" title="surface"></div>
-          <div class="flex-1" style="background:{light.surface2};" title="surface2"></div>
-          <div class="flex-1" style="background:{light.primary};" title="primary"></div>
-          <div class="flex-1" style="background:{p.accent};" title="accent"></div>
-          <div class="flex-1" style="background:{light.sidebarBg};" title="sidebar"></div>
+        <!-- Color palette strip -->
+        <div class="flex h-8" aria-hidden="true">
+          <div class="flex-1 transition-all group-hover:flex-[1.3]" style="background:{light.primary};" title="Primary"></div>
+          <div class="flex-1 transition-all group-hover:flex-[1.2]" style="background:{p.accent};" title="Accent"></div>
+          <div class="flex-1 transition-all group-hover:flex-[1.1]" style="background:{dark.primary};" title="Primary Dark"></div>
+          <div class="flex-1 transition-all" style="background:{light.sidebarBg};" title="Sidebar Light"></div>
+          <div class="flex-1 transition-all" style="background:{dark.sidebarBg};" title="Sidebar Dark"></div>
         </div>
 
         <!-- Meta -->
-        <div class="px-3.5 py-2.5 flex items-baseline gap-1.5" style="background:var(--surface);">
-          <p class="text-[13px] font-semibold text-[var(--text)] truncate">{p.name}</p>
-          <p class="text-[10.5px] text-[var(--text-3)] truncate">· {p.tagline}</p>
+        <div class="px-4 py-3 flex items-baseline gap-2" style="background:var(--surface);">
+          <p class="text-[14px] font-semibold text-[var(--text)] truncate">{p.name}</p>
+          <p class="text-[11px] text-[var(--text-3)] truncate italic">{p.tagline}</p>
         </div>
       </button>
     {/each}

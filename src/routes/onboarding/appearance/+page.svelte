@@ -3,12 +3,12 @@
   import { PALETTES, type Palette } from '$lib/config/palettes';
   import { theme as themeStore } from '$lib/stores/theme.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { appearanceSchema, type FieldErrors } from '$lib/validators';
+  import { appearanceSchema } from '$lib/validators';
+import { Check } from 'lucide-svelte';
 
-  let selectedPalette = $state(PALETTES[0]);
-  let themeMode       = $state<'light'|'dark'|'system'>('system');
-  let formError = $state('');
-  let fieldErrors: FieldErrors<{ primary_color: string; sidebar_bg: string; theme: string }> = $state({});
+let selectedPalette = $state(PALETTES[0]);
+let themeMode       = $state<'light'|'dark'|'system'>('system');
+let formError = $state('');
   let loading         = $state(false);
 
   function choosePalette(p: Palette) {
@@ -23,7 +23,6 @@
 
   async function next() {
     formError = '';
-    fieldErrors = {};
     const payload = {
       primary_color: activePrimary,
       sidebar_bg:    activeSidebar,
@@ -32,11 +31,6 @@
     };
     const parsed = appearanceSchema.safeParse(payload);
     if (!parsed.success) {
-      const flat: any = {};
-      for (const i of parsed.error.issues) {
-        const k = i.path[0]; if (typeof k === 'string' && !flat[k]) flat[k] = i.message;
-      }
-      fieldErrors = flat;
       return;
     }
 
@@ -74,29 +68,40 @@
     </div>
   {/if}
 
-  <div class="grid grid-cols-2 gap-2 mb-5">
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
     {#each PALETTES as p}
       {@const selected = selectedPalette.id === p.id}
-      {@const tok = themeMode === 'dark' ? p.dark : p.light}
+      {@const light = p.light}
+      {@const dark = p.dark}
+      {@const tok = themeMode === 'dark' ? dark : light}
       <button
         type="button"
-        class="p-3 rounded-xl border-2 text-left transition-all relative"
-        style="border-color:{selected ? tok.primary : 'var(--border)'};background:{selected ? 'color-mix(in srgb,'+tok.primary+' 10%,transparent)' : 'var(--surface2)'}"
+        class="group relative p-3 rounded-xl border-2 text-left transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
+        style="border-color:{selected ? p.accent : 'var(--border)'};background:var(--surface);"
         onclick={() => choosePalette(p)}
       >
         {#if selected}
-          <span
-            class="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
-            style="background:{tok.primary}; color:{tok.primaryFg}"
-            aria-label="Selected"
-          >✓</span>
+          <div class="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center" style="background:{p.accent};">
+            <Check size={10} strokeWidth={3} class="text-white" />
+          </div>
         {/if}
-        <div class="flex items-center gap-2 mb-1">
-          <div class="w-5 h-5 rounded-full" style="background:{tok.primary}"></div>
-          <div class="w-5 h-5 rounded-full" style="background:{tok.sidebarBg};border:1px solid var(--border)"></div>
+        
+        <!-- Color preview -->
+        <div class="flex gap-1.5 mb-2">
+          <div class="w-8 h-8 rounded-lg shadow-inner" style="background:{light.primary};"></div>
+          <div class="w-8 h-8 rounded-lg shadow-inner" style="background:{dark.primary};"></div>
+          <div class="w-8 h-8 rounded-lg shadow-inner" style="background:{p.accent};"></div>
         </div>
-        <p class="text-xs font-semibold">{p.name}</p>
-        <p class="text-[10px] text-[var(--text-3)]">{p.tagline}</p>
+        
+        <!-- Mini UI preview -->
+        <div class="rounded-lg p-2 mb-2" style="background:{tok.bg};">
+          <div class="h-1.5 rounded-sm mb-1" style="background:{tok.text};width:50%;opacity:0.7;"></div>
+          <div class="h-1 rounded-sm mb-2" style="background:{tok.text3};width:30%;opacity:0.5;"></div>
+          <div class="px-2 py-0.5 rounded text-[8px] font-bold inline-block" style="background:{tok.primary};color:{tok.primaryFg};">Click</div>
+        </div>
+        
+        <p class="text-[13px] font-semibold text-[var(--text)]">{p.name}</p>
+        <p class="text-[10px] text-[var(--text-3)] italic">{p.tagline}</p>
       </button>
     {/each}
   </div>

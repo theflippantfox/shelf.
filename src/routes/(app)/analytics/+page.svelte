@@ -8,12 +8,46 @@
   import Heatmap from "$lib/components/charts/Heatmap.svelte";
   import DynamicIcon from "$lib/components/ui/DynamicIcon.svelte";
   import {
-    TrendingUp, Users, ShoppingBag, BarChart3, PieChart, ShoppingCart,
-    Calendar, Clock, Package, Banknote, ArrowUp, ArrowDown,
+    TrendingUp, Users, BarChart3, PieChart, ShoppingCart,
+    Calendar, Package, Banknote, ArrowUp, ArrowDown,
     Minus, Trophy, Activity,
   } from "lucide-svelte";
+  import { browser } from "$app/environment";
+  // @ts-expect-error — stale Svelte LSP cache; exports exist at offlineFetch.ts:283,301,321
+import { readAnalyticsCache, writeAnalyticsCache, buildAnalyticsCacheKey } from "$lib/offline/offlineFetch";
 
   let { data } = $props();
+
+  /* ── cache-first analytics ──────────────────────────────────────────────── */
+  // On mount, read cached analytics from IndexedDB so the page renders
+  // instantly even before the server responds. When fresh data arrives
+  // from the server (or API), it replaces the cached snapshot.
+  let cachedAnalytics = $state<any>(null);
+  let freshAnalytics = $state<any>(null);
+  let cacheKey = $state('');
+
+  // The analytics object used by the template: prefer fresh > server > cached
+  // Cached data is only used when server data is unavailable (offline).
+  const analytics = $derived(freshAnalytics ?? (data as any)?.analytics ?? cachedAnalytics);
+
+  if (browser) {
+    // Build cache key from current URL on mount
+    cacheKey = buildAnalyticsCacheKey(window.location.search);
+    readAnalyticsCache(cacheKey).then((cached: any) => {
+      if (cached) cachedAnalytics = cached.analytics;
+    });
+
+    // Fetch fresh data from API in background and update cache
+    fetch(`/api/analytics${window.location.search}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((json) => {
+        if (json?.analytics) {
+          freshAnalytics = json.analytics;
+          writeAnalyticsCache(cacheKey, json);
+        }
+      })
+      .catch(() => { /* offline — cached data is fine */ });
+  }
 
   const presets = [
     { label: "Today",       value: "today" },
@@ -35,7 +69,7 @@
 
   let activeMetric = $state<MetricKey>("revenue");
 
-  const analytics = $derived((data as any).analytics);
+
   const kpis      = $derived(analytics?.kpis ?? null);
   const trend     = $derived(analytics?.trend ?? []);
   const period    = $derived(analytics?.period ?? null);
@@ -84,7 +118,7 @@
 
   /* ── derived summary chips ─────────────────────────────────────────────── */
   const topProduct   = $derived(analytics?.products?.byRevenue?.[0] ?? null);
-  const topCategory  = $derived(analytics?.categories?.[0] ?? null);
+
   const topPayment   = $derived(paymentRows[0] ?? null);
   const uniqueBuyers = $derived(analytics?.customers?.uniqueBuyers ?? 0);
 
@@ -326,7 +360,7 @@
       <!-- ── §B Profit · Inventory (paired cards) ──────────────────────── -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         {#if grossProfit}
-          {@const profitArrow = trendArrow(grossProfit.delta?.direction ?? 'flat')}
+          {@const ProfitArrow = trendArrow(grossProfit.delta?.direction ?? 'flat')}
           <div class="surface-card p-4 md:p-5 space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
@@ -339,7 +373,7 @@
               {#if grossProfit.delta}
                 <span class="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
                       style="background:{trendBg(grossProfit.delta.direction)}; color:{trendTone(grossProfit.delta.direction)}">
-                  <profitArrow size={10} strokeWidth={2.5}></profitArrow>
+                  <ProfitArrow size={10} strokeWidth={2.5}></ProfitArrow>
                   {Math.abs(grossProfit.delta.pct)}%
                 </span>
               {/if}

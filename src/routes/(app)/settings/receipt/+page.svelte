@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
-  import { toasts } from '$lib/stores/toast.svelte';
-  import Button    from '$lib/components/ui/Button.svelte';
+import { invalidateAll } from '$app/navigation';
+import { toasts } from '$lib/stores/toast.svelte';
+import { currentShop } from '$lib/stores/shop.svelte';
+import Button    from '$lib/components/ui/Button.svelte';
 
   let { data } = $props();
   const shop = data.shop as any;
@@ -16,7 +17,11 @@
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ receipt_header: header, receipt_footer: footer }),
     });
-    if (res.ok) { toasts.success('Receipt settings saved'); await invalidateAll(); }
+    if (res.ok) {
+      toasts.success('Receipt settings saved');
+      currentShop.update({ receipt_header: header, receipt_footer: footer });
+      await invalidateAll();
+    }
     else toasts.error('Failed to save');
     saving = false;
   }

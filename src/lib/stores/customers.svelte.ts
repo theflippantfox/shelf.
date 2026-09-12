@@ -8,29 +8,37 @@
  * the store, NOT from data. Writes are optimistic — UI updates
  * instantly, then the server is hit in the background.
  */
+import { writeCache as _writeCache } from "$lib/offline/offlineFetch";
 
 class CustomersStore {
-  #items  = $state<any[]>([]);
-  #search = $state('');
+  #items = $state<any[]>([]);
+  #search = $state("");
 
-  get all()    { return this.#items; }
-  get search() { return this.#search; }
+  get all() {
+    return this.#items;
+  }
+  get search() {
+    return this.#search;
+  }
 
-  get count()  { return this.#items.length; }
+  get count() {
+    return this.#items.length;
+  }
 
   get filtered() {
     if (!this.#search) return this.#items;
     const q = this.#search.toLowerCase();
-    return this.#items.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      (c.phone ?? '').includes(q) ||
-      (c.email ?? '').toLowerCase().includes(q)
+    return this.#items.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone ?? "").includes(q) ||
+        (c.email ?? "").toLowerCase().includes(q),
     );
   }
 
   get byOutstanding() {
-    return [...this.#items].sort((a, b) =>
-      (b.outstanding_balance ?? 0) - (a.outstanding_balance ?? 0)
+    return [...this.#items].sort(
+      (a, b) => (b.outstanding_balance ?? 0) - (a.outstanding_balance ?? 0),
     );
   }
 
@@ -40,7 +48,14 @@ class CustomersStore {
     }
   }
   replaceAll(items: any[]) {
-    this.#items = Array.isArray(items) ? items : [];
+    const snapshot = Array.isArray(items) ? items : [];
+    this.#items = snapshot;
+    // Write-through: keep IDB in sync so offline reads are fresh.
+    // Uses a module-level static import (not dynamic) to avoid
+    // per-navigation Vite module resolution overhead.
+    if (typeof indexedDB !== "undefined" && snapshot.length > 0) {
+      void _writeCache("customers", snapshot);
+    }
   }
 
   /**
@@ -50,21 +65,23 @@ class CustomersStore {
    * when the layout / page mounts.
    */
   async hydrateFromCache(): Promise<void> {
-    if (typeof indexedDB === 'undefined') return;
-    const { readCache } = await import('$lib/offline/offlineFetch');
-    const cached = await readCache<any>('customers', 'name');
+    if (typeof indexedDB === "undefined") return;
+    const { readCache } = await import("$lib/offline/offlineFetch");
+    const cached = await readCache<any>("customers", "name");
     if (cached.length > 0) {
-      this.#items = cached.map(c => {
+      this.#items = cached.map((c) => {
         const { _cached_at, ...rest } = c;
         return rest;
       });
     }
   }
 
-  setSearch(q: string) { this.#search = q; }
+  setSearch(q: string) {
+    this.#search = q;
+  }
 
   getById(id: string) {
-    return this.#items.find(c => c.id === id);
+    return this.#items.find((c) => c.id === id);
   }
 
   // ── Optimistic mutations ────────────────────────────────────────────
@@ -75,7 +92,7 @@ class CustomersStore {
   }
   update(id: string, patch: any) {
     let updated: any = null;
-    this.#items = this.#items.map(c => {
+    this.#items = this.#items.map((c) => {
       if (c.id !== id) return c;
       updated = { ...c, ...patch, _pending: true };
       return updated;
@@ -83,19 +100,23 @@ class CustomersStore {
     return updated;
   }
   remove(id: string) {
-    this.#items = this.#items.filter(c => c.id !== id);
+    this.#items = this.#items.filter((c) => c.id !== id);
   }
   reconcile(clientId: string, real: any) {
-    this.#items = this.#items.map(c => c.client_id === clientId ? real : c);
+    this.#items = this.#items.map((c) => (c.client_id === clientId ? real : c));
   }
   markSynced(id: string) {
-    this.#items = this.#items.map(c => c.id === id
-      ? (() => { const { _pending, _local, ...rest } = c; return rest; })()
-      : c
+    this.#items = this.#items.map((c) =>
+      c.id === id
+        ? (() => {
+            const { _pending, _local, ...rest } = c;
+            return rest;
+          })()
+        : c,
     );
   }
   rollback(clientId: string) {
-    this.#items = this.#items.filter(c => c.client_id !== clientId);
+    this.#items = this.#items.filter((c) => c.client_id !== clientId);
   }
 }
 

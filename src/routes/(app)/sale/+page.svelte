@@ -14,6 +14,7 @@
   import { inventory as invStore } from "$lib/stores/inventory.svelte";
   import { customers as custStore } from "$lib/stores/customers.svelte";
   import { sales as salesStore } from "$lib/stores/sales.svelte";
+import { register as regStore } from "$lib/stores/register.svelte";
   import { inview }  from "$lib/utils/inview";
   import { fly } from "svelte/transition";
   import SearchBar from "$lib/components/ui/SearchBar.svelte";
@@ -403,6 +404,22 @@
             customer: cart.customerId ? { id: cart.customerId, name: cart.customerName } : null,
             _local: true, _pending: true,
           });
+          // Also push a register entry so the cash register page
+          // reflects the offline sale immediately.
+          regStore.add({
+            id:           crypto.randomUUID(),
+            destination:  'counter',
+            amount:       grandTotal,
+            entry_type:   'sale',
+            source:       'sale',
+            sale_id:      clientId,
+            voided_entry_id: null,
+            transfer_group_id: null,
+            notes:        cart.customerName || null,
+            created_at:   payload.created_at ?? new Date().toISOString(),
+            effective_at: payload.created_at ?? new Date().toISOString(),
+            _local: true, _pending: true,
+          });
           for (const item of cart.items) {
             const p = invStore.getById(item.productId);
             if (p) invStore.update(item.productId, { qty: Math.max(0, (p.qty ?? 0) - item.qty) });
@@ -450,6 +467,26 @@
         created_at:   cart.createdAt ?? data2.created_at ?? new Date().toISOString(),
         customer:     cart.customerId ? { id: cart.customerId, name: cart.customerName } : null,
       });
+
+      // Push a sale entry into the register store so the cash
+      // register page's balance reflects the sale instantly,
+      // without waiting for a page reload.
+      const saleId2 = data2.id ?? data2.sale_id;
+      if (saleId2) {
+        regStore.add({
+          id:           crypto.randomUUID(),
+          destination:  'counter',
+          amount:       grandTotal,
+          entry_type:   'sale',
+          source:       'sale',
+          sale_id:      saleId2,
+          voided_entry_id: null,
+          transfer_group_id: null,
+          notes:        cart.customerName || null,
+          created_at:   cart.createdAt ?? data2.created_at ?? new Date().toISOString(),
+          effective_at: cart.createdAt ?? data2.created_at ?? new Date().toISOString(),
+        });
+      }
 
       // Decrement stock for each cart line in the inventory store
       // so the inventory page's KPIs and the sale page's product

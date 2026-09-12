@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
-  import { toasts }        from '$lib/stores/toast.svelte';
-  import Input     from '$lib/components/ui/Input.svelte';
-  import Button    from '$lib/components/ui/Button.svelte';
+import { invalidateAll } from '$app/navigation';
+import { toasts }        from '$lib/stores/toast.svelte';
+import { currentShop }   from '$lib/stores/shop.svelte';
+import Input     from '$lib/components/ui/Input.svelte';
+import Button    from '$lib/components/ui/Button.svelte';
 
   let { data } = $props();
   const shop = data.shop as any;
@@ -17,7 +18,14 @@
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, slug }),
     });
-    if (res.ok) { toasts.success('Shop details saved'); await invalidateAll(); }
+    if (res.ok) {
+      toasts.success('Shop details saved');
+      // Optimistically update the active shop so the header/sidebar
+      // reflects the new name instantly, without waiting for the
+      // server round-trip to re-run the layout load.
+      currentShop.update({ name, slug });
+      await invalidateAll();
+    }
     else toasts.error('Failed to save');
     saving = false;
   }

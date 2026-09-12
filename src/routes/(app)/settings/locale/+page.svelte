@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
-  import { toasts }    from '$lib/stores/toast.svelte';
-  ;
+import { invalidateAll } from '$app/navigation';
+import { toasts }    from '$lib/stores/toast.svelte';
+import { currentShop } from '$lib/stores/shop.svelte';
+import { setFormatLocale } from '$lib/utils/format';
   import { TIMEZONES } from '$lib/config/timezones';
   import { CURRENCIES, getCurrency } from '$lib/config/currencies';
   import Select    from '$lib/components/ui/Select.svelte';
@@ -41,7 +42,28 @@
         currency_locale: cur.locale,
       }),
     });
-    if (res.ok) { toasts.success('Locale settings saved'); await invalidateAll(); }
+    if (res.ok) {
+      toasts.success('Locale settings saved');
+      // Optimistically update the active shop so the header, sidebar,
+      // and all format helpers reflect the new currency/locale
+      // instantly — no flash while the server round-trip re-renders.
+      currentShop.update({
+        timezone,
+        currency_code:   currency,
+        currency_symbol: cur.symbol,
+        currency_locale: cur.locale,
+        date_format,
+        time_format,
+      });
+      setFormatLocale({
+        timezone,
+        currency,
+        locale:     cur.locale,
+        dateFormat: date_format,
+        timeFormat: time_format,
+      });
+      await invalidateAll();
+    }
     else toasts.error('Failed to save');
     saving = false;
   }

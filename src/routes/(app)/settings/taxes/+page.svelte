@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { invalidateAll } from '$app/navigation';
-  import { toasts }   from '$lib/stores/toast.svelte';
-  import Input     from '$lib/components/ui/Input.svelte';
+import { invalidateAll } from '$app/navigation';
+import { toasts }   from '$lib/stores/toast.svelte';
+import { currentShop } from '$lib/stores/shop.svelte';
+import Input     from '$lib/components/ui/Input.svelte';
   import Toggle    from '$lib/components/ui/Toggle.svelte';
   import Button    from '$lib/components/ui/Button.svelte';
 
@@ -25,7 +26,15 @@
         tax_inclusive: taxInclusive,
       }),
     });
-    if (res.ok) { toasts.success('Tax settings saved'); await invalidateAll(); }
+    if (res.ok) {
+      toasts.success('Tax settings saved');
+      currentShop.update({
+        tax_rate:      Math.round(rateFloat * 100),
+        tax_name:      taxName,
+        tax_inclusive: taxInclusive,
+      });
+      await invalidateAll();
+    }
     else toasts.error('Failed to save');
     saving = false;
   }

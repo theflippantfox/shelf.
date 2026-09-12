@@ -5,6 +5,7 @@
   import { inventory as invStore } from '$lib/stores/inventory.svelte';
   import { customers as custStore } from '$lib/stores/customers.svelte';
   import { offlineSync } from '$lib/offline/offlineSync.svelte';
+  import { subscribeToRealtime, unsubscribeFromRealtime } from '$lib/offline/realtime';
   import Sidebar           from '$lib/components/layout/Sidebar.svelte';
   import BottomNav         from '$lib/components/layout/BottomNav.svelte';
   import Header            from '$lib/components/layout/Header.svelte';
@@ -40,6 +41,10 @@
     if (data.customers)  custStore.replaceAll(data.customers  as any[]);
   });
 
+  // The cart prices/quantities come from the server payload and
+  // the inventory store hydration. When the user navigates to
+  // /sale, the inventory store is already fresh from the server.
+
   // Offline-first hydration: on every page mount, populate the
   // stores from IndexedDB BEFORE the server payload lands. That
   // way, when the user opens the app while offline, every page
@@ -52,6 +57,19 @@
   $effect(() => {
     void invStore.hydrateFromCache();
     void custStore.hydrateFromCache();
+
+    // Re-hydrate stores whenever the offline sync engine
+    // refreshes caches (online transition, periodic sync, etc.)
+    // so stale IDB data is replaced in the in-memory stores.
+    let lastSync = offlineSync.lastSyncAt;
+    const poll = setInterval(() => {
+      if (offlineSync.lastSyncAt !== lastSync) {
+        lastSync = offlineSync.lastSyncAt;
+        void invStore.hydrateFromCache();
+        void custStore.hydrateFromCache();
+      }
+    }, 2000);
+    return () => clearInterval(poll);
   });
 
   $effect(() => {
@@ -64,6 +82,19 @@
     void offlineSync.flushPendingSales();
     void offlineSync.flushPendingOps();
     void offlineSync.refreshAllCaches();
+  });
+
+  // ── Realtime subscriptions ────────────────────────────────────────────
+  // Subscribe to Supabase Postgres changes so the local cache and
+  // stores stay in sync when another device/user mutates data.
+  // Tears down on layout destroy and re-subscribes on shop switch.
+  $effect(() => {
+    // React to shop changes — subscribe once the shop is available.
+    const shop = currentShop.data;
+    if (!shop) return;
+
+    subscribeToRealtime();
+    return () => unsubscribeFromRealtime();
   });
 
   // Command-bar state — opened by Header's search button or ⌘K

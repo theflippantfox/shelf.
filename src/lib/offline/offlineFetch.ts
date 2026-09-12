@@ -20,13 +20,13 @@
  * dedupe a retried POST against its own state.
  */
 
-import { browser } from '$app/environment';
-import { getDb, type PendingOp } from './offlineDb';
-import { offlineSync } from './offlineSync.svelte';
+import { browser } from "$app/environment";
+import { getDb, type PendingOp } from "./offlineDb";
+import { offlineSync } from "./offlineSync.svelte";
 
 export type OfflineFetchOptions = RequestInit & {
   /** Optional override — the kind for the pending_ops row (for grouping in the UI). */
-  kind?: PendingOp['kind'];
+  kind?: PendingOp["kind"];
   /**
    * If true, the call goes to the network even when offline. Default
    * false (we queue instead). Used for GETs (no point queueing
@@ -45,13 +45,15 @@ export async function offlineFetch(
 ): Promise<Response> {
   if (!browser) {
     // SSR — return a stub that won't crash but won't pretend to be real.
-    return new Response(JSON.stringify({ error: 'No offline fetch in SSR' }), {
-      status: 500, headers: { 'Content-Type': 'application/json' },
+    return new Response(JSON.stringify({ error: "No offline fetch in SSR" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
     });
   }
 
-  const method = (options.method ?? 'GET').toUpperCase();
-  const isWrite = method === 'POST' || method === 'PATCH' || method === 'DELETE';
+  const method = (options.method ?? "GET").toUpperCase();
+  const isWrite =
+    method === "POST" || method === "PATCH" || method === "DELETE";
 
   // Online: just fetch.
   if (offlineSync.online || options.forceOnline) {
@@ -62,8 +64,9 @@ export async function offlineFetch(
   // caller's existing error path runs. The caller should fall back
   // to reading from the local store.
   if (!isWrite) {
-    return new Response(JSON.stringify({ error: 'Offline — no cached data' }), {
-      status: 503, headers: { 'Content-Type': 'application/json' },
+    return new Response(JSON.stringify({ error: "Offline — no cached data" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
     });
   }
 
@@ -72,27 +75,35 @@ export async function offlineFetch(
   // code treats a 2xx as success and moves on.
   try {
     const id = await enqueueOp({
-      kind:    options.kind ?? 'other',
-      method:  method as 'POST' | 'PATCH' | 'DELETE',
-      path:    typeof input === 'string' ? input : (input as URL).toString(),
-      body:    parseBody(options.body),
+      kind: options.kind ?? "other",
+      method: method as "POST" | "PATCH" | "DELETE",
+      path: typeof input === "string" ? input : (input as URL).toString(),
+      body: parseBody(options.body),
       headers: extractHeaders(options.headers),
     });
     return new Response(JSON.stringify({ ok: true, queued: id }), {
       status: 202,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message ?? 'Queue failed' }), {
-      status: 500, headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: e?.message ?? "Queue failed" }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 }
 
 function parseBody(body: any): any | undefined {
   if (body == null) return undefined;
-  if (typeof body === 'string') {
-    try { return JSON.parse(body); } catch { return body; }
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return body;
+    }
   }
   return body;
 }
@@ -101,7 +112,9 @@ function extractHeaders(h: HeadersInit | undefined): Record<string, string> {
   if (!h) return {};
   if (h instanceof Headers) {
     const out: Record<string, string> = {};
-    h.forEach((v, k) => { out[k] = v; });
+    h.forEach((v, k) => {
+      out[k] = v;
+    });
     return out;
   }
   if (Array.isArray(h)) {
@@ -119,50 +132,50 @@ function extractHeaders(h: HeadersInit | undefined): Record<string, string> {
  * pages should always go through `offlineFetch` instead.
  */
 export async function enqueueOp(input: {
-  kind:    PendingOp['kind'];
-  method:  'POST' | 'PATCH' | 'DELETE';
-  path:    string;
-  body?:   any;
+  kind: PendingOp["kind"];
+  method: "POST" | "PATCH" | "DELETE";
+  path: string;
+  body?: any;
   headers?: Record<string, string>;
-  priority?: number;   // auto-computed if omitted
+  priority?: number; // auto-computed if omitted
 }): Promise<string> {
   const db = await getDb();
   const id = crypto.randomUUID();
   const row: PendingOp = {
     id,
-    kind:    input.kind,
+    kind: input.kind,
     priority: input.priority ?? computePriority(input.kind),
-    method:  input.method,
-    path:    input.path,
-    body:    input.body,
+    method: input.method,
+    path: input.path,
+    body: input.body,
     headers: input.headers,
-    created_at:     Date.now(),
-    attempts:       0,
-    next_retry_at:  0,                // ready to flush immediately when online
-    last_error:     null,
-    last_status:    null,
-    permanent:      false,
+    created_at: Date.now(),
+    attempts: 0,
+    next_retry_at: 0, // ready to flush immediately when online
+    last_error: null,
+    last_status: null,
+    permanent: false,
   };
-  await db.put('pending_ops', row);
+  await db.put("pending_ops", row);
   // Wake the sync engine so it can flush right now if online.
   void offlineSync.flushPendingOps();
   return id;
 }
 
 /** Priority map: lower = processes first. */
-const KIND_PRIORITY: Record<PendingOp['kind'], number> = {
-  customer:      1,   // highest — new customers must exist before sales
-  supplier:      1,   // same as customer
-  product:       2,   // products needed for inventory accuracy
-  register:      2,   // cash register ops
-  sale:         10,   // sales last (customer already exists)
-  credit_payment: 11,  // tied to an existing sale
-  return:        11,  // tied to an existing sale
-  share_toggle:  12,  // low urgency
-  other:         99,  // catch-all
+const KIND_PRIORITY: Record<PendingOp["kind"], number> = {
+  customer: 1, // highest — new customers must exist before sales
+  supplier: 1, // same as customer
+  product: 2, // products needed for inventory accuracy
+  register: 2, // cash register ops
+  sale: 10, // sales last (customer already exists)
+  credit_payment: 11, // tied to an existing sale
+  return: 11, // tied to an existing sale
+  share_toggle: 12, // low urgency
+  other: 99, // catch-all
 };
 
-function computePriority(kind: PendingOp['kind']): number {
+function computePriority(kind: PendingOp["kind"]): number {
   return KIND_PRIORITY[kind] ?? 99;
 }
 
@@ -189,7 +202,7 @@ export function backoffMs(attempts: number): number {
  * wants. Returns [] if the cache is empty (offline + never fetched).
  */
 export async function readCache<T>(
-  store: 'products' | 'categories' | 'customers' | 'register',
+  store: "products" | "categories" | "customers" | "register",
   sortBy?: keyof T,
 ): Promise<T[]> {
   try {
@@ -197,7 +210,9 @@ export async function readCache<T>(
     const all = await db.getAll(store);
     if (sortBy) {
       return (all as T[]).sort((a, b) =>
-        String((a as any)[sortBy] ?? '').localeCompare(String((b as any)[sortBy] ?? ''))
+        String((a as any)[sortBy] ?? "").localeCompare(
+          String((b as any)[sortBy] ?? ""),
+        ),
       );
     }
     return all as T[];
@@ -211,42 +226,101 @@ export async function readCache<T>(
  * rows with the same primary key.
  */
 export async function writeCache(
-  store: 'products' | 'categories' | 'customers' | 'register',
+  store: "products" | "categories" | "customers" | "register",
   rows: any[],
 ): Promise<void> {
   try {
     const db = await getDb();
-    const tx = db.transaction(store, 'readwrite');
+    const tx = db.transaction(store, "readwrite");
     const now = Date.now();
     for (const r of rows) {
       await tx.store.put({ ...r, _cached_at: now });
     }
     await tx.done;
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 }
 
 /**
  * Upsert a single entity into the cache.
  */
 export async function upsertCache(
-  store: 'products' | 'categories' | 'customers' | 'register',
+  store: "products" | "categories" | "customers" | "register",
   row: any,
 ): Promise<void> {
   try {
     const db = await getDb();
     await db.put(store, { ...row, _cached_at: Date.now() });
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 }
 
 /**
  * Delete a single entity from the cache.
  */
 export async function deleteFromCache(
-  store: 'products' | 'categories' | 'customers' | 'register',
+  store: "products" | "categories" | "customers" | "register",
   id: string,
 ): Promise<void> {
   try {
     const db = await getDb();
     await db.delete(store, id);
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Analytics cache — keyed by period hash
+ * ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Read cached analytics for a given period. Returns null if
+ * the cache is cold or stale (> 5 minutes old).
+ */
+export async function readAnalyticsCache(
+  periodKey: string,
+): Promise<any | null> {
+  try {
+    const db = await getDb();
+    const row = await db.get("analytics_cache", periodKey);
+    if (!row) return null;
+    // Consider stale after 5 minutes
+    if (Date.now() - row.cached_at > 5 * 60_000) return null;
+    return row.data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write analytics result to the cache.
+ */
+export async function writeAnalyticsCache(
+  periodKey: string,
+  data: any,
+): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.put("analytics_cache", {
+      key: periodKey,
+      data,
+      cached_at: Date.now(),
+    });
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/**
+ * Build a stable cache key from the current URL search params.
+ * E.g. '?period=7d' → 'period:7d', '?period=custom&from=...&to=...' → 'period:custom:...:...'
+ */
+export function buildAnalyticsCacheKey(search: string): string {
+  const params = new URLSearchParams(search);
+  const parts: string[] = [];
+  params.forEach((v, k) => parts.push(`${k}=${v}`));
+  return parts.length ? `period:${parts.sort().join(":")}` : "period:default";
 }

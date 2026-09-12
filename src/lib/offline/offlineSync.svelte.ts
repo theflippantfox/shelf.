@@ -21,7 +21,7 @@
  * left behind from a previous session.
  */
 
-import { browser } from '$app/environment';
+import { browser } from "$app/environment";
 import {
   getDb,
   type PendingSale,
@@ -30,23 +30,27 @@ import {
   type CachedCategory,
   type CachedCustomer,
   type CachedRegisterEntry,
-} from './offlineDb';
-import { backoffMs } from './offlineFetch';
+} from "./offlineDb";
+import {
+  backoffMs,
+  writeAnalyticsCache,
+  buildAnalyticsCacheKey,
+} from "./offlineFetch";
 
 // Reactive state. These are module-level so every importer sees
 // the same instance — Svelte 5's $state inside a .svelte.ts module
 // works correctly when the module is a singleton.
-let _online         = $state(browser ? navigator.onLine : true);
-let _pendingCount   = $state(0);
-let _pendingSales   = $state(0);
-let _pendingOps     = $state(0);
-let _syncing        = $state(false);
-let _lastSyncAt     = $state<number | null>(null);
-let _lastError      = $state<string | null>(null);
-let _lastFlushAt    = $state<number | null>(null);
-let _flushTimer     : ReturnType<typeof setTimeout> | null = null;
+let _online = $state(browser ? navigator.onLine : true);
+let _pendingCount = $state(0);
+let _pendingSales = $state(0);
+let _pendingOps = $state(0);
+let _syncing = $state(false);
+let _lastSyncAt = $state<number | null>(null);
+let _lastError = $state<string | null>(null);
+let _lastFlushAt = $state<number | null>(null);
+let _flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-const FLUSH_INTERVAL_MS = 5_000;  // 5s — pick up ops whose retry timer expired
+const FLUSH_INTERVAL_MS = 5_000; // 5s — pick up ops whose retry timer expired
 
 /* ──────────────────────────────────────────────────────────────────
  * State refresh
@@ -57,11 +61,11 @@ async function refreshPendingCount(): Promise<void> {
   try {
     const db = await getDb();
     const [sales, ops] = await Promise.all([
-      db.count('pending_sales'),
-      db.count('pending_ops'),
+      db.count("pending_sales"),
+      db.count("pending_ops"),
     ]);
     _pendingSales = sales;
-    _pendingOps   = ops;
+    _pendingOps = ops;
     _pendingCount = sales + ops;
   } catch {
     // IndexedDB unavailable (private mode, quota, etc.) — leave
@@ -73,9 +77,11 @@ async function refreshLastSync(): Promise<void> {
   if (!browser) return;
   try {
     const db = await getDb();
-    const row = await db.get('meta', 'lastFullSync');
+    const row = await db.get("meta", "lastFullSync");
     _lastSyncAt = row?.at ?? null;
-  } catch {}
+  } catch {
+    /* IndexedDB unavailable — leave _lastSyncAt at default */
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -97,19 +103,23 @@ async function flushPendingOps(): Promise<void> {
   let db: Awaited<ReturnType<typeof getDb>>;
   try {
     db = await getDb();
-  } catch { return; }
+  } catch {
+    return;
+  }
 
   let rows: PendingOp[];
   try {
-    rows = await db.getAllFromIndex('pending_ops', 'by-created');
-  } catch { return; }
+    rows = await db.getAllFromIndex("pending_ops", "by-created");
+  } catch {
+    return;
+  }
   if (rows.length === 0) return;
 
   // Filter to ops that are ready to retry (next_retry_at has passed).
   const now = Date.now();
   const ready = rows
-    .filter(r => !r.permanent && r.next_retry_at <= now)
-    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));  // lower = first, undefined = 99 (lowest)
+    .filter((r) => !r.permanent && r.next_retry_at <= now)
+    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99)); // lower = first, undefined = 99 (lowest)
   if (ready.length === 0) {
     // All pending ops are still in backoff — schedule a check.
     scheduleFlush(readyEarliest(rows));
@@ -119,17 +129,21 @@ async function flushPendingOps(): Promise<void> {
   _syncing = true;
   try {
     for (const row of ready) {
-      if (row.permanent) continue;  // skip permanently-failed ops
+      if (row.permanent) continue; // skip permanently-failed ops
       const result = await replayOp(row);
-      if (result === 'network-error') {
+      if (result === "network-error") {
         // Stop the loop — the next online event will resume.
         break;
       }
-      if (result === 'recoverable-error') {
+      if (result === "recoverable-error") {
         // Mark with backoff. Don't break — a later op might still
         // be processable.
-        await markOpWithBackoff(db, row, row.last_status ?? 0, row.last_error ?? '');
-        continue;
+        await markOpWithBackoff(
+          db,
+          row,
+          row.last_status ?? 0,
+          row.last_error ?? "",
+        );
       }
     }
     _lastFlushAt = Date.now();
@@ -139,64 +153,72 @@ async function flushPendingOps(): Promise<void> {
   }
 }
 
-type FlushResult = 'ok' | 'network-error' | 'recoverable-error' | 'permanent-error';
+type FlushResult =
+  | "ok"
+  | "network-error"
+  | "recoverable-error"
+  | "permanent-error";
 
 async function replayOp(op: PendingOp): Promise<FlushResult> {
   const db = await getDb();
   try {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...op.headers,
     };
     const res = await fetch(op.path, {
       method: op.method,
       headers,
-      body: op.body != null ? JSON.stringify(op.body) : undefined,
+      body: op.body == null ? undefined : JSON.stringify(op.body),
     });
     if (res.ok) {
-      await db.delete('pending_ops', op.id);
-      return 'ok';
+      await db.delete("pending_ops", op.id);
+      return "ok";
     }
     // 4xx = permanent (the server is telling us the request is bad;
     //       retrying won't help). 408/429 = transient.
-    if (res.status >= 400 && res.status < 500 &&
-        res.status !== 408 && res.status !== 429) {
+    if (
+      res.status >= 400 &&
+      res.status < 500 &&
+      res.status !== 408 &&
+      res.status !== 429
+    ) {
       const body = await res.json().catch(() => ({ error: res.statusText }));
       const err = body.error ?? body.message ?? `HTTP ${res.status}`;
-      await db.put('pending_ops', {
+      await db.put("pending_ops", {
         ...op,
-        permanent:  true,
+        permanent: true,
         last_error: err,
         last_status: res.status,
-        attempts:   op.attempts + 1,
+        attempts: op.attempts + 1,
       });
       _lastError = `${op.method} ${op.path}: ${err}`;
-      return 'permanent-error';
+      return "permanent-error";
     }
     // 5xx (and 408/429): transient — apply backoff and try again later.
     const body = await res.json().catch(() => ({ error: res.statusText }));
     const err = body.error ?? body.message ?? `HTTP ${res.status}`;
-    await db.put('pending_ops', {
+    await db.put("pending_ops", {
       ...op,
-      last_error:  err,
+      last_error: err,
       last_status: res.status,
-      attempts:    op.attempts + 1,
+      attempts: op.attempts + 1,
       next_retry_at: Date.now() + backoffMs(op.attempts),
     });
     _lastError = `${op.method} ${op.path}: ${err}`;
-    return 'recoverable-error';
+    return "recoverable-error";
   } catch (e: any) {
     // Network blip — apply backoff.
-    const err = e?.message ?? 'Network error';
-    await db.put('pending_ops', {
+    const err = e?.message ?? "Network error";
+    await db.put("pending_ops", {
       ...op,
-      last_error:    err,
-      last_status:   null,
-      attempts:      op.attempts + 1,
+      last_error: err,
+      last_status: null,
+      attempts: op.attempts + 1,
       next_retry_at: Date.now() + backoffMs(op.attempts),
     });
     _lastError = `${op.method} ${op.path}: ${err}`;
-    return 'network-error';
+    return "network-error";
   }
 }
 
@@ -206,11 +228,11 @@ async function markOpWithBackoff(
   status: number,
   err: string,
 ): Promise<void> {
-  await db.put('pending_ops', {
+  await db.put("pending_ops", {
     ...op,
-    last_error:    err,
-    last_status:   status || op.last_status,
-    attempts:      op.attempts + 1,
+    last_error: err,
+    last_status: status || op.last_status,
+    attempts: op.attempts + 1,
     next_retry_at: Date.now() + backoffMs(op.attempts),
   });
 }
@@ -233,12 +255,13 @@ function readyEarliest(rows: PendingOp[]): number | null {
 function scheduleFlush(at: number | null): void {
   if (_flushTimer) clearTimeout(_flushTimer);
   if (!_online) return;
-  const delay = at
-    ? Math.max(0, at - Date.now())
-    : FLUSH_INTERVAL_MS;
-  _flushTimer = setTimeout(() => {
-    void flushPendingOps();
-  }, Math.min(delay, FLUSH_INTERVAL_MS));
+  const delay = at ? Math.max(0, at - Date.now()) : FLUSH_INTERVAL_MS;
+  _flushTimer = setTimeout(
+    () => {
+      void flushPendingOps();
+    },
+    Math.min(delay, FLUSH_INTERVAL_MS),
+  );
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -259,36 +282,40 @@ async function flushPendingSales(): Promise<void> {
   let db: Awaited<ReturnType<typeof getDb>>;
   try {
     db = await getDb();
-  } catch { return; }
+  } catch {
+    return;
+  }
 
   let rows: PendingSale[];
   try {
-    rows = await db.getAllFromIndex('pending_sales', 'by-created');
-  } catch { return; }
+    rows = await db.getAllFromIndex("pending_sales", "by-created");
+  } catch {
+    return;
+  }
   if (rows.length === 0) return;
 
   _syncing = true;
   try {
     for (const row of rows) {
-      if (row.status === 'synced') continue;
+      if (row.status === "synced") continue;
       // Mark in-flight so the badge shows "Syncing…".
-      await db.put('pending_sales', { ...row, status: 'syncing' });
+      await db.put("pending_sales", { ...row, status: "syncing" });
       try {
-        const res = await fetch('/api/sales', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch("/api/sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...row.payload, client_id: row.id }),
         });
         if (res.ok) {
-          await db.delete('pending_sales', row.id);
+          await db.delete("pending_sales", row.id);
         } else {
           // Server rejected (insufficient stock, validation, etc.).
           // Mark the row failed and stop the loop — let the user
           // see the error and decide what to do.
           const err = await res.json().catch(() => ({ error: res.statusText }));
-          await db.put('pending_sales', {
+          await db.put("pending_sales", {
             ...row,
-            status: 'failed',
+            status: "failed",
             last_error: err.error ?? `HTTP ${res.status}`,
             attempts: row.attempts + 1,
           });
@@ -298,10 +325,10 @@ async function flushPendingSales(): Promise<void> {
       } catch (e: any) {
         // Network blip — put the row back to pending, stop the
         // loop, wait for the next `online` event.
-        await db.put('pending_sales', {
+        await db.put("pending_sales", {
           ...row,
-          status: 'pending',
-          last_error: e?.message ?? 'Network error',
+          status: "pending",
+          last_error: e?.message ?? "Network error",
           attempts: row.attempts + 1,
         });
         break;
@@ -326,17 +353,17 @@ async function flushPendingSales(): Promise<void> {
 async function refreshProductsCache(): Promise<void> {
   if (!browser || !_online) return;
   try {
-    const res = await fetch('/api/products?limit=500');
+    const res = await fetch("/api/products?limit=500");
     if (!res.ok) return;
     const list = (await res.json()) as CachedProduct[];
     const db = await getDb();
-    const tx = db.transaction('products', 'readwrite');
+    const tx = db.transaction("products", "readwrite");
     const now = Date.now();
     for (const p of list) {
       await tx.store.put({ ...p, _cached_at: now });
     }
     await tx.done;
-    await db.put('meta', { key: 'lastFullSync', at: now });
+    await db.put("meta", { key: "lastFullSync", at: now });
     _lastSyncAt = now;
   } catch {
     // Network blip — the existing cache is still good.  Try again
@@ -347,50 +374,95 @@ async function refreshProductsCache(): Promise<void> {
 async function refreshCategoriesCache(): Promise<void> {
   if (!browser || !_online) return;
   try {
-    const res = await fetch('/api/categories?limit=200');
+    const res = await fetch("/api/categories?limit=200");
     if (!res.ok) return;
     const list = (await res.json()) as CachedCategory[];
     const db = await getDb();
-    const tx = db.transaction('categories', 'readwrite');
+    const tx = db.transaction("categories", "readwrite");
     const now = Date.now();
     for (const c of list) {
       await tx.store.put({ ...c, _cached_at: now });
     }
     await tx.done;
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 }
 
 async function refreshCustomersCache(): Promise<void> {
   if (!browser || !_online) return;
   try {
-    const res = await fetch('/api/customers?limit=500');
+    const res = await fetch("/api/customers?limit=500");
     if (!res.ok) return;
     const list = (await res.json()) as CachedCustomer[];
     const db = await getDb();
-    const tx = db.transaction('customers', 'readwrite');
+    const tx = db.transaction("customers", "readwrite");
     const now = Date.now();
     for (const c of list) {
       await tx.store.put({ ...c, _cached_at: now });
     }
     await tx.done;
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 }
 
 async function refreshRegisterCache(): Promise<void> {
   if (!browser || !_online) return;
   try {
-    const res = await fetch('/api/cash-register?limit=200');
+    const res = await fetch("/api/cash-register?limit=200");
     if (!res.ok) return;
     const json = await res.json();
-    const list = (Array.isArray(json) ? json : (json.entries ?? [])) as CachedRegisterEntry[];
+    const list = (
+      Array.isArray(json) ? json : (json.entries ?? [])
+    ) as CachedRegisterEntry[];
     const db = await getDb();
-    const tx = db.transaction('register', 'readwrite');
+    const tx = db.transaction("register", "readwrite");
     const now = Date.now();
     for (const e of list) {
       await tx.store.put({ ...e, _cached_at: now });
     }
     await tx.done;
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/**
+ * Refresh the analytics cache for all common period presets.
+ * This ensures IndexedDB has fresh analytics data for offline
+ * reads and instant page loads.
+ */
+const ANALYTICS_PERIODS = [
+  "today",
+  "7d",
+  "30d",
+  "90d",
+  "this_month",
+  "last_month",
+];
+
+async function refreshAnalyticsCache(): Promise<void> {
+  if (!browser || !_online) return;
+  try {
+    // Fire all period fetches in parallel instead of sequentially.
+    await Promise.allSettled(
+      ANALYTICS_PERIODS.map((period) =>
+        fetch(`/api/analytics?period=${period}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((json) => {
+            if (json?.analytics) {
+              return writeAnalyticsCache(
+                buildAnalyticsCacheKey(`period=${period}`),
+                json,
+              );
+            }
+          }),
+      ),
+    );
+  } catch {
+    /* non-fatal */
+  }
 }
 
 /**
@@ -405,6 +477,9 @@ async function refreshAllCaches(): Promise<void> {
   await refreshCategoriesCache();
   await refreshCustomersCache();
   await refreshRegisterCache();
+  // Analytics is heavy (6 parallel fetches) and non-critical —
+  // fire-and-forget so it doesn't block the UI-ready caches.
+  void refreshAnalyticsCache();
 }
 
 /** Force a sync now. The user clicks "Sync now" in the header. */
@@ -420,14 +495,30 @@ async function syncNow(): Promise<void> {
  * ──────────────────────────────────────────────────────────────── */
 
 export const offlineSync = {
-  get online()         { return _online; },
-  get pendingCount()   { return _pendingCount; },
-  get pendingSales()   { return _pendingSales; },
-  get pendingOps()     { return _pendingOps; },
-  get syncing()        { return _syncing; },
-  get lastSyncAt()     { return _lastSyncAt; },
-  get lastError()      { return _lastError; },
-  get lastFlushAt()    { return _lastFlushAt; },
+  get online() {
+    return _online;
+  },
+  get pendingCount() {
+    return _pendingCount;
+  },
+  get pendingSales() {
+    return _pendingSales;
+  },
+  get pendingOps() {
+    return _pendingOps;
+  },
+  get syncing() {
+    return _syncing;
+  },
+  get lastSyncAt() {
+    return _lastSyncAt;
+  },
+  get lastError() {
+    return _lastError;
+  },
+  get lastFlushAt() {
+    return _lastFlushAt;
+  },
   refreshPendingCount,
   refreshLastSync,
   flushPendingOps,
@@ -436,6 +527,7 @@ export const offlineSync = {
   refreshCategoriesCache,
   refreshCustomersCache,
   refreshRegisterCache,
+  refreshAnalyticsCache,
   refreshAllCaches,
   syncNow,
 };
@@ -454,14 +546,17 @@ if (browser) {
     // Ask the SW to drain its own queue too (if any rows were
     // queued by the SW's fetch handler — the page-side store
     // doesn't see those).
-    navigator.serviceWorker?.controller?.postMessage({ type: 'flush-sales' });
+    navigator.serviceWorker?.controller?.postMessage({ type: "flush-sales" });
   };
   const onOffline = () => {
     _online = false;
-    if (_flushTimer) { clearTimeout(_flushTimer); _flushTimer = null; }
+    if (_flushTimer) {
+      clearTimeout(_flushTimer);
+      _flushTimer = null;
+    }
   };
-  window.addEventListener('online',  onOnline);
-  window.addEventListener('offline', onOffline);
+  window.addEventListener("online", onOnline);
+  window.addEventListener("offline", onOffline);
 
   // Boot-time priming.  Both calls are no-ops when offline (they
   // short-circuit on _online).  We don't await — these run in the
@@ -472,9 +567,13 @@ if (browser) {
     void refreshAllCaches();
     // Also ask the SW to drain anything it queued in a previous
     // session.
-    navigator.serviceWorker?.ready?.then((reg) => {
-      reg.active?.postMessage({ type: 'flush-sales' });
-    }).catch(() => { /* SW not yet registered — fine */ });
+    navigator.serviceWorker?.ready
+      ?.then((reg) => {
+        reg.active?.postMessage({ type: "flush-sales" });
+      })
+      .catch(() => {
+        /* SW not yet registered — fine */
+      });
   }
 
   // Periodic flush so ops whose retry timer has expired get a chance
